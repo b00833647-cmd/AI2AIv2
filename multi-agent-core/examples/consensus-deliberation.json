@@ -1,0 +1,116 @@
+{
+  "id": "consensus-deliberation",
+  "version": "0.1.0",
+  "name": "Four-Party Consensus Deliberation",
+  "description": "Four representatives must agree on a single policy proposal. Each represents a constituency with different priorities (efficiency, equity, sustainability, fiscal). Consensus requires explicit endorsement from ALL four. The orchestrator's role is most active here: enforcing that nobody monopolizes, surfacing emerging common ground, prompting holdouts to state their conditions, and detecting genuine consensus vs. pseudo-consensus from exhaustion.\n\nDemonstrates: N=4 participants, free-text + structured outcome, mediator-style orchestrator interventions, asymmetric private briefs (each constituency has private red lines).",
+
+  "participants": [
+    {
+      "id": "alex",
+      "role": "Efficiency Advocate (Treasury)",
+      "llm": { "provider": "anthropic", "model": "claude-sonnet-4-6", "thinkingBudget": 4000, "maxTokens": 3000, "apiKeyEnv": "ALEX_ANTHROPIC_API_KEY" },
+      "systemPromptTemplate": "You represent the Treasury. Your priority: minimize public spending and bureaucratic overhead.\n\nPrivate red lines: {{brief.redLines}}\nPrivate flexibility: {{brief.flexibility}}\n\nThe deliberation is about: {{brief.topic}}\n\nOn each turn, you may:\n  - state_position(stance, reasoning) — articulate your current view.\n  - propose_amendment(text) — suggest a change to the working proposal.\n  - endorse(working_proposal, conditions?) — accept the current draft, optionally with conditions.\n  - object(working_proposal, reason, willing_to_yield) — reject, with whether you'd yield if conditions improved.\n  - ask_clarification(participant_id, question) — request specifics from another participant.",
+      "brief": {
+        "topic": "Should the city allocate €50M to a 5-year program for public transit expansion, and if so, on what terms?",
+        "redLines": "Total program cost cannot exceed €40M. No new taxes; must come from existing budget. Program must include sunset clause.",
+        "flexibility": "Open to scope reduction, phased rollout, or matching with private investment."
+      },
+      "publicProfile": { "constituency": "Treasury", "priority": "fiscal discipline" },
+      "tools": [
+        { "name": "state_position", "description": "Articulate your current stance on the working proposal.", "inputSchema": { "type": "object", "properties": { "stance": { "type": "string", "enum": ["support", "oppose", "neutral", "conditional"] }, "reasoning": { "type": "string" } }, "required": ["stance", "reasoning"] } },
+        { "name": "propose_amendment", "description": "Suggest a change.", "inputSchema": { "type": "object", "properties": { "text": { "type": "string" }, "rationale": { "type": "string" } }, "required": ["text"] } },
+        { "name": "endorse", "description": "Accept the current draft.", "inputSchema": { "type": "object", "properties": { "working_proposal_summary": { "type": "string" }, "conditions": { "type": "array", "items": { "type": "string" } } }, "required": ["working_proposal_summary"] } },
+        { "name": "object", "description": "Reject the current draft.", "inputSchema": { "type": "object", "properties": { "working_proposal_summary": { "type": "string" }, "reason": { "type": "string" }, "willing_to_yield": { "type": "boolean" } }, "required": ["working_proposal_summary", "reason"] } },
+        { "name": "ask_clarification", "description": "Ask another participant a question.", "inputSchema": { "type": "object", "properties": { "participant_id": { "type": "string" }, "question": { "type": "string" } }, "required": ["participant_id", "question"] } }
+      ],
+      "memoryPolicy": { "type": "summarized", "keepRecent": 4, "maxContextTokens": 80000 }
+    },
+
+    {
+      "id": "blair",
+      "role": "Equity Advocate (Community Coalition)",
+      "llm": { "provider": "anthropic", "model": "claude-sonnet-4-6", "thinkingBudget": 4000, "maxTokens": 3000, "apiKeyEnv": "BLAIR_ANTHROPIC_API_KEY" },
+      "systemPromptTemplate": "You represent a coalition of community organizations. Your priority: the program must serve underserved neighborhoods first.\n\nPrivate red lines: {{brief.redLines}}\nPrivate flexibility: {{brief.flexibility}}\n\nTopic: {{brief.topic}}\n\nUse the same five tools as everyone: state_position, propose_amendment, endorse, object, ask_clarification.",
+      "brief": {
+        "topic": "Should the city allocate €50M to a 5-year program for public transit expansion, and if so, on what terms?",
+        "redLines": "At least 60% of new routes must serve neighborhoods in the bottom income quartile. Affordable fare structure (≤ €1 base) must be guaranteed.",
+        "flexibility": "Open to phasing, public-private partnership, fare subsidies in lieu of caps if equivalently inclusive."
+      },
+      "publicProfile": { "constituency": "Community Coalition", "priority": "equitable access" },
+      "tools": [
+        { "name": "state_position", "description": "Articulate your stance.", "inputSchema": { "type": "object", "properties": { "stance": { "type": "string" }, "reasoning": { "type": "string" } }, "required": ["stance", "reasoning"] } },
+        { "name": "propose_amendment", "description": "Suggest a change.", "inputSchema": { "type": "object", "properties": { "text": { "type": "string" }, "rationale": { "type": "string" } }, "required": ["text"] } },
+        { "name": "endorse", "description": "Accept the current draft.", "inputSchema": { "type": "object", "properties": { "working_proposal_summary": { "type": "string" }, "conditions": { "type": "array", "items": { "type": "string" } } }, "required": ["working_proposal_summary"] } },
+        { "name": "object", "description": "Reject the current draft.", "inputSchema": { "type": "object", "properties": { "working_proposal_summary": { "type": "string" }, "reason": { "type": "string" }, "willing_to_yield": { "type": "boolean" } }, "required": ["working_proposal_summary", "reason"] } },
+        { "name": "ask_clarification", "description": "Ask a question.", "inputSchema": { "type": "object", "properties": { "participant_id": { "type": "string" }, "question": { "type": "string" } }, "required": ["participant_id", "question"] } }
+      ],
+      "memoryPolicy": { "type": "summarized", "keepRecent": 4, "maxContextTokens": 80000 }
+    },
+
+    {
+      "id": "casey",
+      "role": "Sustainability Advocate (Environment Department)",
+      "llm": { "provider": "anthropic", "model": "claude-sonnet-4-6", "thinkingBudget": 4000, "maxTokens": 3000, "apiKeyEnv": "CASEY_ANTHROPIC_API_KEY" },
+      "systemPromptTemplate": "You represent the Environment Department. Your priority: the program must reduce per-capita transportation emissions.\n\nPrivate red lines: {{brief.redLines}}\nPrivate flexibility: {{brief.flexibility}}\n\nTopic: {{brief.topic}}",
+      "brief": {
+        "topic": "Should the city allocate €50M to a 5-year program for public transit expansion, and if so, on what terms?",
+        "redLines": "All new vehicles must be zero-emission. Program must include explicit emission-reduction targets with annual reporting.",
+        "flexibility": "Open to mixed fleets in early years if a clear transition timeline is committed."
+      },
+      "publicProfile": { "constituency": "Environment Department", "priority": "emissions reduction" },
+      "tools": [
+        { "name": "state_position", "description": "Articulate your stance.", "inputSchema": { "type": "object", "properties": { "stance": { "type": "string" }, "reasoning": { "type": "string" } }, "required": ["stance", "reasoning"] } },
+        { "name": "propose_amendment", "description": "Suggest a change.", "inputSchema": { "type": "object", "properties": { "text": { "type": "string" }, "rationale": { "type": "string" } }, "required": ["text"] } },
+        { "name": "endorse", "description": "Accept the current draft.", "inputSchema": { "type": "object", "properties": { "working_proposal_summary": { "type": "string" }, "conditions": { "type": "array", "items": { "type": "string" } } }, "required": ["working_proposal_summary"] } },
+        { "name": "object", "description": "Reject the current draft.", "inputSchema": { "type": "object", "properties": { "working_proposal_summary": { "type": "string" }, "reason": { "type": "string" }, "willing_to_yield": { "type": "boolean" } }, "required": ["working_proposal_summary", "reason"] } },
+        { "name": "ask_clarification", "description": "Ask a question.", "inputSchema": { "type": "object", "properties": { "participant_id": { "type": "string" }, "question": { "type": "string" } }, "required": ["participant_id", "question"] } }
+      ],
+      "memoryPolicy": { "type": "summarized", "keepRecent": 4, "maxContextTokens": 80000 }
+    },
+
+    {
+      "id": "drew",
+      "role": "Operations Advocate (Transit Authority)",
+      "llm": { "provider": "anthropic", "model": "claude-sonnet-4-6", "thinkingBudget": 4000, "maxTokens": 3000, "apiKeyEnv": "DREW_ANTHROPIC_API_KEY" },
+      "systemPromptTemplate": "You represent the city Transit Authority. Your priority: the program must be operationally feasible.\n\nPrivate red lines: {{brief.redLines}}\nPrivate flexibility: {{brief.flexibility}}\n\nTopic: {{brief.topic}}",
+      "brief": {
+        "topic": "Should the city allocate €50M to a 5-year program for public transit expansion, and if so, on what terms?",
+        "redLines": "Cannot promise routes that exceed crew/maintenance capacity. New depot construction is a 24-month minimum lead time.",
+        "flexibility": "Can ramp service if hiring and depot capacity scale in parallel; open to contractor partnerships for off-peak."
+      },
+      "publicProfile": { "constituency": "Transit Authority", "priority": "operational feasibility" },
+      "tools": [
+        { "name": "state_position", "description": "Articulate your stance.", "inputSchema": { "type": "object", "properties": { "stance": { "type": "string" }, "reasoning": { "type": "string" } }, "required": ["stance", "reasoning"] } },
+        { "name": "propose_amendment", "description": "Suggest a change.", "inputSchema": { "type": "object", "properties": { "text": { "type": "string" }, "rationale": { "type": "string" } }, "required": ["text"] } },
+        { "name": "endorse", "description": "Accept the current draft.", "inputSchema": { "type": "object", "properties": { "working_proposal_summary": { "type": "string" }, "conditions": { "type": "array", "items": { "type": "string" } } }, "required": ["working_proposal_summary"] } },
+        { "name": "object", "description": "Reject the current draft.", "inputSchema": { "type": "object", "properties": { "working_proposal_summary": { "type": "string" }, "reason": { "type": "string" }, "willing_to_yield": { "type": "boolean" } }, "required": ["working_proposal_summary", "reason"] } },
+        { "name": "ask_clarification", "description": "Ask a question.", "inputSchema": { "type": "object", "properties": { "participant_id": { "type": "string" }, "question": { "type": "string" } }, "required": ["participant_id", "question"] } }
+      ],
+      "memoryPolicy": { "type": "summarized", "keepRecent": 4, "maxContextTokens": 80000 }
+    }
+  ],
+
+  "decisionSpace": {
+    "freeText": true,
+    "slots": [
+      { "name": "policy_text", "type": "text", "maxLength": 4000 },
+      { "name": "endorsements", "type": "json", "schema": { "type": "object", "patternProperties": { "^.*$": { "type": "object", "properties": { "endorsed": { "type": "boolean" }, "conditions": { "type": "array", "items": { "type": "string" } } } } } } }
+    ]
+  },
+
+  "protocolHints": {
+    "maxTurns": 40,
+    "maxRounds": 10,
+    "speakingOrder": "free",
+    "orchestratorMode": "default",
+    "permittedOutcomes": ["consensus", "majority", "no_agreement", "timeout", "aborted"],
+    "maxOrchestratorTokens": 80000,
+    "maxParticipantTokensPerTurn": 3000
+  },
+
+  "agreementCriteria": "Consensus requires that all four participants call `endorse` against the same working_proposal_summary text within a single round, with no concurrent objections. The orchestrator should: (a) periodically summarize the working proposal back to all participants via broadcast_to so they're endorsing the same thing; (b) when a holdout participant objects with willing_to_yield=true, prompt them with broadcast_to to state their specific condition; (c) if 3 participants endorse and 1 objects across 2 consecutive rounds with no movement, declare 'majority' (with the holdout's objection in the rationale) — do NOT force consensus. If no quorum forms, declare 'no_agreement' at maxRounds.",
+
+  "ui": {
+    "observer": "scenarios/consensus-deliberation/ui/Observer.tsx"
+  }
+}

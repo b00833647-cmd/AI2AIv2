@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI2AI — Negotiation Demo</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161922;
+    --panel-2: #1d2230;
+    --text: #e7eaf0;
+    --dim: #a4abb8;
+    --accent: #6aa9ff;
+    --buyer: #57c4a3;
+    --seller: #e89e57;
+    --good: #6dd084;
+    --warn: #e5a558;
+    --bad: #e76f6f;
+    --border: #2a2f3d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+  }
+  header {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .subtitle { color: var(--dim); font-size: 13px; }
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px;
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .panel h2 {
+    margin: 0 0 12px;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+  }
+  label { display: block; font-size: 13px; margin: 12px 0 4px; color: var(--text); }
+  label small { color: var(--dim); font-weight: normal; }
+  input, textarea, select {
+    width: 100%;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font: inherit;
+    font-size: 13px;
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  textarea { resize: vertical; min-height: 80px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .role-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 6px 0 4px;
+  }
+  .role-toggle button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .role-toggle button.active { background: var(--accent); border-color: var(--accent); color: #0a0f1a; font-weight: 600; }
+  .submit {
+    margin-top: 18px;
+    width: 100%;
+    background: var(--accent);
+    color: #0a0f1a;
+    border: none;
+    border-radius: 6px;
+    padding: 12px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .submit:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status {
+    padding: 12px 16px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--dim);
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .signals {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin-bottom: 12px;
+  }
+  .signal-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .signal-card h3 { margin: 0 0 8px; font-size: 13px; }
+  .signal-card .role-tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; margin-left: 6px; }
+  .signal-card .role-tag.user { background: var(--accent); color: #0a0f1a; }
+  .signal-card .role-tag.opponent { background: #444a5e; color: var(--text); }
+  .signal-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; color: var(--dim); }
+  .signal-row code { color: var(--text); font-family: ui-monospace, "JetBrains Mono", monospace; }
+  .signal-row.pos code { color: var(--good); }
+  .signal-row.neg code { color: var(--warn); }
+  .notes {
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .transcript {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .turn {
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+  .turn .who { font-size: 12px; color: var(--dim); margin-bottom: 6px; }
+  .turn.buyer { border-left: 4px solid var(--buyer); }
+  .turn.seller { border-left: 4px solid var(--seller); }
+  .turn .who strong { color: var(--text); }
+  .turn .text { white-space: pre-wrap; font-size: 14px; }
+  .turn .tool { margin-top: 6px; font-size: 11px; color: var(--dim); font-family: ui-monospace, monospace; }
+  .outcome {
+    padding: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    margin-top: 8px;
+  }
+  .outcome.agreed { border-left: 4px solid var(--good); }
+  .outcome.timeout, .outcome.impasse { border-left: 4px solid var(--warn); }
+  .outcome.rejected, .outcome.aborted { border-left: 4px solid var(--bad); }
+  .outcome .label { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .outcome .verdict { font-size: 18px; font-weight: 600; margin: 4px 0 8px; }
+  .outcome .terms code { font-family: ui-monospace, monospace; font-size: 12px; color: var(--accent); }
+  .outcome .summary { font-size: 13px; color: var(--text); margin-top: 6px; }
+  .outcome .rationale { font-size: 12px; color: var(--dim); margin-top: 8px; }
+  .empty { color: var(--dim); font-size: 13px; padding: 24px; text-align: center; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 99px; font-size: 11px; background: var(--panel-2); color: var(--dim); margin-left: 6px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>AI2AI</h1>
+    <span class="subtitle">multi-agent negotiation runtime — Toyota Camry demo</span>
+  </header>
+  <main>
+    <section class="panel" id="form-panel">
+      <h2>1. Pick your role</h2>
+      <div class="role-toggle">
+        <button id="role-buyer" type="button" class="active">Buyer</button>
+        <button id="role-seller" type="button">Seller</button>
+      </div>
+
+      <h2 style="margin-top: 22px;">2. Car facts</h2>
+      <label>Mileage <small>(e.g. 32,000 mi)</small></label>
+      <input id="mileage" type="text" value="32,000 mi" />
+      <label>Customizations / recent repairs</label>
+      <textarea id="customizations">All-weather floor mats added; new Michelin tires installed 2 months ago; dealer-serviced.</textarea>
+      <label>Average market price ($)</label>
+      <input id="marketPrice" type="number" value="24000" />
+
+      <h2 style="margin-top: 22px;">3. Both sides' price targets</h2>
+      <div class="row">
+        <div>
+          <label>Seller listing ($)</label>
+          <input id="sellerListing" type="number" value="25500" />
+        </div>
+        <div>
+          <label>Seller min ($)</label>
+          <input id="sellerMinimum" type="number" value="22500" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Buyer target ($)</label>
+          <input id="buyerTarget" type="number" value="22000" />
+        </div>
+        <div>
+          <label>Buyer max ($)</label>
+          <input id="buyerMax" type="number" value="24500" />
+        </div>
+      </div>
+
+      <h2 style="margin-top: 22px;">4. Your context <small>(<span id="role-label">buyer</span>)</small></h2>
+      <textarea id="userPersonalContext" placeholder="Anything about you that helps your AI agent — reasons, constraints, history.">I'm a graduate student starting my first full-time job and need a reliable commuter. Cash-funded, can close fast.</textarea>
+
+      <h2 style="margin-top: 22px;">5. Behavior prompt</h2>
+      <textarea id="userBehaviorPrompt" rows="6" placeholder="Describe how you want your agent to behave. Tactics, tone, risk appetite, time pressure, trust posture.">Be a tough but polite negotiator. Anchor low, don't budge in the first two rounds. I value honesty so don't bluff. I'd rather walk away than overpay. Time isn't a big concern. Use a casual, friendly tone.</textarea>
+
+      <button class="submit" id="run-btn">Run negotiation</button>
+    </section>
+
+    <section class="panel" id="output-panel">
+      <h2>Live transcript</h2>
+      <div id="status" class="status">Ready. Fill in the form and click <em>Run negotiation</em>.</div>
+      <div id="signals-display"></div>
+      <div id="transcript" class="transcript"></div>
+      <div id="outcome-display"></div>
+    </section>
+  </main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+let userRole = "buyer";
+$("role-buyer").addEventListener("click", () => setRole("buyer"));
+$("role-seller").addEventListener("click", () => setRole("seller"));
+function setRole(r) {
+  userRole = r;
+  $("role-buyer").classList.toggle("active", r === "buyer");
+  $("role-seller").classList.toggle("active", r === "seller");
+  $("role-label").textContent = r;
+}
+
+$("run-btn").addEventListener("click", runNegotiation);
+
+const DIMENSIONS = [
+  "assertiveness", "flexibility", "riskTolerance",
+  "communicationStyle", "timeOrientation", "trustLevel", "emotionalExpressiveness",
+];
+
+// API base. When the page is served by our server (origin starts with http),
+// use relative URLs. When the page is rendered in a preview iframe with no
+// http origin (Claude Launch preview, file:// open, etc.), fall back to the
+// default localhost server URL — which requires CORS on the server side.
+function apiBase() {
+  const origin = window.location.origin;
+  if (origin && (origin.startsWith("http://") || origin.startsWith("https://"))) return origin;
+  // Allow override via ?api=http://host:port  (handy if you've remapped the port)
+  const params = new URLSearchParams(window.location.search);
+  const override = params.get("api");
+  if (override) return override.replace(/\/$/, "");
+  return "http://localhost:3737";
+}
+
+async function runNegotiation() {
+  const btn = $("run-btn");
+  btn.disabled = true;
+  btn.textContent = "Running…";
+  $("transcript").innerHTML = "";
+  $("signals-display").innerHTML = "";
+  $("outcome-display").innerHTML = "";
+  setStatus("Submitting…");
+
+  const payload = {
+    userRole,
+    mileage: $("mileage").value,
+    customizations: $("customizations").value,
+    marketPrice: Number($("marketPrice").value),
+    sellerListing: Number($("sellerListing").value),
+    sellerMinimum: Number($("sellerMinimum").value),
+    buyerTarget: Number($("buyerTarget").value),
+    buyerMax: Number($("buyerMax").value),
+    userPersonalContext: $("userPersonalContext").value,
+    userBehaviorPrompt: $("userBehaviorPrompt").value,
+  };
+
+  try {
+    const res = await fetch(apiBase() + "/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok || !res.body) throw new Error("server returned " + res.status);
+    await readSseStream(res.body, handleEvent);
+  } catch (err) {
+    setStatus("Error: " + (err && err.message ? err.message : err), true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Run negotiation";
+  }
+}
+
+function setStatus(text, isError) {
+  const el = $("status");
+  el.textContent = text;
+  el.style.color = isError ? "var(--bad)" : "var(--dim)";
+}
+
+const userSignals = { signals: null, notes: "" };
+const opponentSignals = { signals: null };
+
+function handleEvent(event, data) {
+  switch (event) {
+    case "status": setStatus(data.message); break;
+    case "user_signals":
+      userSignals.signals = data.signals;
+      userSignals.notes = data.notes;
+      renderSignalsPanel(data.role);
+      break;
+    case "opponent_signals":
+      opponentSignals.signals = data.signals;
+      renderSignalsPanel(userSignals.role);
+      break;
+    case "session_start":
+      setStatus("Session " + data.sessionId.slice(0, 8) + " started — orchestrator: " + data.orchestratorModel);
+      break;
+    case "turn": appendTurn(data); break;
+    case "decision": /* hidden by default; could surface in a "details" toggle */ break;
+    case "fallback":
+      const note = document.createElement("div");
+      note.className = "status";
+      note.style.color = "var(--warn)";
+      note.textContent = "[round-robin fallback triggered: " + data.reason + "]";
+      $("transcript").appendChild(note);
+      break;
+    case "session_end":
+      renderOutcome(data);
+      break;
+    case "done":
+      setStatus("Done. Session " + data.sessionId.slice(0, 8) + " ended (" + data.outcome.type + ").");
+      break;
+    case "error":
+      setStatus("Error: " + data.message, true);
+      break;
+  }
+}
+
+function renderSignalsPanel() {
+  const opponentRole = userRole === "buyer" ? "seller" : "buyer";
+  const card = (role, signals, notes, isUser) => {
+    if (!signals) return "";
+    const rows = DIMENSIONS.map((d) => {
+      const v = signals[d];
+      const sign = v > 0 ? "+1" : v < 0 ? "-1" : "0";
+      const cls = v > 0 ? "pos" : v < 0 ? "neg" : "";
+      return `<div class="signal-row ${cls}"><span>${d}</span><code>${sign}</code></div>`;
+    }).join("");
+    const tag = `<span class="role-tag ${isUser ? "user" : "opponent"}">${isUser ? "you" : "random"}</span>`;
+    const notesHtml = notes && notes.trim().length > 0
+      ? `<div class="notes">${escapeHtml(notes)}</div>` : "";
+    return `<div class="signal-card"><h3>${role}${tag}</h3>${rows}${notesHtml}</div>`;
+  };
+  const userCard = card(userRole, userSignals.signals, userSignals.notes, true);
+  const oppCard = card(opponentRole, opponentSignals.signals, "", false);
+  $("signals-display").innerHTML = `<div class="signals">${userCard}${oppCard}</div>`;
+}
+
+function appendTurn(t) {
+  const div = document.createElement("div");
+  div.className = "turn " + t.emitterId;
+  const tools = (t.toolCalls && t.toolCalls.length > 0)
+    ? t.toolCalls.map((c) => c.name + (c.input && c.input.action ? " · " + c.input.action : "")).join(", ")
+    : "";
+  div.innerHTML =
+    `<div class="who">Turn #${t.turnNumber} · <strong>${t.emitterId}</strong>${tools ? ' <span class="badge">' + tools + '</span>' : ''}</div>` +
+    `<div class="text">${escapeHtml(t.message || "(no public message)")}</div>`;
+  // If submit_proposal, show the price.
+  const proposal = (t.toolCalls || []).find((c) => c.name === "submit_proposal");
+  if (proposal && proposal.input && Array.isArray(proposal.input.issues)) {
+    const price = proposal.input.issues.find((i) => i.name === "price");
+    if (price) {
+      const isFinal = proposal.input.is_final ? " · FINAL" : "";
+      div.innerHTML += `<div class="tool">→ ${proposal.input.action} @ $${Number(price.value).toLocaleString()}${isFinal}</div>`;
+    }
+  }
+  $("transcript").appendChild(div);
+  div.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+function renderOutcome(data) {
+  const o = data.outcome;
+  const div = document.createElement("div");
+  div.className = "outcome " + o.type;
+  let termsHtml = "";
+  if (o.terms) {
+    const parts = Object.entries(o.terms).map(([k, v]) => `<code>${k}=${v}</code>`).join(" · ");
+    termsHtml = `<div class="terms">${parts}</div>`;
+  }
+  div.innerHTML =
+    `<div class="label">Outcome</div>` +
+    `<div class="verdict">${o.type.toUpperCase()}${data.degraded ? ' <span class="badge">degraded</span>' : ''}</div>` +
+    termsHtml +
+    `<div class="summary">${escapeHtml(o.summary)}</div>` +
+    `<div class="rationale">${escapeHtml(o.rationale)}</div>`;
+  $("outcome-display").appendChild(div);
+}
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// Minimal SSE parser. Each event is two newline-separated lines:
+//   event: <name>
+//   data: <json>
+// Followed by a blank line.
+async function readSseStream(body, onEvent) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) !== -1) {
+      const block = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      let eventName = "message";
+      let dataLines = [];
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) eventName = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+      }
+      if (dataLines.length > 0) {
+        try {
+          onEvent(eventName, JSON.parse(dataLines.join("\n")));
+        } catch (err) {
+          console.error("bad SSE payload", err, dataLines);
+        }
+      }
+    }
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,200 @@
+{
+  "id": "three-party-debate",
+  "version": "0.1.0",
+  "name": "Three-Party Debate (Pro / Con / Judge)",
+  "description": "A formal debate with two debaters arguing opposite sides of a resolution and a non-participating Judge who renders a verdict at the end. Demonstrates: N>2 participants, asymmetric roles (judge vs debater), termination via judge declaration rather than mutual agreement, free-text decision space.\n\nThe orchestrator's job here is to enforce speaking turns, prevent any single debater from monopolizing, prompt the Judge to render a decision when both sides have presented their final arguments, and detect concession or filibuster.",
+
+  "participants": [
+    {
+      "id": "pro",
+      "role": "Affirmative Debater",
+      "llm": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
+        "thinkingBudget": 4000,
+        "maxTokens": 4000,
+        "apiKeyEnv": "DEBATER_PRO_ANTHROPIC_API_KEY"
+      },
+      "systemPromptTemplate": "You are arguing the AFFIRMATIVE side of the resolution: \"{{brief.resolution}}\".\n\nDebate format: each turn, you make ONE argument. Cite evidence using cite_evidence when claiming empirical facts. Concede a point ONLY when the opposition's evidence is incontrovertible — concede_point with the specific claim conceded. Do not filibuster; one focused argument per turn.\n\nYour stance details: {{brief.stanceDetails}}\n\nWhen you've made your strongest case (typically by round 4), use make_argument with is_closing=true to signal your closing statement.",
+      "brief": {
+        "resolution": "Resolved: Cities should ban private car ownership in central districts.",
+        "stanceDetails": "Argue that the social, environmental, and equity benefits outweigh personal-mobility costs."
+      },
+      "publicProfile": { "side": "affirmative" },
+      "tools": [
+        {
+          "name": "make_argument",
+          "description": "Make a single focused argument. Use is_closing=true when delivering your final statement.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "claim": { "type": "string", "description": "The thesis of this turn's argument, one sentence." },
+              "support": { "type": "string", "description": "Reasoning, evidence summary, or analogy. 2-4 paragraphs max." },
+              "is_closing": { "type": "boolean", "default": false }
+            },
+            "required": ["claim", "support"]
+          }
+        },
+        {
+          "name": "cite_evidence",
+          "description": "Reference a specific source for an empirical claim. Use sparingly and only for factual assertions.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "claim": { "type": "string" },
+              "source": { "type": "string", "description": "e.g. 'Bloomberg 2023 study on Oslo car-free zones'" },
+              "summary": { "type": "string" }
+            },
+            "required": ["claim", "source"]
+          }
+        },
+        {
+          "name": "concede_point",
+          "description": "Acknowledge a specific point made by the opposition. Use sparingly — concession is principled, not strategic capitulation.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "opposition_turn_number": { "type": "integer" },
+              "what_you_concede": { "type": "string" },
+              "what_you_maintain": { "type": "string" }
+            },
+            "required": ["opposition_turn_number", "what_you_concede"]
+          }
+        }
+      ],
+      "memoryPolicy": { "type": "summarized", "keepRecent": 6, "maxContextTokens": 100000 }
+    },
+
+    {
+      "id": "con",
+      "role": "Negative Debater",
+      "llm": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
+        "thinkingBudget": 4000,
+        "maxTokens": 4000,
+        "apiKeyEnv": "DEBATER_CON_ANTHROPIC_API_KEY"
+      },
+      "systemPromptTemplate": "You are arguing the NEGATIVE side of the resolution: \"{{brief.resolution}}\".\n\nDebate format: each turn, you make ONE argument. Cite evidence using cite_evidence when claiming empirical facts. Concede a point ONLY when the opposition's evidence is incontrovertible. Do not filibuster.\n\nYour stance details: {{brief.stanceDetails}}\n\nWhen you've made your strongest case, use make_argument with is_closing=true.",
+      "brief": {
+        "resolution": "Resolved: Cities should ban private car ownership in central districts.",
+        "stanceDetails": "Argue that the policy infringes liberty disproportionately, harms the disabled and elderly, and that congestion charging achieves the stated goals more efficiently."
+      },
+      "publicProfile": { "side": "negative" },
+      "tools": [
+        {
+          "name": "make_argument",
+          "description": "Make a single focused argument. Use is_closing=true when delivering your final statement.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "claim": { "type": "string" },
+              "support": { "type": "string" },
+              "is_closing": { "type": "boolean", "default": false }
+            },
+            "required": ["claim", "support"]
+          }
+        },
+        {
+          "name": "cite_evidence",
+          "description": "Reference a source for an empirical claim.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "claim": { "type": "string" },
+              "source": { "type": "string" },
+              "summary": { "type": "string" }
+            },
+            "required": ["claim", "source"]
+          }
+        },
+        {
+          "name": "concede_point",
+          "description": "Acknowledge a specific point.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "opposition_turn_number": { "type": "integer" },
+              "what_you_concede": { "type": "string" },
+              "what_you_maintain": { "type": "string" }
+            },
+            "required": ["opposition_turn_number", "what_you_concede"]
+          }
+        }
+      ],
+      "memoryPolicy": { "type": "summarized", "keepRecent": 6, "maxContextTokens": 100000 }
+    },
+
+    {
+      "id": "judge",
+      "role": "Judge",
+      "llm": {
+        "provider": "anthropic",
+        "model": "claude-opus-4-7",
+        "thinkingBudget": 8000,
+        "maxTokens": 4000,
+        "apiKeyEnv": "JUDGE_ANTHROPIC_API_KEY"
+      },
+      "systemPromptTemplate": "You are the Judge. You do NOT argue. You are invoked only when the orchestrator asks you to:\n\n  - request_clarification: ask one debater to clarify a specific point.\n  - render_verdict: declare which side prevailed and why, citing specific arguments.\n\nResolution: \"{{brief.resolution}}\"\n\nJudging criteria: argument quality, evidence specificity, responsiveness to the opposition. Disregard rhetorical flourish. Disregard your own prior beliefs about the resolution; judge ONLY on the case made in this debate.",
+      "brief": {
+        "resolution": "Resolved: Cities should ban private car ownership in central districts."
+      },
+      "publicProfile": { "role": "judge" },
+      "tools": [
+        {
+          "name": "request_clarification",
+          "description": "Ask one debater to clarify a specific point in their argument before rendering a verdict.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "debater_id": { "type": "string", "enum": ["pro", "con"] },
+              "question": { "type": "string" }
+            },
+            "required": ["debater_id", "question"]
+          }
+        },
+        {
+          "name": "render_verdict",
+          "description": "Declare the winner of the debate with reasoning that cites specific turn numbers.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "winner": { "type": "string", "enum": ["pro", "con", "tie"] },
+              "rationale": { "type": "string", "description": "Reasoning citing specific turn numbers from both debaters." },
+              "key_arguments": {
+                "type": "array",
+                "items": { "type": "object", "properties": { "side": { "type": "string" }, "turn_number": { "type": "integer" }, "summary": { "type": "string" } } }
+              }
+            },
+            "required": ["winner", "rationale"]
+          }
+        }
+      ],
+      "memoryPolicy": { "type": "verbatim" }
+    }
+  ],
+
+  "decisionSpace": {
+    "freeText": true,
+    "slots": [
+      { "name": "winner", "type": "enum", "options": ["pro", "con", "tie"] },
+      { "name": "rationale", "type": "text", "maxLength": 2000 }
+    ]
+  },
+
+  "protocolHints": {
+    "maxTurns": 14,
+    "maxRounds": 6,
+    "speakingOrder": "alternating",
+    "orchestratorMode": "default",
+    "permittedOutcomes": ["verdict_rendered", "no_verdict", "timeout", "aborted"],
+    "maxOrchestratorTokens": 30000,
+    "maxParticipantTokensPerTurn": 4000
+  },
+
+  "agreementCriteria": "The session ends when the Judge calls render_verdict. The orchestrator should NOT invoke the Judge until both Pro and Con have each delivered a closing statement (make_argument with is_closing=true), or until maxRounds is reached. The Judge may first call request_clarification (at most twice total) before rendering a verdict. After the Judge renders a verdict, declare outcome 'verdict_rendered' with terms = the verdict's winner and rationale.",
+
+  "ui": {
+    "observer": "scenarios/three-party-debate/ui/Observer.tsx"
+  }
+}

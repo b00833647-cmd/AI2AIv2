@@ -1,0 +1,28 @@
+{
+  "name": "ai2ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Multi-agent LLM dialogue runtime built on the multi-agent-core spec.",
+  "scripts": {
+    "run": "tsx src/cli/run.ts",
+    "batch": "tsx src/cli/batch.ts",
+    "replay": "tsx src/cli/replay.ts",
+    "judge": "tsx src/cli/judge.ts",
+    "setup": "tsx src/cli/setup.ts",
+    "serve": "tsx src/server/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1",
+    "better-sqlite3": "^11.5.0",
+    "nanoid": "^5.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

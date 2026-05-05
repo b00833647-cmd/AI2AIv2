@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI2AI · Admin</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161922; --panel-2: #1d2230; --panel-3: #232838;
+    --text: #e7eaf0; --dim: #9aa1ae; --accent: #6aa9ff;
+    --good: #6dd084; --warn: #e5a558; --bad: #e76f6f;
+    --border: #2a2f3d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         font-size: 14px; line-height: 1.5; }
+  header.topbar { padding: 12px 24px; border-bottom: 1px solid var(--border);
+                  display: flex; justify-content: space-between; align-items: center; }
+  header.topbar h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  header.topbar .links a { color: var(--dim); text-decoration: none; margin-left: 16px; font-size: 13px; }
+  header.topbar .links a:hover { color: var(--accent); }
+  main { max-width: 1600px; margin: 0 auto; padding: 24px; }
+  .panel { background: var(--panel); border: 1px solid var(--border);
+           border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+  h2 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); font-weight: 600; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .stat .label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .stat .sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .funnel { display: grid; grid-template-columns: 80px 1fr 60px; gap: 8px; align-items: center; font-size: 13px; }
+  .funnel-bar { background: var(--panel-3); height: 24px; border-radius: 4px; overflow: hidden; }
+  .funnel-bar > .fill { background: var(--accent); height: 100%; transition: width 240ms; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); font-weight: 600; }
+  tr:hover td { background: var(--panel-2); }
+  td a { color: var(--accent); text-decoration: none; font-family: ui-monospace, monospace; }
+  td a:hover { text-decoration: underline; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 6px; border-radius: 99px; font-weight: 600; }
+  .badge.ok { background: rgba(109,208,132,0.15); color: var(--good); }
+  .badge.warn { background: rgba(229,165,88,0.15); color: var(--warn); }
+  .badge.bad { background: rgba(231,111,111,0.15); color: var(--bad); }
+  .badge.dim { background: var(--panel-3); color: var(--dim); }
+  .controls { margin-bottom: 12px; }
+  .controls input[type="text"] { background: var(--panel-2); color: var(--text);
+                                 border: 1px solid var(--border); border-radius: 6px;
+                                 padding: 8px 10px; font: inherit; font-size: 13px; min-width: 240px; }
+  .scroll-x { overflow-x: auto; }
+  #detail { display: none; }
+  #detail .back { color: var(--accent); cursor: pointer; font-size: 13px; margin-bottom: 12px; display: inline-block; }
+  pre { background: var(--panel-2); border: 1px solid var(--border); padding: 10px; border-radius: 6px;
+        font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+  .turn { padding: 8px 10px; border-left: 3px solid var(--border); background: var(--panel-2); border-radius: 4px; margin-bottom: 6px; }
+  .turn.buyer { border-left-color: var(--good); }
+  .turn.seller { border-left-color: var(--warn); }
+  .turn .meta { font-size: 11px; color: var(--dim); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>AI2AI · Admin Dashboard</h1>
+  <div class="links">
+    <a href="/study" target="_blank">→ Study</a>
+    <a href="#" onclick="loadData(); return false;">⟳ Refresh</a>
+  </div>
+</header>
+
+<main>
+
+<div id="overview">
+  <div class="panel">
+    <h2>Overview</h2>
+    <div class="stats" id="stats">Loading…</div>
+  </div>
+
+  <div class="panel">
+    <h2>Funnel · participants who reached each step</h2>
+    <div id="funnel">Loading…</div>
+  </div>
+
+  <div class="panel">
+    <h2>Participants</h2>
+    <div class="controls">
+      <input type="text" id="filter" placeholder="filter by id, role, outcome, code…" />
+    </div>
+    <div class="scroll-x">
+      <table id="participants-table">
+        <thead>
+          <tr>
+            <th>ID</th><th>Role</th><th>Status</th><th>Outcome</th><th>Final $</th>
+            <th>Tokens</th><th>Time</th><th>Last screen</th><th>Events</th>
+            <th>Flags</th><th>Code</th>
+          </tr>
+        </thead>
+        <tbody id="participants-body"><tr><td colspan="11">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="detail">
+  <a class="back" onclick="closeDetail()">← back to overview</a>
+  <div id="detail-body"></div>
+</div>
+
+</main>
+
+<script>
+async function loadData() {
+  const res = await fetch("/admin/data");
+  if (!res.ok) { document.body.innerHTML = "<p style='padding:20px'>Auth required.</p>"; return; }
+  const d = await res.json();
+  renderStats(d);
+  renderFunnel(d.funnel);
+  renderParticipants(d.participants);
+}
+
+function renderStats(d) {
+  const c = d.counts, s = d.spend;
+  const dropRate = c.total > 0 ? Math.round(((c.total - c.finished) / c.total) * 100) : 0;
+  const stats = [
+    { label: "Participants", value: c.total, sub: c.finished + " finished · " + dropRate + "% dropped" },
+    { label: "Sessions run", value: s.sessions, sub: s.tokens_orchestrator.toLocaleString() + " orch tokens" },
+    { label: "Total tokens", value: s.tokens_total.toLocaleString(), sub: "across all sessions" },
+    { label: "Est. cost", value: "$" + d.estUsd, sub: "@ ~$9/M (Sonnet 4.6 mid)" },
+  ];
+  $("stats").innerHTML = stats.map(s => `
+    <div class="stat">
+      <div class="label">${s.label}</div>
+      <div class="value">${s.value}</div>
+      <div class="sub">${s.sub}</div>
+    </div>
+  `).join("");
+}
+
+function renderFunnel(rows) {
+  const SCREEN_NAMES = {
+    1: "Role pick", 2: "Consent", 3: "Instructions", 4: "Listing",
+    5: "Personal context", 6: "Behavior prompt", 7: "Negotiation",
+    8: "Survey", 9: "Demographics", 10: "Thanks",
+  };
+  if (rows.length === 0) {
+    $("funnel").innerHTML = "<p style='color:var(--dim);font-size:13px'>No event data yet — first participant who completes will populate this.</p>";
+    return;
+  }
+  const max = Math.max(...rows.map(r => r.reached));
+  $("funnel").innerHTML = rows.map(r => {
+    const pct = max > 0 ? (r.reached / max) * 100 : 0;
+    return `<div class="funnel">
+      <div>Step ${r.screen}<br><span style="color:var(--dim);font-size:11px">${SCREEN_NAMES[r.screen] || ""}</span></div>
+      <div class="funnel-bar"><div class="fill" style="width:${pct}%"></div></div>
+      <div style="text-align:right;font-family:ui-monospace,monospace">${r.reached}</div>
+    </div>`;
+  }).join("");
+}
+
+let allParticipants = [];
+function renderParticipants(rows) {
+  allParticipants = rows;
+  applyFilter();
+}
+
+$("filter").addEventListener("input", applyFilter);
+function applyFilter() {
+  const q = $("filter").value.toLowerCase().trim();
+  const filtered = q
+    ? allParticipants.filter(p =>
+        p.id.toLowerCase().includes(q) ||
+        (p.role || "").toLowerCase().includes(q) ||
+        (p.outcome_type || "").toLowerCase().includes(q) ||
+        (p.completion_code || "").toLowerCase().includes(q))
+    : allParticipants;
+  renderTable(filtered);
+}
+
+function renderTable(rows) {
+  if (rows.length === 0) {
+    $("participants-body").innerHTML = "<tr><td colspan='11' style='text-align:center;color:var(--dim)'>No participants yet.</td></tr>";
+    return;
+  }
+  $("participants-body").innerHTML = rows.map(p => {
+    const status = p.finished_at ? "<span class='badge ok'>finished</span>" : "<span class='badge dim'>in progress</span>";
+    const outcome = p.outcome_type ? `<span class='badge ${outcomeColor(p.outcome_type)}'>${p.outcome_type}</span>` : "—";
+    let price = "—";
+    if (p.outcome_terms_json) {
+      try { const t = JSON.parse(p.outcome_terms_json); if (t.price) price = "$" + t.price.toLocaleString(); } catch {}
+    }
+    const tokens = p.tokens_total ? p.tokens_total.toLocaleString() : "—";
+    const time = p.total_time_sec != null ? formatTime(p.total_time_sec) : "—";
+    const flags = [];
+    if (p.flag_speeding) flags.push("<span class='badge bad'>speed</span>");
+    if (p.flag_attention) flags.push("<span class='badge bad'>attn</span>");
+    if (p.flag_short_prompt) flags.push("<span class='badge warn'>short</span>");
+    return `<tr>
+      <td><a onclick="openDetail('${p.id}')">${p.id}</a></td>
+      <td>${p.role || "—"}</td>
+      <td>${status}</td>
+      <td>${outcome}</td>
+      <td style="font-family:ui-monospace,monospace">${price}</td>
+      <td style="font-family:ui-monospace,monospace">${tokens}</td>
+      <td>${time}</td>
+      <td>${p.last_screen ?? "—"}</td>
+      <td style="font-family:ui-monospace,monospace">${p.total_events}</td>
+      <td>${flags.join(" ") || "—"}</td>
+      <td style="font-family:ui-monospace,monospace;font-size:11px">${p.completion_code || "—"}</td>
+    </tr>`;
+  }).join("");
+}
+
+function outcomeColor(t) {
+  if (t === "agreed") return "ok";
+  if (t === "impasse" || t === "timeout") return "warn";
+  if (t === "rejected" || t === "aborted") return "bad";
+  return "dim";
+}
+function formatTime(sec) {
+  if (sec < 60) return sec + "s";
+  return Math.floor(sec / 60) + "m " + (sec % 60) + "s";
+}
+
+async function openDetail(id) {
+  $("overview").style.display = "none";
+  $("detail").style.display = "block";
+  $("detail-body").innerHTML = "<p style='color:var(--dim)'>Loading…</p>";
+  const res = await fetch("/admin/p/" + encodeURIComponent(id));
+  if (!res.ok) { $("detail-body").innerHTML = "<p>Not found.</p>"; return; }
+  const d = await res.json();
+  renderDetail(id, d);
+}
+
+function closeDetail() {
+  $("detail").style.display = "none";
+  $("overview").style.display = "block";
+}
+
+function renderDetail(id, d) {
+  const p = d.participant;
+  const meta = [
+    ["id", p.id], ["role", p.role], ["age", p.age], ["gender", p.gender],
+    ["experience", p.experience], ["AI familiarity", p.ai_familiarity],
+    ["consent", p.consent ? "yes" : "no"], ["attention check", p.attention_check_pass ? "pass" : "fail"],
+    ["created", p.created_at], ["finished", p.finished_at || "—"],
+    ["completion code", p.completion_code || "—"],
+  ];
+  let html = `<h2>Participant ${id}</h2>
+    <div class="panel"><h2>Demographics & meta</h2>
+      <table><tbody>${meta.map(([k, v]) => `<tr><td style="color:var(--dim)">${k}</td><td>${v ?? "—"}</td></tr>`).join("")}</tbody></table>
+    </div>`;
+
+  // Behavior prompts
+  if (d.behavior_prompts && d.behavior_prompts.length > 0) {
+    html += `<div class="panel"><h2>Behavior prompts (${d.behavior_prompts.length} revision${d.behavior_prompts.length > 1 ? "s" : ""})</h2>`;
+    for (const bp of d.behavior_prompts) {
+      let sigs = "";
+      try {
+        const s = JSON.parse(bp.mapped_signals_json);
+        sigs = "<div style='font-family:ui-monospace,monospace;font-size:11px;color:var(--dim);margin-top:8px'>"
+          + Object.entries(s).map(([k, v]) => `${k}=${v > 0 ? "+" + v : v}`).join(" · ") + "</div>";
+      } catch {}
+      html += `<div style="margin-bottom:12px">
+        <div style="color:var(--dim);font-size:12px">Revision ${bp.revision} · ${bp.submitted_at}</div>
+        <pre>${escapeHtml(bp.prompt_text)}</pre>
+        ${sigs}
+        ${bp.mapped_notes ? "<div style='font-size:12px;color:var(--dim);margin-top:6px'><em>" + escapeHtml(bp.mapped_notes) + "</em></div>" : ""}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Personal context
+  const ctxRow = (d.participant_responses || []).find(r => r.screen === "context" && r.key === "personal_context");
+  if (ctxRow) {
+    html += `<div class="panel"><h2>Personal context (step 5)</h2><pre>${escapeHtml(ctxRow.value_text || "")}</pre></div>`;
+  }
+
+  // Survey responses
+  const survey = (d.participant_responses || []).filter(r => r.screen === "post_survey" && !r.key.startsWith("_"));
+  if (survey.length > 0) {
+    html += `<div class="panel"><h2>Post-survey</h2><table><tbody>`;
+    for (const r of survey) {
+      html += `<tr><td style="color:var(--dim)">${r.key}</td><td>${r.value_int ?? escapeHtml(r.value_text || "")}</td></tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  // Negotiation transcript
+  if (d.session && d.session.turns && d.session.turns.length > 0) {
+    html += `<div class="panel"><h2>Negotiation transcript (${d.session.turns.length} turns)</h2>`;
+    html += `<div style='font-size:13px;margin-bottom:8px;color:var(--dim)'>Outcome: <strong>${d.session.outcome_type || "?"}</strong> ${d.session.outcome_summary ? "· " + escapeHtml(d.session.outcome_summary) : ""}</div>`;
+    for (const t of d.session.turns) {
+      let tools = "";
+      try {
+        const tc = JSON.parse(t.tool_calls_json || "[]");
+        const proposal = tc.find(c => c.name === "submit_proposal");
+        if (proposal && proposal.input && proposal.input.issues) {
+          const price = (proposal.input.issues.find(i => i.name === "price") || {}).value;
+          if (price != null) tools = ` · ${proposal.input.action} @ $${Number(price).toLocaleString()}`;
+        }
+      } catch {}
+      html += `<div class="turn ${t.emitter_id}">
+        <div class="meta">turn #${t.turn_number} · ${t.emitter_id}${tools}</div>
+        <div>${escapeHtml(t.message || "")}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Events count
+  const eventsCount = (d.participant_events || []).length;
+  if (eventsCount > 0) {
+    const byType = {};
+    for (const e of d.participant_events) byType[e.event_type] = (byType[e.event_type] || 0) + 1;
+    html += `<div class="panel"><h2>Events (${eventsCount})</h2>
+      <div style="font-family:ui-monospace,monospace;font-size:12px">
+        ${Object.entries(byType).sort((a,b) => b[1]-a[1]).map(([k,v]) => `<span style="margin-right:14px">${k}=<strong>${v}</strong></span>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  // Actions
+  html += `<div class="panel"><h2>Actions</h2>
+    <a href="/api/p/export?id=${encodeURIComponent(id)}" target="_blank" style="color:var(--accent);margin-right:18px">⬇ Download full JSON export</a>
+    <a href="#" style="color:var(--bad)" onclick="eraseParticipant('${id}'); return false;">🗑 Erase (GDPR)</a>
+  </div>`;
+
+  $("detail-body").innerHTML = html;
+}
+
+async function eraseParticipant(id) {
+  if (!confirm("Erase ALL data for participant " + id + "? This cannot be undone.")) return;
+  const res = await fetch("/api/p/erase?id=" + encodeURIComponent(id), { method: "DELETE" });
+  if (res.ok) { alert("Erased."); closeDetail(); loadData(); }
+  else { alert("Failed: " + (await res.text())); }
+}
+
+function $(id) { return document.getElementById(id); }
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+loadData();
+</script>
+</body>
+</html>

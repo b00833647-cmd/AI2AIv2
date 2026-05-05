@@ -1,0 +1,47 @@
+# Fly.io deployment config for AI2AI.
+#
+# Usage:
+#   fly launch --no-deploy           # creates the app, edit this file as needed
+#   fly volumes create data --size 1 # 1GB persistent volume for SQLite
+#   fly secrets set ANTHROPIC_API_KEY=sk-ant-... \
+#                   AI2AI_ADMIN_PASSWORD=change-me \
+#                   AI2AI_DAILY_BUDGET_USD=20
+#   fly deploy
+
+app = "ai2ai"               # change to your unique app name
+primary_region = "cdg"      # Paris — closest to ESSEC participants
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  AI2AI_PORT = "8080"
+  AI2AI_DB_PATH = "/data/sessions.db"
+
+[mounts]
+  source = "data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpus = 1

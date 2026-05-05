@@ -1,0 +1,193 @@
+{
+  "id": "buyer-seller-negotiation",
+  "version": "0.1.0",
+  "name": "Buyer-Seller Negotiation (car sale)",
+  "description": "A two-party negotiation over a used car. The buyer wants the lowest price; the seller wants the highest. Multiple issues are negotiable (price, warranty months, delivery weeks, accessories). This is the v1 car-sale flow re-expressed as a Scenario Pack — used as the canonical baseline for v2 testing.",
+
+  "participants": [
+    {
+      "id": "buyer",
+      "role": "Buyer",
+      "llm": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
+        "thinkingBudget": 5000,
+        "maxTokens": 8000,
+        "apiKeyEnv": "BUYER_ANTHROPIC_API_KEY"
+      },
+      "systemPromptTemplate": "You are negotiating to buy a used car.\n\nYour profile:\n- Maximum budget: €{{brief.maxBudget}}\n- Ideal price range: €{{brief.idealRange.0}} – €{{brief.idealRange.1}}\n- Acceptable mileage: up to {{brief.maxMileageKm}}km\n- Fuel preference: {{brief.fuelPreference}}\n- BATNA (walk-away alternative): {{brief.batna}}\n\nThe car for sale:\n- {{brief.listing.year}} {{brief.listing.make}} {{brief.listing.model}}\n- Listed at €{{brief.listing.listedPriceEur}}\n- {{brief.listing.mileageKm}}km, {{brief.listing.fuelType}}, {{brief.listing.transmission}}\n\nNegotiable issues: price, warranty (months), delivery (weeks), accessories.\n\nStrategy: {{brief.strategy}}\n\nOn each turn, either:\n  - Use submit_proposal with explicit issue values when you're ready to make a formal offer.\n  - Use send_message for conversation, clarification, or rapport.\n\nAlways verbalize your offers in the proposal's `message` field — the seller cannot see the structured data, only your prose.",
+      "brief": {
+        "maxBudget": 22000,
+        "idealRange": [16000, 19000],
+        "maxMileageKm": 80000,
+        "fuelPreference": "no-preference",
+        "batna": "Continue browsing — there are 3 similar cars listed nearby within budget.",
+        "strategy": "Balanced. Anchor low (around 70% of listed), concede in proportion to the seller's concessions, and aim for a price in your ideal range with reasonable warranty coverage.",
+        "listing": {
+          "id": "car-001",
+          "year": 2020,
+          "make": "Peugeot",
+          "model": "508",
+          "listedPriceEur": 22000,
+          "mileageKm": 55000,
+          "fuelType": "gasoline",
+          "transmission": "automatic"
+        }
+      },
+      "publicProfile": {
+        "type": "private buyer",
+        "shoppingFor": "a family sedan"
+      },
+      "tools": [
+        {
+          "name": "submit_proposal",
+          "description": "Make a formal offer with structured issue values plus a public message conveying the offer in prose.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "action": { "type": "string", "enum": ["propose", "counter", "accept", "reject"] },
+              "issues": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "value": { "type": ["number", "string", "boolean"] },
+                    "justification": { "type": "string" }
+                  },
+                  "required": ["name", "value"]
+                }
+              },
+              "reasoning": { "type": "string", "description": "Private reasoning, logged but not shared with the seller." },
+              "message": { "type": "string", "description": "Public prose visible to the seller. MUST verbalize the offer values clearly." },
+              "is_final": { "type": "boolean" }
+            },
+            "required": ["action", "issues", "message"]
+          }
+        },
+        {
+          "name": "send_message",
+          "description": "Send a conversational message without making a formal offer. Use for rapport, clarification, or stalling.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "message": { "type": "string" },
+              "intent": { "type": "string", "enum": ["greeting", "clarification", "rapport", "stall", "objection", "other"] }
+            },
+            "required": ["message"]
+          }
+        }
+      ],
+      "memoryPolicy": { "type": "summarized", "keepRecent": 5, "maxContextTokens": 160000 }
+    },
+
+    {
+      "id": "seller",
+      "role": "Seller",
+      "llm": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
+        "thinkingBudget": 5000,
+        "maxTokens": 8000,
+        "apiKeyEnv": "SELLER_ANTHROPIC_API_KEY"
+      },
+      "systemPromptTemplate": "You are selling a used car.\n\nYour profile:\n- Listed price: €{{brief.listing.listedPriceEur}}\n- Minimum acceptable: €{{brief.minimumAcceptablePrice}}\n- Reason for sale: {{brief.reasonForSale}}\n- Time pressure: {{brief.timePressure}}\n- BATNA: {{brief.batna}}\n\nThe car:\n- {{brief.listing.year}} {{brief.listing.make}} {{brief.listing.model}}\n- {{brief.listing.mileageKm}}km, {{brief.listing.fuelType}}, {{brief.listing.transmission}}\n- Available accessories: {{brief.listing.availableAddOns}}\n\nNegotiable issues: price, warranty (months), delivery (weeks), accessories.\n\nStrategy: {{brief.strategy}}\n\nOn each turn, either:\n  - Use submit_proposal with explicit issue values when ready to make a formal offer.\n  - Use send_message for conversation.\n\nAlways verbalize your offers in the proposal's `message` field — the buyer cannot see the structured data, only your prose.",
+      "brief": {
+        "minimumAcceptablePrice": 17500,
+        "reasonForSale": "Upgrading to a larger vehicle; need this gone in 4 weeks.",
+        "timePressure": "moderate",
+        "batna": "List on a second platform; expect 2-4 more weeks before another buyer.",
+        "strategy": "Defend the listed price firmly for 2 rounds, then concede slowly. Anchor on car condition and low mileage. Trade warranty/delivery for price holds.",
+        "listing": {
+          "id": "car-001",
+          "year": 2020,
+          "make": "Peugeot",
+          "model": "508",
+          "listedPriceEur": 22000,
+          "mileageKm": 55000,
+          "fuelType": "gasoline",
+          "transmission": "automatic",
+          "availableAddOns": ["winter_tires", "extended_warranty", "service_pack"]
+        }
+      },
+      "publicProfile": {
+        "type": "private seller",
+        "carYear": 2020,
+        "carMake": "Peugeot"
+      },
+      "tools": [
+        {
+          "name": "submit_proposal",
+          "description": "Make a formal offer with structured issue values plus a public message conveying the offer in prose.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "action": { "type": "string", "enum": ["propose", "counter", "accept", "reject"] },
+              "issues": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "value": { "type": ["number", "string", "boolean"] },
+                    "justification": { "type": "string" }
+                  },
+                  "required": ["name", "value"]
+                }
+              },
+              "reasoning": { "type": "string" },
+              "message": { "type": "string" },
+              "is_final": { "type": "boolean" }
+            },
+            "required": ["action", "issues", "message"]
+          }
+        },
+        {
+          "name": "send_message",
+          "description": "Conversational message without a formal offer.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "message": { "type": "string" },
+              "intent": { "type": "string", "enum": ["greeting", "clarification", "rapport", "stall", "objection", "other"] }
+            },
+            "required": ["message"]
+          }
+        }
+      ],
+      "memoryPolicy": { "type": "summarized", "keepRecent": 5, "maxContextTokens": 160000 }
+    }
+  ],
+
+  "decisionSpace": {
+    "freeText": false,
+    "slots": [
+      { "name": "price", "type": "number", "range": [12000, 22000], "unit": "EUR" },
+      { "name": "warranty_months", "type": "number", "range": [0, 24] },
+      { "name": "delivery_weeks", "type": "number", "range": [0, 8] },
+      { "name": "accessories", "type": "enum", "options": ["none", "winter_tires", "extended_warranty", "service_pack"] }
+    ]
+  },
+
+  "protocolHints": {
+    "maxTurns": 30,
+    "maxRounds": 15,
+    "speakingOrder": "alternating",
+    "orchestratorMode": "default",
+    "permittedOutcomes": ["agreed", "rejected", "impasse", "timeout", "aborted"],
+    "maxOrchestratorTokens": 50000,
+    "maxParticipantTokensPerTurn": 8000,
+    "firstSpeaker": "buyer"
+  },
+
+  "agreementCriteria": "Agreement requires that one party calls submit_proposal with action='accept' OR that both parties propose proposals with identical values for all four slots (price, warranty_months, delivery_weeks, accessories) within the same round. A 'reject' action by either party with is_final=true ends the session as 'rejected'. If neither happens within maxRounds, declare 'impasse'.",
+
+  "agreementDetectorModule": "scenarios/buyer-seller-negotiation/agreement.ts",
+
+  "utilityModule": "scenarios/buyer-seller-negotiation/utility.ts",
+
+  "ui": {
+    "observer": "scenarios/buyer-seller-negotiation/ui/Observer.tsx",
+    "setup": "scenarios/buyer-seller-negotiation/ui/Setup.tsx"
+  }
+}

@@ -1,0 +1,9 @@
+This directory is a runtime artifact location.
+
+`pack.json` is regenerated on every /api/p/run from the scenario builder
+(src/multi-agent/pack-builder.ts) using each participant's intake answers.
+The file is git-ignored because it contains free-text participant content.
+
+If you want to run the scenario from the CLI (`npm run run -- toyota-camry-negotiation`)
+without going through the web flow first, run `npm run setup` once to generate
+a baseline pack.json from interactive intake.

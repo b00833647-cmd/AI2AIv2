@@ -1,0 +1,15 @@
+node_modules
+data
+*.db
+*.db-journal
+.env
+.env.*
+.git
+.github
+.DS_Store
+*.log
+dist
+.vscode
+.idea
+README.md
+LICENSE

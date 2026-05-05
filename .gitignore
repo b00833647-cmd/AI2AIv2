@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# Local databases (participant data lives here in dev)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+
+# Generated runtime artifacts.
+# pack.json is regenerated per session and contains free-text participant
+# content — never commit it.
+scenarios/toyota-camry-negotiation/pack.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Build output (we don't currently build, kept for safety)
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Local backup directories created during development
+AI2AI-backup-*/
+
+# Claude Code internal state (intelligence cache, sessions etc.)
+.claude-flow/

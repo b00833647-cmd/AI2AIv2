@@ -1,0 +1,1803 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Negotiation Study — Demo</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161922;
+    --panel-2: #1d2230;
+    --panel-3: #232838;
+    --text: #e7eaf0;
+    --dim: #9aa1ae;
+    --accent: #6aa9ff;
+    --accent-fade: #6aa9ff22;
+    --buyer: #57c4a3;
+    --seller: #e89e57;
+    --good: #6dd084;
+    --warn: #e5a558;
+    --bad: #e76f6f;
+    --border: #2a2f3d;
+    --listing-bg: #11151c;
+    --listing-accent: #f5b042;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+    font-size: 16px;
+  }
+  header.topbar {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+  }
+  header.topbar h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  header.topbar .progress { font-size: 12px; color: var(--dim); }
+  main { max-width: 1400px; margin: 0 auto; padding: 24px 24px 96px; }
+  @media (max-width: 480px) { main { padding: 16px 14px 96px; } }
+
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* Landscape split utility. */
+  .split {
+    display: grid;
+    grid-template-columns: var(--split-cols, 1fr 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+  .split.aside      { --split-cols: 360px 1fr; }
+  .split.left-bias  { --split-cols: 1.6fr 1fr; }
+  .split.right-bias { --split-cols: 1fr 1.6fr; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 480px) { .panel { padding: 16px; border-radius: 8px; } }
+  .panel.scrollable {
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+  }
+  .panel.sticky { position: sticky; top: 16px; }
+  @media (max-width: 900px) {
+    .panel.sticky, .panel.scrollable { position: static; max-height: none; }
+  }
+  .panel.center {
+    max-width: 640px; margin-left: auto; margin-right: auto;
+  }
+
+  h2 { margin: 0 0 14px; font-size: 18px; font-weight: 600; }
+  h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  p { margin: 0 0 10px; }
+  .muted { color: var(--dim); font-size: 14px; }
+  hr.sep { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+
+  label { display: block; font-size: 14px; margin: 14px 0 6px; }
+  input[type="text"], input[type="number"], select, textarea {
+    width: 100%; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px 12px; font: inherit; font-size: 16px; min-height: 44px;
+  }
+  textarea { resize: vertical; min-height: 110px; line-height: 1.5; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 480px) { .row { grid-template-columns: 1fr; gap: 0; } }
+
+  .check-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; font-size: 14px; }
+  .check-row input[type="checkbox"] { width: 22px; height: 22px; margin-top: 2px; flex-shrink: 0; }
+
+  .radio-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px; margin-top: 8px;
+  }
+  .radio-grid label.choice {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px; cursor: pointer; margin: 0; min-height: 44px; font-size: 14px;
+  }
+  .radio-grid label.choice:has(input:checked) { background: var(--accent-fade); border-color: var(--accent); }
+  .radio-grid input[type="radio"] { width: 18px; height: 18px; }
+
+  /* Big role-pick tiles for screen 1 (full screen). */
+  .role-hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin-top: 18px;
+  }
+  @media (max-width: 700px) { .role-hero { grid-template-columns: 1fr; } }
+  .role-tile {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    transition: border-color 120ms, transform 80ms;
+  }
+  .role-tile:hover { transform: translateY(-2px); }
+  .role-tile h3 { color: var(--text); font-size: 22px; text-transform: none; letter-spacing: 0; margin: 0 0 6px; }
+  .role-tile p { color: var(--dim); margin: 0; font-size: 14px; }
+  .role-tile.active.buyer { border-color: var(--buyer); background: linear-gradient(180deg, var(--panel-2) 0%, #1f3c33 100%); }
+  .role-tile.active.seller { border-color: var(--seller); background: linear-gradient(180deg, var(--panel-2) 0%, #3c2c1f 100%); }
+  .role-tile .role-icon {
+    font-size: 28px; line-height: 1;
+    display: inline-block; margin-bottom: 12px;
+  }
+
+  .likert {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px; margin-top: 8px;
+  }
+  .likert button {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 14px 0; font: inherit; font-size: 14px; font-weight: 600;
+    cursor: pointer; min-height: 48px;
+  }
+  .likert button.active { background: var(--accent); color: #0a0f1a; border-color: var(--accent); font-weight: 700; }
+  .likert-labels {
+    display: flex; justify-content: space-between;
+    margin-top: 6px; color: var(--dim); font-size: 12px;
+  }
+  @media (max-width: 480px) { .likert button { padding: 12px 0; font-size: 13px; } }
+
+  .btn-primary, .btn-secondary {
+    border: none; border-radius: 6px;
+    padding: 14px 20px; font: inherit; font-size: 15px; font-weight: 600;
+    cursor: pointer; min-height: 48px;
+  }
+  .btn-primary { background: var(--accent); color: #0a0f1a; width: 100%; margin-top: 18px; }
+  .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-secondary { background: var(--panel-3); color: var(--text); border: 1px solid var(--border); }
+
+  .status {
+    padding: 10px 14px; background: var(--panel-2);
+    border-left: 3px solid var(--accent); border-radius: 6px;
+    color: var(--text); font-size: 13px; margin-bottom: 12px;
+  }
+  .status.error { border-left-color: var(--bad); color: var(--bad); }
+
+  /* IRB-style notice callout (e.g. "use a PC or laptop"). */
+  .notice-warning {
+    background: rgba(229, 165, 88, 0.12);
+    border: 1px solid var(--warn);
+    border-left: 4px solid var(--warn);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 4px 0 22px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Consent-form section styling. */
+  .consent-form h3 {
+    margin: 18px 0 6px;
+    color: var(--accent);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+  }
+  .consent-form h3:first-of-type { margin-top: 0; }
+  .consent-form p { font-size: 14px; line-height: 1.6; margin: 0 0 8px; }
+  .consent-form a { color: var(--accent); }
+
+  /* Loading spinner — replaces the "Translating…" text. */
+  .spinner-overlay {
+    display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px;
+    margin-top: 18px;
+    padding: 32px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .spinner-overlay.active { display: flex; }
+  .spinner {
+    width: 44px; height: 44px;
+    border: 4px solid var(--panel-3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 900ms linear infinite;
+  }
+  .spinner-overlay .label { color: var(--dim); font-size: 13px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Car listing — themed like a classifieds page. */
+  .listing {
+    background: var(--listing-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .listing .gallery {
+    background: #0a0d14;
+    /* Bigger viewer + full-aspect-ratio: tall enough to show the 4:3 source
+       photos without cropping. Height adapts to viewport on smaller screens. */
+    height: clamp(420px, 65vh, 760px);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .listing .gallery .gallery-main {
+    /* contain (was cover) keeps the entire image visible. The dark gallery
+       background fills any letterbox area on the sides. */
+    width: 100%; height: 100%; object-fit: contain;
+    transition: opacity 250ms;
+  }
+  .listing .gallery .badge {
+    position: absolute; top: 14px; left: 14px;
+    background: var(--listing-accent); color: #1a1100;
+    padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    z-index: 2;
+  }
+  .listing .gallery .photo-count {
+    position: absolute; bottom: 14px; right: 14px;
+    background: rgba(0,0,0,0.6); color: var(--text);
+    padding: 4px 10px; border-radius: 4px; font-size: 12px;
+    z-index: 2;
+  }
+  /* Thumbnail strip — matches a real classifieds gallery. Narrow + centered
+     so it doesn't fight the new tall hero photo for visual weight. */
+  .gallery-strip {
+    display: grid;
+    grid-template-columns: repeat(3, 80px);
+    gap: 6px;
+    padding: 8px;
+    justify-content: center;
+    background: #0a0d14;
+    border-bottom: 1px solid var(--border);
+  }
+  .thumb {
+    border: 2px solid transparent;
+    border-radius: 4px;
+    padding: 0;
+    cursor: pointer;
+    overflow: hidden;
+    background: transparent;
+    aspect-ratio: 16 / 10;
+    transition: border-color 120ms;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb:hover { border-color: var(--dim); }
+  .thumb.active { border-color: var(--listing-accent); }
+  @media (max-width: 480px) {
+    .listing .gallery { height: 240px; }
+  }
+  .listing-body { padding: 22px; }
+  .listing-title {
+    font-size: 24px; font-weight: 700; margin: 0 0 4px;
+  }
+  .listing-subtitle {
+    color: var(--dim); font-size: 14px; margin: 0 0 14px;
+  }
+  .listing-price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 6px 0 18px;
+  }
+  .listing-price {
+    font-size: 32px; font-weight: 800; color: var(--listing-accent); margin: 0;
+    flex-shrink: 0;
+  }
+  .listing-price-note { font-size: 14px; color: var(--dim); margin: 0; line-height: 1.4; flex: 1; min-width: 220px; }
+
+  .specs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin: 14px 0;
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .spec-item .spec-label { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .spec-item .spec-value { font-size: 14px; font-weight: 600; margin-top: 2px; }
+
+  .listing-section { margin-top: 14px; }
+  .listing-section h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--dim); }
+  .listing-section p { font-size: 14px; line-height: 1.6; margin: 0 0 6px; }
+  .listing-section ul { margin: 4px 0; padding-left: 22px; font-size: 14px; line-height: 1.7; }
+
+  .seller-card {
+    margin-top: 18px;
+    padding: 14px;
+    background: var(--panel-2);
+    border-radius: 8px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .seller-card .avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--panel-3); display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .seller-card .seller-meta { font-size: 13px; }
+  .seller-card .seller-meta .name { font-weight: 600; }
+  .seller-card .seller-meta .stat { color: var(--dim); }
+
+  .your-info-card {
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: var(--accent-fade);
+    border: 1px dashed var(--accent);
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .your-info-card strong { color: var(--accent); }
+
+  .signal-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .signal-row {
+    display: grid;
+    grid-template-columns: 160px 28px 1fr;
+    gap: 8px; align-items: baseline;
+    font-size: 13px; padding: 4px 0;
+  }
+  @media (max-width: 480px) {
+    .signal-row { grid-template-columns: 1fr 28px; }
+    .signal-row .desc { display: none; }
+  }
+  .signal-row .name { color: var(--dim); }
+  .signal-row .val { font-weight: 700; text-align: center; font-family: ui-monospace, monospace; }
+  .signal-row.pos .val { color: var(--good); }
+  .signal-row.neg .val { color: var(--warn); }
+  .signal-row .desc { color: var(--text); font-size: 12px; }
+
+  .turn {
+    padding: 12px 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel-2);
+    margin-bottom: 10px;
+  }
+  .turn.buyer { border-left: 4px solid var(--buyer); }
+  .turn.seller { border-left: 4px solid var(--seller); }
+  .turn .who { font-size: 12px; color: var(--dim); margin-bottom: 6px; }
+  .turn .who strong { color: var(--text); }
+  .turn .text { white-space: pre-wrap; font-size: 14px; }
+  .turn .tool { margin-top: 8px; font-size: 11px; color: var(--accent); font-family: ui-monospace, monospace; }
+
+  .outcome {
+    padding: 16px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel-2); margin-bottom: 16px;
+  }
+  .outcome.agreed { border-left: 4px solid var(--good); }
+  .outcome.timeout, .outcome.impasse { border-left: 4px solid var(--warn); }
+  .outcome.rejected, .outcome.aborted { border-left: 4px solid var(--bad); }
+  .outcome .verdict { font-size: 22px; font-weight: 700; margin: 4px 0 8px; }
+  .outcome .terms { font-family: ui-monospace, monospace; font-size: 14px; color: var(--accent); margin: 6px 0; }
+  .outcome .summary { font-size: 14px; }
+  .outcome .surplus { font-size: 13px; color: var(--dim); margin-top: 6px; }
+
+  /* ─── Live negotiation screen — Tier 1 enhancements ─── */
+
+  /* Sticky price ticker at the top of the screen. */
+  .price-ticker {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 12px;
+    padding: 16px 18px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin: 0 0 18px;
+    backdrop-filter: blur(8px);
+  }
+  .ticker-cell { text-align: center; }
+  .ticker-cell.spread { display: flex; flex-direction: column; justify-content: center; }
+  .ticker-label {
+    font-size: 11px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+  .ticker-value {
+    font-size: 26px;
+    font-weight: 700;
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    transition: color 250ms;
+    color: var(--dim);
+  }
+  .ticker-cell.buyer  .ticker-value.live { color: var(--buyer); }
+  .ticker-cell.seller .ticker-value.live { color: var(--seller); }
+  .ticker-cell.spread .ticker-value { font-size: 18px; color: var(--accent); }
+  .ticker-value.flash { animation: flashUpdate 700ms ease-out; }
+  @keyframes flashUpdate {
+    0%   { transform: scale(1); }
+    25%  { transform: scale(1.18); text-shadow: 0 0 12px currentColor; }
+    100% { transform: scale(1); text-shadow: none; }
+  }
+  @media (max-width: 600px) {
+    .price-ticker { grid-template-columns: 1fr 1fr; }
+    .ticker-cell.spread { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 8px; }
+    .ticker-value { font-size: 20px; }
+  }
+
+  /* Two-sided chat layout. */
+  .chat-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 4px;
+  }
+  .msg-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    max-width: 100%;
+  }
+  .msg-row.buyer  { justify-content: flex-start; }
+  .msg-row.seller { justify-content: flex-end; }
+
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+  .avatar.buyer  { background: var(--buyer);  color: #0a0f1a; }
+  .avatar.seller { background: var(--seller); color: #0a0f1a; }
+
+  .bubble {
+    max-width: 70%;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+  }
+  .bubble.buyer  { border-bottom-left-radius: 4px;  border-left:  3px solid var(--buyer); }
+  .bubble.seller { border-bottom-right-radius: 4px; border-right: 3px solid var(--seller); }
+  .bubble-meta { font-size: 11px; color: var(--dim); margin-bottom: 4px; text-transform: lowercase; }
+  .bubble-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  .bubble-tool {
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: rgba(106, 169, 255, 0.08);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--accent);
+    font-family: ui-monospace, monospace;
+  }
+
+  /* Slide-in animation per side. */
+  .msg-row.buyer  .bubble { animation: slideInLeft  360ms ease-out; }
+  .msg-row.seller .bubble { animation: slideInRight 360ms ease-out; }
+  .msg-row.buyer  .avatar { animation: popIn 280ms ease-out; }
+  .msg-row.seller .avatar { animation: popIn 280ms ease-out; }
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-24px) scale(0.96); }
+    to   { opacity: 1; transform: translateX(0)     scale(1); }
+  }
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(24px)  scale(0.96); }
+    to   { opacity: 1; transform: translateX(0)     scale(1); }
+  }
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.5); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  /* Typing indicator (three pulsing dots) */
+  .msg-row.typing .bubble {
+    padding: 14px 18px;
+    display: flex; gap: 6px; align-items: center;
+  }
+  .typing-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--dim);
+    animation: typingPulse 1.2s infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.18s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.36s; }
+  @keyframes typingPulse {
+    0%, 60%, 100% { opacity: 0.3; transform: scale(0.85); }
+    30%           { opacity: 1;   transform: scale(1.15); }
+  }
+
+  /* Outcome reveal banner. */
+  .outcome-banner {
+    display: none;
+    margin-top: 22px;
+    padding: 36px 28px;
+    border-radius: 14px;
+    text-align: center;
+    border: 2px solid var(--border);
+    background: var(--panel-2);
+  }
+  .outcome-banner.show { display: block; animation: revealOutcome 700ms cubic-bezier(0.2, 0.9, 0.3, 1.1); }
+  .outcome-banner.agreed   { border-color: var(--good); background: linear-gradient(180deg, var(--panel-2) 0%, rgba(109, 208, 132, 0.10) 100%); }
+  .outcome-banner.impasse,
+  .outcome-banner.timeout  { border-color: var(--warn); background: linear-gradient(180deg, var(--panel-2) 0%, rgba(229, 165, 88, 0.10) 100%); }
+  .outcome-banner.rejected,
+  .outcome-banner.aborted  { border-color: var(--bad);  background: linear-gradient(180deg, var(--panel-2) 0%, rgba(231, 111, 111, 0.10) 100%); }
+
+  .outcome-banner .verdict {
+    font-size: 14px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 10px;
+  }
+  .outcome-banner .verdict-big {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+  .outcome-banner.agreed   .verdict-big { color: var(--good); }
+  .outcome-banner.impasse  .verdict-big,
+  .outcome-banner.timeout  .verdict-big { color: var(--warn); }
+  .outcome-banner.rejected .verdict-big,
+  .outcome-banner.aborted  .verdict-big { color: var(--bad); }
+  .outcome-banner .deal-price {
+    font-size: 56px;
+    font-weight: 800;
+    font-family: ui-monospace, monospace;
+    color: var(--accent);
+    margin: 14px 0 6px;
+    animation: priceCountUp 900ms cubic-bezier(0.2, 0.9, 0.3, 1.05);
+  }
+  .outcome-banner .summary { color: var(--text); margin-top: 10px; font-size: 14px; max-width: 540px; margin-left: auto; margin-right: auto; }
+  .outcome-banner .continue-prompt {
+    margin-top: 24px;
+    opacity: 0;
+    transform: translateY(8px);
+    animation: fadeInUpDelay 450ms ease-out 700ms forwards;
+  }
+  @keyframes revealOutcome {
+    from { opacity: 0; transform: translateY(-30px) scale(0.94); }
+    to   { opacity: 1; transform: translateY(0)     scale(1); }
+  }
+  @keyframes priceCountUp {
+    from { opacity: 0; transform: scale(0.5); }
+    50%  { opacity: 1; transform: scale(1.12); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes fadeInUpDelay {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .completion-code {
+    display: inline-block; padding: 8px 14px;
+    background: var(--panel-3);
+    border: 1px dashed var(--accent); border-radius: 6px;
+    font-family: ui-monospace, monospace; font-size: 16px; font-weight: 700;
+    color: var(--accent); user-select: all;
+  }
+
+  .thanks-hero {
+    text-align: center; padding: 60px 20px 30px;
+  }
+  .thanks-hero .check {
+    width: 80px; height: 80px; margin: 0 auto 18px;
+    background: var(--good); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 44px; color: #0a0f1a; font-weight: 800;
+  }
+  .thanks-hero h2 { font-size: 28px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>AI Negotiation Study</h1>
+  <div class="progress" id="progress">Step 1 of 8</div>
+</header>
+
+<main>
+
+<!-- ─── SCREEN 1 — pick role only ─── -->
+<section id="screen-1" class="screen active">
+  <div class="panel center">
+    <h3>Step 1</h3>
+    <h2 style="font-size: 24px;">Which side will you play?</h2>
+    <p class="muted">In the real study, this is randomly assigned. For the demo, you choose.</p>
+
+    <div class="role-hero">
+      <button type="button" id="role-buyer" class="role-tile">
+        <div class="role-icon">🚗</div>
+        <h3>BUYER</h3>
+        <p>You want to buy a used car. You'll write instructions for an AI agent that negotiates the deal on your behalf.</p>
+      </button>
+      <button type="button" id="role-seller" class="role-tile">
+        <div class="role-icon">🏷️</div>
+        <h3>SELLER</h3>
+        <p>You want to sell your used car. You'll write instructions for an AI agent that negotiates the deal on your behalf.</p>
+      </button>
+    </div>
+
+    <button class="btn-primary" id="btn-1-continue" disabled>Continue</button>
+  </div>
+</section>
+
+<!-- ─── SCREEN 2 — formal IRB-style consent form ─── -->
+<section id="screen-2" class="screen">
+  <div class="panel center consent-form" style="max-width: 760px;">
+    <h3 style="color: var(--dim); letter-spacing: 0.05em;">Step 2</h3>
+    <h2 style="font-size: 22px; line-height: 1.3;">Consent Form for Participation in a Research Study</h2>
+    <p class="muted" style="margin: 0 0 4px; font-weight: 600; color: var(--text);">ESSEC Business School</p>
+    <p class="muted" style="margin: 0 0 20px;">Consumer Behavior Study</p>
+
+    <div class="notice-warning">
+      <strong>Please take this survey on a PC or laptop computer</strong>, and not on a mobile
+      device (mobile phone or tablet).
+    </div>
+
+    <h3>Description</h3>
+    <p>You are invited to participate in a research study on consumer behavior. We are
+    interested in understanding how individuals respond to a certain negotiation scenario.</p>
+
+    <h3>Time involvement</h3>
+    <p>Your participation will take approximately 4 minutes.</p>
+
+    <h3>Protection of confidentiality</h3>
+    <p>The information that you give in the study will be handled confidentially. Your data
+    will be anonymous which means that your name will not be collected or linked to the data.</p>
+
+    <h3>Payments</h3>
+    <p>You will receive <strong>0.50 GBP</strong> as payment for your participation. Payment is
+    only awarded if the study is completed. By completion, we mean that you have continued to
+    the end of the study and that the answers you provide speak directly to the questions
+    being asked (i.e., are not random answers).</p>
+
+    <h3>Participant's rights</h3>
+    <p>If you have read this form and have decided to participate in this project, please
+    understand your participation is voluntary and you have the right to withdraw your consent
+    or discontinue participation at any time. In this case, you will not earn any money (or
+    credits). You have the right to refuse to answer particular questions. The results of this
+    research study may be presented at scientific or professional meetings or published in
+    scientific journals.</p>
+
+    <h3>Contact information</h3>
+    <p>If you have any questions, concerns, or complaints about this research, its procedures,
+    risks, and benefits, contact the Researcher, <strong>Faraz Ghodratizadeh</strong> at
+    <a href="mailto:faraz.ghodratizadeh@essec.edu">faraz.ghodratizadeh@essec.edu</a>.</p>
+
+    <h3>Agreement</h3>
+    <p>By clicking on the button below ("Yes, I consent to participate in this study."), you
+    agree to participate in the research study described above. This choice will serve as your
+    signature confirming your consent. If you do not want to participate, exit the survey and
+    "return" your submission on Prolific by clicking on the "stop without completing" button.</p>
+
+    <button class="btn-primary" id="btn-2-continue">Yes, I consent to participate in this study.</button>
+  </div>
+</section>
+
+<!-- ─── SCREEN 3 — instructions / scenario framing ─── -->
+<section id="screen-3" class="screen">
+  <div class="panel center" style="max-width: 760px;">
+    <h3>Step 3</h3>
+    <h2 id="instructions-heading">The scenario</h2>
+
+    <p id="instructions-intro">You are shopping for a used car on an online marketplace.
+    You've narrowed your search to a <strong>2023 Toyota Camry</strong>.</p>
+
+    <p>The platform you're using has a new feature: <strong>you can fully delegate the
+    negotiation to an AI agent</strong> that acts on your behalf. The seller is using the
+    same feature — their AI agent will respond on their behalf. So the entire negotiation
+    will happen agent-to-agent. Neither side types messages directly.</p>
+
+    <hr class="sep" />
+
+    <h3>What's coming next</h3>
+    <ul style="font-size: 14px; line-height: 1.8; padding-left: 22px; margin: 4px 0 14px;">
+      <li><strong>Step 4 · Listing.</strong> You'll see the full listing for the car.</li>
+      <li><strong>Step 5 · Your context.</strong> You'll describe your situation — what's
+        going on with you as <span id="instructions-role-side">a buyer</span>.</li>
+      <li><strong>Step 6 · Instructions for your AI.</strong> You'll write a prompt telling
+        your AI agent how to negotiate.</li>
+      <li><strong>Step 7 · Watch.</strong> You'll watch the two AI agents negotiate live.</li>
+      <li><strong>Steps 8–10.</strong> A few questions, basic demographics, then a thank-you
+        screen with your completion code.</li>
+    </ul>
+
+    <button class="btn-primary" id="btn-3-continue">Continue — see the listing</button>
+  </div>
+</section>
+
+<!-- ─── SCREEN 4 — car listing (themed like a classified ad) ─── -->
+<section id="screen-4" class="screen">
+  <div class="panel">
+    <h3 id="listing-context">Step 4 · You're considering this listing</h3>
+
+    <div class="listing">
+      <div class="gallery">
+        <span class="badge" id="listing-badge">FOR SALE</span>
+        <img id="gallery-main" class="gallery-main"
+             src="img/camry/camry-front.jpg"
+             alt="Black 2023 Toyota Camry — front 3/4 view" />
+        <span class="photo-count">📷 3 photos</span>
+      </div>
+      <div class="gallery-strip">
+        <button type="button" class="thumb active" data-src="img/camry/camry-front.jpg">
+          <img src="img/camry/camry-front.jpg" alt="Front" />
+        </button>
+        <button type="button" class="thumb" data-src="img/camry/camry-rear.jpg">
+          <img src="img/camry/camry-rear.jpg" alt="Rear" />
+        </button>
+        <button type="button" class="thumb" data-src="img/camry/camry-side.jpg">
+          <img src="img/camry/camry-side.jpg" alt="Side profile" />
+        </button>
+      </div>
+      <div class="listing-body">
+        <h2 class="listing-title">2023 Toyota Camry SE — Black</h2>
+        <p class="listing-subtitle">Single owner · Garage-kept · Dealer-serviced · 📍 15 miles away</p>
+
+        <div class="listing-price-row">
+          <div class="listing-price" id="listing-price">$25,500</div>
+          <div class="listing-price-note" id="listing-price-note">
+            Asking price · Average market price for this configuration: ~$24,000
+          </div>
+        </div>
+
+        <div class="specs-grid">
+          <div class="spec-item"><div class="spec-label">Year</div><div class="spec-value">2023</div></div>
+          <div class="spec-item"><div class="spec-label">Make</div><div class="spec-value">Toyota</div></div>
+          <div class="spec-item"><div class="spec-label">Model</div><div class="spec-value">Camry SE</div></div>
+          <div class="spec-item"><div class="spec-label">Color</div><div class="spec-value">Midnight Black</div></div>
+          <div class="spec-item"><div class="spec-label">Mileage</div><div class="spec-value">32,000 mi</div></div>
+          <div class="spec-item"><div class="spec-label">Transmission</div><div class="spec-value">Automatic</div></div>
+          <div class="spec-item"><div class="spec-label">Fuel</div><div class="spec-value">Gasoline</div></div>
+          <div class="spec-item"><div class="spec-label">Condition</div><div class="spec-value">Excellent</div></div>
+          <div class="spec-item"><div class="spec-label">Owners</div><div class="spec-value">1 (private)</div></div>
+          <div class="spec-item"><div class="spec-label">Accidents</div><div class="spec-value">None reported</div></div>
+        </div>
+
+        <div class="listing-section">
+          <h4>Description</h4>
+          <p>Selling my 2023 Toyota Camry SE in excellent condition. I bought it new in 2023
+          and it's been garage-kept and dealer-serviced its whole life. No accidents. The car
+          drives like new — smooth, quiet, fuel-efficient.</p>
+          <p>Price is firm-ish, but I'm open to reasonable offers from serious buyers. Looking
+          for a quick, clean sale.</p>
+        </div>
+
+        <div class="listing-section">
+          <h4>Recent service & customizations</h4>
+          <ul>
+            <li>New Michelin Premier A/S tires — installed 2 months ago</li>
+            <li>Full service at Toyota dealership last month (oil, filters, brake check)</li>
+            <li>All-weather floor mats added (front + rear)</li>
+            <li>Original keys, owner's manual, and full service records included</li>
+          </ul>
+        </div>
+
+        <div class="listing-section">
+          <h4>What's included</h4>
+          <ul>
+            <li>Two key fobs</li>
+            <li>Owner's manual + complete service history</li>
+            <li>4 winter tires on rims (separate, optional add-on)</li>
+          </ul>
+        </div>
+
+        <div class="seller-card">
+          <div class="avatar">👤</div>
+          <div class="seller-meta">
+            <div class="name">Private seller · Member since 2021</div>
+            <div class="stat">⭐ 4.9 · 12 prior listings · responds within 1 hour</div>
+          </div>
+        </div>
+
+        <!-- "Your info" pull-aside that adapts based on role. -->
+        <div class="your-info-card" id="your-info-card">
+          <strong>Your situation:</strong>
+          <span id="your-situation">
+            You can spend up to <strong>$24,500</strong> (your hard walk-away).
+            Your ideal target is <strong>$22,000</strong>.
+            You're a cash-funded buyer — no financing delays.
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="btn-4-continue">Continue — describe your situation</button>
+  </div>
+</section>
+
+<!-- ─── SCREEN 5 — your personal context (free text) ─── -->
+<section id="screen-5" class="screen">
+  <div class="panel center" style="max-width: 760px;">
+    <h3>Step 5</h3>
+    <h2 id="context-heading">Your situation</h2>
+
+    <p id="context-intro"></p>
+
+    <p class="muted" id="context-examples"></p>
+
+    <label for="context-text">About you</label>
+    <textarea id="context-text" rows="10" placeholder="Example:
+
+Honestly I just graduated and moved to Reston, Virginia for my first real job, so I don't have a lot of money — most of my savings went to deposits and moving costs. I really do need a car though, the commute is 22 miles each way and there's basically no transit. I've been looking for something reliable that won't cost me a fortune in repairs, which is why I keep coming back to a Camry. I've got about three weekends to figure this out before my parents need their car back. I'd love to close fast if the price feels right, but I really can't go above what's in my budget — I'd rather walk away and keep looking than overpay and stress about it for the next six months."></textarea>
+
+    <button class="btn-primary" id="btn-5-continue">Continue — write instructions for your AI</button>
+
+    <div class="status error" id="context-error" style="display:none; margin-top:14px;"></div>
+  </div>
+</section>
+
+<!-- ─── SCREEN 6 — behavior prompt ─── -->
+<section id="screen-6" class="screen">
+  <div class="panel center" style="max-width: 820px;">
+    <h3>Step 6</h3>
+    <h2 id="prompt-heading">Now brief your AI agent</h2>
+
+    <p>You're the <strong id="prompt-role-banner">buyer</strong>. Your AI agent will do the
+    negotiation for you — you won't type any messages yourself. Use the box below to tell
+    it <strong>how to negotiate on your behalf</strong>: how to open, when to push back,
+    when to give in, what tone to use, and what your hard limits are.</p>
+
+    <p class="muted">Write it the way you'd brief a friend who was doing this for you —
+    in your own words, in plain sentences. The more specific you are, the more your agent
+    will sound like you.</p>
+
+    <label for="prompt">Instructions for your AI agent</label>
+    <textarea id="prompt" rows="14" placeholder="Example — write yours however you want, this is just to give you the idea:
+
+I want you to start low — open at around $21,000 to anchor the negotiation. From there, only concede slowly, and never give back more than the seller does in any single round. Stay polite the whole time, but firm: think neighbor-to-neighbor, not boss-to-employee, and don't get chatty or apologetic. If the seller pushes back hard, mention that I'm cash-funded and can close this week — that's real leverage. You can also hint that I have other Camrys I'm watching nearby, but don't lie about specifics. My absolute ceiling is $24,500 — not one dollar more, even if I love the car. If the seller won't come down below that, just thank them politely and walk away."></textarea>
+
+    <button class="btn-primary" id="btn-prompt">Submit instructions</button>
+
+    <div class="spinner-overlay" id="prompt-spinner">
+      <div class="spinner"></div>
+      <div class="label">Setting up your AI agent…</div>
+    </div>
+
+    <div class="status error" id="prompt-error" style="display:none; margin-top:14px;"></div>
+  </div>
+</section>
+
+<!-- ─── SCREEN 5 — full-page live negotiation ─── -->
+<section id="screen-7" class="screen">
+  <div class="panel">
+    <h3>Step 7</h3>
+    <h2>Watch the negotiation</h2>
+    <div class="status" id="run-status">Starting…</div>
+
+    <!-- Live price ticker (sticks to top while you scroll). -->
+    <div class="price-ticker">
+      <div class="ticker-cell buyer">
+        <div class="ticker-label">Buyer offer</div>
+        <div class="ticker-value" id="ticker-buyer">—</div>
+      </div>
+      <div class="ticker-cell spread">
+        <div class="ticker-label">Spread</div>
+        <div class="ticker-value" id="ticker-spread">—</div>
+      </div>
+      <div class="ticker-cell seller">
+        <div class="ticker-label">Seller ask</div>
+        <div class="ticker-value" id="ticker-seller">—</div>
+      </div>
+    </div>
+
+    <!-- Two-sided chat: buyer bubbles on the left, seller on the right. -->
+    <div id="transcript" class="chat-container"></div>
+
+    <!-- Outcome banner (hidden until session_end). -->
+    <div id="outcome-banner" class="outcome-banner"></div>
+  </div>
+</section>
+
+<!-- ─── SCREEN 6 — questions + negotiation log ─── -->
+<section id="screen-8" class="screen">
+  <div class="split left-bias">
+    <div>
+      <div class="panel">
+        <div class="outcome" id="outcome-card"></div>
+      </div>
+      <div class="panel scrollable">
+        <h3>Negotiation transcript</h3>
+        <p class="muted" style="font-size: 12px; margin-bottom: 12px;">
+          Re-read any turn while you answer the questions on the right.
+        </p>
+        <div id="transcript-replay"></div>
+      </div>
+    </div>
+    <div>
+      <div class="panel sticky">
+        <h3>Step 8</h3>
+        <h2>How did it go?</h2>
+        <div id="post-survey"></div>
+
+        <label for="free-text">Anything that surprised you? (optional)</label>
+        <textarea id="free-text" rows="3"></textarea>
+
+        <button class="btn-primary" id="btn-8-continue" disabled>Continue</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── SCREEN 7 — about the participant ─── -->
+<section id="screen-9" class="screen">
+  <div class="panel center">
+    <h3>Step 9</h3>
+    <h2>A few things about you</h2>
+    <p class="muted">These help us understand who participated. None of this is shared with anyone outside the research team.</p>
+
+    <div class="row">
+      <div>
+        <label for="age">Age</label>
+        <input type="number" id="age" min="13" max="120" />
+      </div>
+      <div>
+        <label for="gender">Gender</label>
+        <select id="gender">
+          <option value="">— select —</option>
+          <option>Female</option><option>Male</option>
+          <option>Non-binary</option><option>Prefer not to say</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Prior negotiation experience</label>
+    <div class="radio-grid">
+      <label class="choice"><input type="radio" name="experience" value="none" /> None</label>
+      <label class="choice"><input type="radio" name="experience" value="little" /> A little</label>
+      <label class="choice"><input type="radio" name="experience" value="moderate" /> Moderate</label>
+      <label class="choice"><input type="radio" name="experience" value="lot" /> A lot</label>
+    </div>
+
+    <label>Familiarity with AI tools (ChatGPT, Claude, etc.)?</label>
+    <div class="radio-grid">
+      <label class="choice"><input type="radio" name="ai_familiarity" value="none" /> Not at all</label>
+      <label class="choice"><input type="radio" name="ai_familiarity" value="some" /> Some</label>
+      <label class="choice"><input type="radio" name="ai_familiarity" value="very" /> Very</label>
+    </div>
+
+    <label><strong>Attention check.</strong> Please pick "A lot" below.</label>
+    <div class="radio-grid">
+      <label class="choice"><input type="radio" name="attn" value="none" /> None</label>
+      <label class="choice"><input type="radio" name="attn" value="little" /> A little</label>
+      <label class="choice"><input type="radio" name="attn" value="moderate" /> Moderate</label>
+      <label class="choice"><input type="radio" name="attn" value="lot" /> A lot</label>
+    </div>
+
+    <button class="btn-primary" id="btn-9-finish">Submit & finish</button>
+
+    <div class="spinner-overlay" id="finish-spinner">
+      <div class="spinner"></div>
+      <div class="label">Saving your responses…</div>
+    </div>
+
+    <div class="status error" id="finish-error" style="display:none; margin-top:14px;"></div>
+  </div>
+</section>
+
+<!-- ─── SCREEN 8 — thanks ─── -->
+<section id="screen-10" class="screen">
+  <div class="panel center">
+    <div class="thanks-hero">
+      <div class="check">✓</div>
+      <h2>Thank you for participating</h2>
+      <p class="muted" style="max-width: 480px; margin: 0 auto;">
+        Your responses have been recorded. Both negotiators in this study were AI agents — your
+        prompt shaped your side, and the opposing agent's behavior was held neutral so we can
+        compare across participants.
+      </p>
+    </div>
+
+    <hr class="sep" />
+
+    <div style="text-align: center;">
+      <p class="muted" style="margin-bottom: 8px;">Your completion code (save this for your records):</p>
+      <span class="completion-code" id="completion-code">—</span>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+// ─── Config ──────────────────────────────────────────────────────────────
+function apiBase() {
+  const origin = window.location.origin;
+  if (origin && (origin.startsWith("http://") || origin.startsWith("https://"))) return origin;
+  const params = new URLSearchParams(window.location.search);
+  const override = params.get("api");
+  if (override) return override.replace(/\/$/, "");
+  return "http://localhost:3737";
+}
+
+const ROLE_INFO = {
+  buyer: {
+    listingContext: "Step 4 · You're considering this listing",
+    badge: "FOR SALE",
+    priceLabel: "Asking price · Average market price for this configuration: ~$24,000",
+    situation: "You can spend up to <strong>$24,500</strong> (your hard walk-away). " +
+               "Your ideal target is <strong>$22,000</strong>. " +
+               "You're a cash-funded buyer — no financing delays.",
+    promptRoleBanner: "buyer",
+  },
+  seller: {
+    listingContext: "Step 4 · This is your listing",
+    badge: "YOUR LISTING",
+    priceLabel: "Your asking price · Average market price for this configuration: ~$24,000",
+    situation: "You listed it at <strong>$25,500</strong>. " +
+               "You won't go below <strong>$22,500</strong> (your hard walk-away). " +
+               "You'd like a clean sale within 4 weeks before relocating.",
+    promptRoleBanner: "seller",
+  },
+};
+
+const POST_QUESTIONS = [
+  { key: "satisfaction",      text: "Satisfied with the outcome?" },
+  { key: "agent_represented", text: "Your agent represented your preferences well?" },
+  { key: "control",           text: "Felt in control of how your agent negotiated?" },
+  { key: "opponent_fair",     text: "The opponent's agent seemed fair?" },
+  { key: "trust_ai",          text: "Trust in AI to handle real negotiations on your behalf?" },
+  { key: "would_use_again",   text: "Would you use a tool like this in real life?" },
+];
+
+const TOTAL_STEPS = 10;
+
+// ─── State ───────────────────────────────────────────────────────────────
+const state = {
+  participantId: null,
+  step: 1,
+  role: null,
+  postRatings: {},
+  outcome: null,
+  turns: [],
+  // Live-screen state (resets each negotiation):
+  lastBuyerPrice: null,
+  lastSellerPrice: null,
+  typingNode: null,
+  screenStartTs: Date.now(),
+};
+
+const $ = (id) => document.getElementById(id);
+
+// ─── Boot — create participant on first load with full browser metadata. ──
+async function ensureParticipant() {
+  if (state.participantId) return;
+  try {
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    const r = await api("/api/p/start", {
+      userAgent: navigator.userAgent,
+      viewport: { w: window.innerWidth, h: window.innerHeight },
+      screen: { w: window.screen.width, h: window.screen.height },
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      language: navigator.language,
+      referrer: document.referrer || null,
+      connectionType: conn ? conn.effectiveType : null,
+    });
+    state.participantId = r.participantId;
+    track("screen_enter", { step: state.step });
+  } catch (err) {
+    alert("Couldn't start the study: " + err.message + "\nIs the server running on " + apiBase() + "?");
+    throw err;
+  }
+}
+ensureParticipant();
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
+function show(step) {
+  // Track exit from previous screen with the time spent on it.
+  if (state.step !== step) {
+    track("screen_exit", { from: state.step, to: step, dwellMs: timeOnScreen() });
+  }
+  state.step = step;
+  state.screenStartTs = Date.now();
+  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+  $("screen-" + step).classList.add("active");
+  $("progress").textContent = `Step ${step} of ${TOTAL_STEPS}`;
+  window.scrollTo({ top: 0 });
+  track("screen_enter", { step: step });
+}
+function timeOnScreen() { return Date.now() - state.screenStartTs; }
+
+// ─── Behavioral telemetry library ──────────────────────────────────────
+//
+// Buffers events client-side and POSTs them in batches to /api/p/event.
+// Auto-instruments common interactions (clicks, focus/blur, scroll,
+// visibility, resize, paste, idle, reload) so screens don't have to opt in.
+//
+const eventBuffer = [];
+const IDLE_THRESHOLD_MS = 15000;
+let lastInteraction = Date.now();
+let isIdle = false;
+let lastScrollPct = 0;
+let maxScrollPct = 0;
+
+function track(type, payload) {
+  if (!type) return;
+  eventBuffer.push({
+    ts: new Date().toISOString(),
+    screen: state.step,
+    type: type,
+    payload: payload || {},
+  });
+  if (eventBuffer.length >= 25) flushEvents();
+}
+
+async function flushEvents(usingBeacon) {
+  if (eventBuffer.length === 0 || !state.participantId) return;
+  const batch = eventBuffer.splice(0);
+  const url = apiBase() + "/api/p/event";
+  const body = JSON.stringify({ participantId: state.participantId, events: batch });
+  if (usingBeacon && navigator.sendBeacon) {
+    navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
+    return;
+  }
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body,
+      keepalive: true,
+    });
+  } catch (err) {
+    // Put events back for the next flush if the network call fails.
+    eventBuffer.unshift(...batch);
+  }
+}
+
+// Periodic safety flush (in addition to size-triggered flush).
+setInterval(flushEvents, 8000);
+
+// On navigate-away / tab close, fire a final beacon flush.
+window.addEventListener("pagehide", () => flushEvents(true));
+window.addEventListener("beforeunload", () => flushEvents(true));
+
+// Confirm-on-leave so participants don't accidentally lose progress.
+window.addEventListener("beforeunload", (e) => {
+  if (state.step >= 2 && state.step <= 9) {
+    e.preventDefault();
+    e.returnValue = "";  // legacy browsers
+    return "";
+  }
+});
+
+// ─── Auto-instrumentation: clicks, focus, blur, paste, scroll, etc. ────
+function summarizeTarget(t) {
+  if (!t || !t.tagName) return null;
+  return {
+    tag: t.tagName.toLowerCase(),
+    id: t.id || undefined,
+    name: t.name || undefined,
+    cls: t.className && typeof t.className === "string" ? t.className.slice(0, 80) : undefined,
+    text: (t.textContent || "").trim().slice(0, 60) || undefined,
+    type: t.type || undefined,
+    value: (t.tagName === "INPUT" && t.type === "radio") ? t.value : undefined,
+  };
+}
+
+document.addEventListener("click", (e) => {
+  noteInteraction();
+  track("click", summarizeTarget(e.target) || {});
+}, true);
+
+document.addEventListener("focusin", (e) => {
+  noteInteraction();
+  const summary = summarizeTarget(e.target);
+  if (summary && (summary.tag === "input" || summary.tag === "textarea" || summary.tag === "select")) {
+    track("focus", summary);
+  }
+}, true);
+
+document.addEventListener("focusout", (e) => {
+  const summary = summarizeTarget(e.target);
+  if (summary && (summary.tag === "input" || summary.tag === "textarea" || summary.tag === "select")) {
+    if (summary.tag === "textarea" && e.target.value) {
+      summary.length = e.target.value.length;
+    }
+    track("blur", summary);
+  }
+}, true);
+
+document.addEventListener("paste", (e) => {
+  noteInteraction();
+  const tgt = summarizeTarget(e.target);
+  const txt = (e.clipboardData || window.clipboardData);
+  const pastedLen = txt ? (txt.getData("text") || "").length : 0;
+  track("paste", { ...(tgt || {}), pastedLen });
+}, true);
+
+document.addEventListener("keydown", (e) => {
+  noteInteraction();
+  // Don't log every keystroke (too noisy + privacy). Just count via blur summary.
+  void e;
+}, true);
+
+let scrollTimer;
+window.addEventListener("scroll", () => {
+  noteInteraction();
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => {
+    const docH = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
+    const pct = Math.min(100, Math.round((window.scrollY / docH) * 100));
+    if (Math.abs(pct - lastScrollPct) >= 5) {
+      lastScrollPct = pct;
+      maxScrollPct = Math.max(maxScrollPct, pct);
+      track("scroll", { pct: pct, maxPct: maxScrollPct });
+    }
+  }, 250);
+}, { passive: true });
+
+document.addEventListener("visibilitychange", () => {
+  track("visibility_change", { hidden: document.hidden });
+  if (!document.hidden) noteInteraction();
+});
+
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    track("resize", { w: window.innerWidth, h: window.innerHeight });
+  }, 300);
+});
+
+window.addEventListener("popstate", () => track("popstate", {}));
+
+// Idle detection — fire idle_start when no interaction for IDLE_THRESHOLD,
+// idle_end when interaction resumes.
+function noteInteraction() {
+  const now = Date.now();
+  if (isIdle) {
+    track("idle_end", { idleMs: now - lastInteraction });
+    isIdle = false;
+  }
+  lastInteraction = now;
+}
+setInterval(() => {
+  if (!isIdle && Date.now() - lastInteraction > IDLE_THRESHOLD_MS) {
+    isIdle = true;
+    track("idle_start", { thresholdMs: IDLE_THRESHOLD_MS });
+  }
+}, 5000);
+["mousemove", "keydown", "wheel", "touchstart"].forEach((evt) => {
+  window.addEventListener(evt, noteInteraction, { passive: true, capture: true });
+});
+async function api(path, body) {
+  const res = await fetch(apiBase() + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`${path} → ${res.status}: ${txt}`);
+  }
+  return res.json();
+}
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// ─── SCREEN 1 — role pick ───────────────────────────────────────────────
+$("role-buyer").addEventListener("click", () => pickRole("buyer"));
+$("role-seller").addEventListener("click", () => pickRole("seller"));
+function pickRole(r) {
+  state.role = r;
+  $("role-buyer").classList.toggle("active", r === "buyer");
+  $("role-buyer").classList.toggle("buyer", r === "buyer");
+  $("role-seller").classList.toggle("active", r === "seller");
+  $("role-seller").classList.toggle("seller", r === "seller");
+  $("btn-1-continue").disabled = false;
+}
+$("btn-1-continue").addEventListener("click", async () => {
+  $("btn-1-continue").disabled = true;
+  try {
+    await ensureParticipant();
+    await api("/api/p/role", { participantId: state.participantId, role: state.role });
+    show(2);
+  } catch (err) {
+    alert("Couldn't save role: " + err.message);
+    $("btn-1-continue").disabled = false;
+  }
+});
+
+// ─── SCREEN 2 — consent ─────────────────────────────────────────────────
+// The button click IS the consent action (per the IRB form's AGREEMENT
+// section: "this choice will serve as your signature"). No checkbox.
+$("btn-2-continue").addEventListener("click", async () => {
+  $("btn-2-continue").disabled = true;
+  try {
+    await api("/api/p/consent", {
+      participantId: state.participantId,
+      consent: true,
+      timeOnScreenMs: timeOnScreen(),
+    });
+    fillInstructions();
+    show(3);
+  } catch (err) {
+    alert("Couldn't save consent: " + err.message);
+    $("btn-2-continue").disabled = false;
+  }
+});
+
+// ─── SCREEN 3 — instructions / scenario framing ────────────────────────
+function fillInstructions() {
+  const r = ROLE_INFO[state.role];
+  if (state.role === "buyer") {
+    $("instructions-heading").textContent = "The scenario";
+    $("instructions-intro").innerHTML =
+      "You are shopping for a used car on an online marketplace. " +
+      "You've narrowed your search to a <strong>2023 Toyota Camry</strong>.";
+    $("instructions-role-side").textContent = "a buyer";
+  } else {
+    $("instructions-heading").textContent = "The scenario";
+    $("instructions-intro").innerHTML =
+      "You are selling your used car on an online marketplace. " +
+      "You're listing a <strong>2023 Toyota Camry</strong>.";
+    $("instructions-role-side").textContent = "a seller";
+  }
+  // Also pre-fill the "your situation" hint on the listing screen via the
+  // ROLE_INFO map (used by fillListing() one screen later).
+  void r;
+}
+$("btn-3-continue").addEventListener("click", () => {
+  fillListing();
+  fillContext();
+  show(4);
+});
+
+// ─── SCREEN 4 — car listing ────────────────────────────────────────────
+function fillListing() {
+  const r = ROLE_INFO[state.role];
+  $("listing-context").textContent = r.listingContext;
+  $("listing-badge").textContent = r.badge;
+  $("listing-price-note").textContent = r.priceLabel;
+  $("your-situation").innerHTML = r.situation;
+  $("prompt-role-banner").textContent = r.promptRoleBanner;
+}
+
+// Thumbnail strip — clicking swaps the main image with a brief crossfade.
+document.querySelectorAll(".gallery-strip .thumb").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const src = btn.getAttribute("data-src");
+    if (!src) return;
+    const main = $("gallery-main");
+    main.style.opacity = "0";
+    setTimeout(() => {
+      main.src = src;
+      main.style.opacity = "1";
+    }, 180);
+    document.querySelectorAll(".gallery-strip .thumb").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    // Section D — log which stimulus photo the participant viewed.
+    track("listing_thumbnail_view", { src: src });
+  });
+});
+
+$("btn-4-continue").addEventListener("click", () => show(5));
+
+// ─── SCREEN 5 — your personal context (free text) ──────────────────────
+function fillContext() {
+  if (state.role === "buyer") {
+    $("context-intro").innerHTML =
+      "<strong>Imagine you really want this car.</strong> Take a moment to picture " +
+      "your life right now — who you are, why you're car-shopping, what would change " +
+      "if you actually drove this Camry home this week. Tell us, in your own words, " +
+      "what's going on for you. This is about <em>you</em>, not your AI agent yet — " +
+      "but everything you write here will help the AI represent your real situation " +
+      "when it negotiates.";
+    $("context-examples").innerHTML =
+      "For instance: Why is this car catching your attention? What's your timeline " +
+      "like? What can you afford, comfortably? What would make you walk away? " +
+      "Anything else about your life right now that matters.";
+  } else {
+    $("context-intro").innerHTML =
+      "<strong>Imagine you really need to sell this car.</strong> Take a moment to " +
+      "picture your life right now — who you are, why you're letting it go, what " +
+      "would change once it's no longer in your driveway. Tell us, in your own " +
+      "words, what's going on for you. This is about <em>you</em>, not your AI " +
+      "agent yet — but everything you write here will help the AI represent your " +
+      "real situation when it negotiates.";
+    $("context-examples").innerHTML =
+      "For instance: Why are you selling now? How quickly do you need to be done? " +
+      "What price would feel like a real win, and what would feel like getting " +
+      "taken? Anything else about your life right now that matters.";
+  }
+}
+$("btn-5-continue").addEventListener("click", async () => {
+  const text = $("context-text").value.trim();
+  if (text.length < 5) {
+    showContextError("Please write a few sentences about your situation.");
+    return;
+  }
+  hideContextError();
+  $("btn-5-continue").disabled = true;
+  $("btn-5-continue").textContent = "Saving…";
+  try {
+    await api("/api/p/context", {
+      participantId: state.participantId,
+      contextText: text,
+      timeOnScreenMs: timeOnScreen(),
+    });
+    show(6);
+  } catch (err) {
+    showContextError("Error: " + err.message);
+    $("btn-5-continue").disabled = false;
+    $("btn-5-continue").textContent = "Continue — write instructions for your AI";
+  }
+});
+function showContextError(msg) {
+  const el = $("context-error");
+  el.textContent = msg;
+  el.style.display = "block";
+}
+function hideContextError() { $("context-error").style.display = "none"; }
+
+// ─── SCREEN 6 — behavior prompt ────────────────────────────────────────
+$("btn-prompt").addEventListener("click", async () => {
+  const text = $("prompt").value.trim();
+  if (text.length < 10) {
+    showPromptError("Please write a few sentences for your AI agent.");
+    return;
+  }
+  hidePromptError();
+  $("btn-prompt").disabled = true;
+  $("btn-prompt").textContent = "Setting up…";
+  $("prompt-spinner").classList.add("active");
+  try {
+    // Mapper runs server-side; we ignore the response — signals are stored
+    // in behavior_prompts but not surfaced to the participant. We do NOT
+    // call /api/p/prompt-confirm because the manipulation-check screen was
+    // removed from the flow; match_rating stays NULL on the DB row, which
+    // distinguishes "not asked" from a real rating.
+    await api("/api/p/prompt", {
+      participantId: state.participantId,
+      promptText: text,
+    });
+    show(7);
+    runNegotiation();
+  } catch (err) {
+    showPromptError("Error: " + err.message);
+    $("btn-prompt").disabled = false;
+    $("btn-prompt").textContent = "Submit instructions";
+    $("prompt-spinner").classList.remove("active");
+  }
+});
+function showPromptError(msg) {
+  const el = $("prompt-error");
+  el.textContent = msg;
+  el.style.display = "block";
+}
+function hidePromptError() { $("prompt-error").style.display = "none"; }
+
+// ─── SCREEN 5 — live negotiation ───────────────────────────────────────
+async function runNegotiation() {
+  // Reset live-screen state — the ticker, banner, and turn list start fresh.
+  $("transcript").innerHTML = "";
+  $("outcome-banner").className = "outcome-banner";
+  $("outcome-banner").innerHTML = "";
+  $("ticker-buyer").textContent = "—";
+  $("ticker-seller").textContent = "—";
+  $("ticker-spread").textContent = "—";
+  $("ticker-buyer").classList.remove("live");
+  $("ticker-seller").classList.remove("live");
+  state.lastBuyerPrice = null;
+  state.lastSellerPrice = null;
+  state.typingNode = null;
+  state.turns = [];
+  setRunStatus("Negotiation starting…");
+  try {
+    const res = await fetch(apiBase() + "/api/p/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ participantId: state.participantId }),
+    });
+    if (!res.ok || !res.body) throw new Error("server returned " + res.status);
+    await readSse(res.body, handleSse);
+  } catch (err) {
+    setRunStatus("Error: " + err.message, true);
+  }
+}
+function setRunStatus(text, isError) {
+  const el = $("run-status");
+  el.textContent = text;
+  el.classList.toggle("error", !!isError);
+}
+function handleSse(event, data) {
+  switch (event) {
+    case "status":         setRunStatus(data.message); break;
+    case "session_start":  setRunStatus("Connected · the agents are negotiating"); break;
+    case "turn_starting":  showTypingIndicator(data.participantId); break;
+    case "turn":           appendTurn(data); break;
+    case "session_end":    state.outcome = data.outcome; break;
+    case "fallback":       setRunStatus("[round-robin fallback: " + data.reason + "]", true); break;
+    case "done":
+      state.outcome = data.outcome;
+      removeTypingIndicator();
+      setRunStatus("Negotiation finished — see the result below.");
+      revealOutcome(data.outcome);
+      break;
+    case "error":          setRunStatus("Error: " + data.message, true); break;
+  }
+}
+
+function appendTurn(t) {
+  state.turns.push(t);
+  removeTypingIndicator();
+  const div = renderTurnNode(t);
+  $("transcript").appendChild(div);
+  updateTicker(t);
+  div.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+function renderTurnNode(t) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "msg-row " + t.emitterId;
+
+  const avatar = document.createElement("div");
+  avatar.className = "avatar " + t.emitterId;
+  avatar.textContent = t.emitterId === "buyer" ? "B" : "S";
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble " + t.emitterId;
+
+  const meta = `<div class="bubble-meta">turn #${t.turnNumber} · ${t.emitterId}</div>`;
+  const body = `<div class="bubble-text">${escapeHtml(t.message || "(no public message)")}</div>`;
+  let toolLine = "";
+  const proposal = (t.toolCalls || []).find((c) => c.name === "submit_proposal");
+  if (proposal && proposal.input && Array.isArray(proposal.input.issues)) {
+    const priceIssue = proposal.input.issues.find((i) => i.name === "price");
+    if (priceIssue) {
+      const action = proposal.input.action || "propose";
+      const final = proposal.input.is_final ? " · FINAL" : "";
+      toolLine = `<div class="bubble-tool">→ ${action} @ $${Number(priceIssue.value).toLocaleString()}${final}</div>`;
+    }
+  }
+  bubble.innerHTML = meta + body + toolLine;
+
+  // Buyer: avatar on the left of the bubble. Seller: avatar on the right.
+  if (t.emitterId === "buyer") { wrapper.appendChild(avatar); wrapper.appendChild(bubble); }
+  else                          { wrapper.appendChild(bubble); wrapper.appendChild(avatar); }
+  return wrapper;
+}
+
+// ─── Typing indicator ───────────────────────────────────────────────────
+function showTypingIndicator(participantId) {
+  removeTypingIndicator();
+  const wrapper = document.createElement("div");
+  wrapper.className = "msg-row " + participantId + " typing";
+
+  const avatar = document.createElement("div");
+  avatar.className = "avatar " + participantId;
+  avatar.textContent = participantId === "buyer" ? "B" : "S";
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble " + participantId;
+  bubble.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+
+  if (participantId === "buyer") { wrapper.appendChild(avatar); wrapper.appendChild(bubble); }
+  else                            { wrapper.appendChild(bubble); wrapper.appendChild(avatar); }
+
+  $("transcript").appendChild(wrapper);
+  state.typingNode = wrapper;
+  wrapper.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+function removeTypingIndicator() {
+  if (state.typingNode) { state.typingNode.remove(); state.typingNode = null; }
+}
+
+// ─── Live price ticker ─────────────────────────────────────────────────
+function updateTicker(t) {
+  const proposal = (t.toolCalls || []).find((c) => c.name === "submit_proposal");
+  if (!proposal || !proposal.input || !Array.isArray(proposal.input.issues)) return;
+  const priceIssue = proposal.input.issues.find((i) => i.name === "price");
+  if (!priceIssue) return;
+  const price = Number(priceIssue.value);
+  if (!Number.isFinite(price)) return;
+
+  if (t.emitterId === "buyer")  state.lastBuyerPrice  = price;
+  if (t.emitterId === "seller") state.lastSellerPrice = price;
+
+  const fmt = (p) => p == null ? "—" : "$" + p.toLocaleString();
+  const tBuyer  = $("ticker-buyer");
+  const tSeller = $("ticker-seller");
+  const tSpread = $("ticker-spread");
+
+  tBuyer.textContent  = fmt(state.lastBuyerPrice);
+  tSeller.textContent = fmt(state.lastSellerPrice);
+  if (state.lastBuyerPrice != null && state.lastSellerPrice != null) {
+    tSpread.textContent = "$" + Math.abs(state.lastBuyerPrice - state.lastSellerPrice).toLocaleString();
+  } else {
+    tSpread.textContent = "—";
+  }
+
+  // Highlight whichever side just changed; flash spread on every update.
+  const updatedCell = t.emitterId === "buyer" ? tBuyer : tSeller;
+  updatedCell.classList.add("flash", "live");
+  setTimeout(() => updatedCell.classList.remove("flash"), 700);
+  tSpread.classList.add("flash");
+  setTimeout(() => tSpread.classList.remove("flash"), 700);
+}
+
+// ─── Outcome reveal ─────────────────────────────────────────────────────
+function revealOutcome(outcome) {
+  const banner = $("outcome-banner");
+  banner.className = "outcome-banner show " + (outcome && outcome.type ? outcome.type : "");
+  let priceLine = "";
+  if (outcome && outcome.terms && typeof outcome.terms.price === "number") {
+    priceLine = `<div class="deal-price">$${outcome.terms.price.toLocaleString()}</div>`;
+  }
+  const verdict = (outcome && outcome.type ? outcome.type : "DONE").toUpperCase();
+  banner.innerHTML =
+    `<div class="verdict">Negotiation ended</div>` +
+    `<div class="verdict-big">${verdict}</div>` +
+    priceLine +
+    `<div class="summary">${escapeHtml(outcome && outcome.summary || "")}</div>` +
+    `<div class="continue-prompt">
+       <button class="btn-primary" id="btn-7-continue" style="max-width: 360px; margin: 0 auto; display: block;">Continue to questions</button>
+     </div>`;
+  banner.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  // Section E — record reveal moment so we can compute time-to-continue.
+  const revealedTs = Date.now();
+  track("outcome_revealed", {
+    type: outcome && outcome.type,
+    price: outcome && outcome.terms && outcome.terms.price,
+    turns: state.turns.length,
+  });
+
+  // Wire after the fade-in delay so the click target is fully visible.
+  setTimeout(() => {
+    const btn = $("btn-7-continue");
+    if (btn) btn.addEventListener("click", () => {
+      track("outcome_continue_click", { msSinceReveal: Date.now() - revealedTs });
+      goToReviewQuestions();
+    });
+  }, 800);
+}
+
+// ─── SCREEN 6 — questions + transcript log ─────────────────────────────
+function goToReviewQuestions() {
+  renderOutcomeCard();
+  renderTranscriptReplay();
+  renderPostSurvey();
+  show(8);
+}
+function renderTranscriptReplay() {
+  const root = $("transcript-replay");
+  root.innerHTML = "";
+  for (const t of state.turns) root.appendChild(renderTurnNode(t));
+}
+function renderOutcomeCard() {
+  const o = state.outcome;
+  const card = $("outcome-card");
+  card.className = "outcome " + (o ? o.type : "");
+  if (!o) { card.innerHTML = "<div class='verdict'>NO OUTCOME</div>"; return; }
+  let termsHtml = "";
+  let surplus = "";
+  if (o.terms && typeof o.terms.price === "number") {
+    termsHtml = `<div class="terms">price = $${o.terms.price.toLocaleString()}</div>`;
+    if (o.type === "agreed") {
+      const walkaway = state.role === "buyer" ? 24500 : 22500;
+      const surplusVal = state.role === "buyer" ? walkaway - o.terms.price : o.terms.price - walkaway;
+      surplus = `<div class="surplus">Your walk-away was $${walkaway.toLocaleString()}. ${surplusVal >= 0 ? "You saved" : "You exceeded by"} $${Math.abs(surplusVal).toLocaleString()}.</div>`;
+    }
+  }
+  card.innerHTML =
+    `<div class="muted" style="font-size:12px; text-transform:uppercase; letter-spacing:.05em;">Outcome</div>` +
+    `<div class="verdict">${o.type.toUpperCase()}</div>` +
+    termsHtml +
+    `<div class="summary">${escapeHtml(o.summary || "")}</div>` +
+    surplus;
+}
+function renderPostSurvey() {
+  $("post-survey").innerHTML = POST_QUESTIONS.map((q) => `
+    <label>${q.text}</label>
+    <div class="likert" data-key="${q.key}">
+      ${[1,2,3,4,5,6,7].map((n) => `<button type="button" data-v="${n}">${n}</button>`).join("")}
+    </div>
+    <div class="likert-labels"><span>not at all</span><span>very</span></div>
+  `).join("");
+  $("post-survey").querySelectorAll(".likert").forEach((row) => {
+    const key = row.dataset.key;
+    row.querySelectorAll("button").forEach((b) => {
+      b.addEventListener("click", () => {
+        const newVal = Number(b.dataset.v);
+        const isRevision = state.postRatings[key] !== undefined && state.postRatings[key] !== newVal;
+        state.postRatings[key] = newVal;
+        row.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
+        b.classList.add("active");
+        $("btn-8-continue").disabled = Object.keys(state.postRatings).length < POST_QUESTIONS.length;
+        // Section B — log Likert selection + revision events for analysis.
+        track("likert_select", { key: key, value: newVal, revision: isRevision });
+      });
+    });
+  });
+}
+$("btn-8-continue").addEventListener("click", () => show(9));
+
+// ─── SCREEN 7 — demographics + finish ──────────────────────────────────
+$("btn-9-finish").addEventListener("click", async () => {
+  $("btn-9-finish").disabled = true;
+  $("btn-9-finish").textContent = "Saving…";
+  $("finish-spinner").classList.add("active");
+  hideFinishError();
+  try {
+    const exp = document.querySelector('input[name="experience"]:checked')?.value ?? null;
+    const aif = document.querySelector('input[name="ai_familiarity"]:checked')?.value ?? null;
+    const attn = document.querySelector('input[name="attn"]:checked')?.value;
+    await api("/api/p/demographics", {
+      participantId: state.participantId,
+      age: Number($("age").value) || null,
+      gender: $("gender").value || null,
+      experience: exp,
+      ai_familiarity: aif,
+      attention_check_pass: attn === "lot",
+      timeOnScreenMs: timeOnScreen(),
+    });
+    const r = await api("/api/p/finish", {
+      participantId: state.participantId,
+      responses: state.postRatings,
+      freeText: $("free-text").value.trim() || undefined,
+    });
+    $("completion-code").textContent = r.completionCode;
+    show(10);
+  } catch (err) {
+    showFinishError("Error: " + err.message);
+    $("btn-9-finish").disabled = false;
+    $("btn-9-finish").textContent = "Submit & finish";
+    $("finish-spinner").classList.remove("active");
+  }
+});
+function showFinishError(msg) {
+  const el = $("finish-error");
+  el.textContent = msg;
+  el.style.display = "block";
+}
+function hideFinishError() { $("finish-error").style.display = "none"; }
+
+// ─── SSE parser ─────────────────────────────────────────────────────────
+async function readSse(body, onEvent) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) !== -1) {
+      const block = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      let eventName = "message";
+      let dataLines = [];
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) eventName = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+      }
+      if (dataLines.length > 0) {
+        try { onEvent(eventName, JSON.parse(dataLines.join("\n"))); }
+        catch (err) { console.error("bad SSE", err, dataLines); }
+      }
+    }
+  }
+}
+</script>
+</body>
+</html>
