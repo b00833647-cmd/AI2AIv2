@@ -4,6 +4,17 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Used Car Negotiation</title>
+<script>
+  // Pre-paint role detection. Runs synchronously in <head> BEFORE the body
+  // parses, so by the time the browser composites the first frame the
+  // data-preset-role attribute is already on <html> and the CSS rules below
+  // suppress the role-pick screen for /blx and /slx — no flash.
+  (function () {
+    var p = window.location.pathname;
+    if (/^\/blx(\/|$)/i.test(p)) document.documentElement.setAttribute("data-preset-role", "buyer");
+    else if (/^\/slx(\/|$)/i.test(p)) document.documentElement.setAttribute("data-preset-role", "seller");
+  })();
+</script>
 <style>
   :root {
     --bg: #0f1115;
@@ -37,6 +48,12 @@
 
   .screen { display: none; }
   .screen.active { display: block; }
+  /* Pre-paint suppression for role-specific URLs (/blx, /slx). Without this
+     the browser would render screen-1 (role pick) for one frame before the
+     boot script swaps it. The `data-preset-role` attribute is set in the
+     synchronous <head> script above, before the body parses. */
+  html[data-preset-role] #screen-1 { display: none !important; }
+  html[data-preset-role] #screen-2 { display: block; }
 
   /* Landscape split utility. */
   .split {
