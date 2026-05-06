@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AI Negotiation Study — Demo</title>
+<title>Used Car Negotiation</title>
 <style>
   :root {
     --bg: #0f1115;
@@ -32,14 +32,6 @@
     line-height: 1.55;
     font-size: 16px;
   }
-  header.topbar {
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 12px; flex-wrap: wrap;
-  }
-  header.topbar h1 { margin: 0; font-size: 16px; font-weight: 600; }
-  header.topbar .progress { font-size: 12px; color: var(--dim); }
   main { max-width: 1400px; margin: 0 auto; padding: 24px 24px 96px; }
   @media (max-width: 480px) { main { padding: 16px 14px 96px; } }
 
@@ -618,17 +610,11 @@
 </head>
 <body>
 
-<header class="topbar">
-  <h1>AI Negotiation Study</h1>
-  <div class="progress" id="progress">Step 1 of 8</div>
-</header>
-
 <main>
 
 <!-- ─── SCREEN 1 — pick role only ─── -->
 <section id="screen-1" class="screen active">
   <div class="panel center">
-    <h3>Step 1</h3>
     <h2 style="font-size: 24px;">Which side will you play?</h2>
     <p class="muted">In the real study, this is randomly assigned. For the demo, you choose.</p>
 
@@ -652,7 +638,6 @@
 <!-- ─── SCREEN 2 — formal IRB-style consent form ─── -->
 <section id="screen-2" class="screen">
   <div class="panel center consent-form" style="max-width: 760px;">
-    <h3 style="color: var(--dim); letter-spacing: 0.05em;">Step 2</h3>
     <h2 style="font-size: 22px; line-height: 1.3;">Consent Form for Participation in a Research Study</h2>
     <p class="muted" style="margin: 0 0 4px; font-weight: 600; color: var(--text);">ESSEC Business School</p>
     <p class="muted" style="margin: 0 0 20px;">Consumer Behavior Study</p>
@@ -705,7 +690,6 @@
 <!-- ─── SCREEN 3 — instructions / scenario framing ─── -->
 <section id="screen-3" class="screen">
   <div class="panel center" style="max-width: 760px;">
-    <h3>Step 3</h3>
     <h2 id="instructions-heading">The scenario</h2>
 
     <p id="instructions-intro">You are shopping for a used car on an online marketplace.
@@ -719,16 +703,16 @@
     <hr class="sep" />
 
     <h3>What's coming next</h3>
-    <ul style="font-size: 14px; line-height: 1.8; padding-left: 22px; margin: 4px 0 14px;">
-      <li><strong>Step 4 · Listing.</strong> You'll see the full listing for the car.</li>
-      <li><strong>Step 5 · Your context.</strong> You'll describe your situation — what's
+    <ol style="font-size: 14px; line-height: 1.8; padding-left: 22px; margin: 4px 0 14px;">
+      <li><strong>Listing.</strong> You'll see the full listing for the car.</li>
+      <li><strong>Your context.</strong> You'll describe your situation — what's
         going on with you as <span id="instructions-role-side">a buyer</span>.</li>
-      <li><strong>Step 6 · Instructions for your AI.</strong> You'll write a prompt telling
+      <li><strong>Instructions for your AI.</strong> You'll write a prompt telling
         your AI agent how to negotiate.</li>
-      <li><strong>Step 7 · Watch.</strong> You'll watch the two AI agents negotiate live.</li>
-      <li><strong>Steps 8–10.</strong> A few questions, basic demographics, then a thank-you
+      <li><strong>Watch.</strong> You'll watch the two AI agents negotiate live.</li>
+      <li><strong>Wrap-up.</strong> A few questions, basic demographics, then a thank-you
         screen with your completion code.</li>
-    </ul>
+    </ol>
 
     <button class="btn-primary" id="btn-3-continue">Continue — see the listing</button>
   </div>
@@ -737,7 +721,7 @@
 <!-- ─── SCREEN 4 — car listing (themed like a classified ad) ─── -->
 <section id="screen-4" class="screen">
   <div class="panel">
-    <h3 id="listing-context">Step 4 · You're considering this listing</h3>
+    <h3 id="listing-context">You're considering this listing</h3>
 
     <div class="listing">
       <div class="gallery">
@@ -837,7 +821,6 @@
 <!-- ─── SCREEN 5 — your personal context (free text) ─── -->
 <section id="screen-5" class="screen">
   <div class="panel center" style="max-width: 760px;">
-    <h3>Step 5</h3>
     <h2 id="context-heading">Your situation</h2>
 
     <p id="context-intro"></p>
@@ -858,7 +841,6 @@ Honestly I just graduated and moved to Reston, Virginia for my first real job, s
 <!-- ─── SCREEN 6 — behavior prompt ─── -->
 <section id="screen-6" class="screen">
   <div class="panel center" style="max-width: 820px;">
-    <h3>Step 6</h3>
     <h2 id="prompt-heading">Now brief your AI agent</h2>
 
     <p>You're the <strong id="prompt-role-banner">buyer</strong>. Your AI agent will do the
@@ -889,7 +871,6 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
 <!-- ─── SCREEN 5 — full-page live negotiation ─── -->
 <section id="screen-7" class="screen">
   <div class="panel">
-    <h3>Step 7</h3>
     <h2>Watch the negotiation</h2>
     <div class="status" id="run-status">Starting…</div>
 
@@ -934,11 +915,10 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
     </div>
     <div>
       <div class="panel sticky">
-        <h3>Step 8</h3>
         <h2>How did it go?</h2>
         <div id="post-survey"></div>
 
-        <label for="free-text">Anything that surprised you? (optional)</label>
+        <label for="free-text">Any comments on the study? (optional)</label>
         <textarea id="free-text" rows="3"></textarea>
 
         <button class="btn-primary" id="btn-8-continue" disabled>Continue</button>
@@ -950,7 +930,6 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
 <!-- ─── SCREEN 7 — about the participant ─── -->
 <section id="screen-9" class="screen">
   <div class="panel center">
-    <h3>Step 9</h3>
     <h2>A few things about you</h2>
     <p class="muted">These help us understand who participated. None of this is shared with anyone outside the research team.</p>
 
@@ -1040,7 +1019,7 @@ function apiBase() {
 
 const ROLE_INFO = {
   buyer: {
-    listingContext: "Step 4 · You're considering this listing",
+    listingContext: "You're considering this listing",
     badge: "FOR SALE",
     priceLabel: "Asking price · Average market price for this configuration: ~$24,000",
     situation: "You can spend up to <strong>$24,500</strong> (your hard walk-away). " +
@@ -1049,7 +1028,7 @@ const ROLE_INFO = {
     promptRoleBanner: "buyer",
   },
   seller: {
-    listingContext: "Step 4 · This is your listing",
+    listingContext: "This is your listing",
     badge: "YOUR LISTING",
     priceLabel: "Your asking price · Average market price for this configuration: ~$24,000",
     situation: "You listed it at <strong>$25,500</strong>. " +
@@ -1120,7 +1099,8 @@ function show(step) {
   state.screenStartTs = Date.now();
   document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
   $("screen-" + step).classList.add("active");
-  $("progress").textContent = `Step ${step} of ${TOTAL_STEPS}`;
+  // Progress indicator was removed from the header; keep the screen-enter
+  // telemetry event so the funnel chart in /admin still works.
   window.scrollTo({ top: 0 });
   track("screen_enter", { step: step });
 }
