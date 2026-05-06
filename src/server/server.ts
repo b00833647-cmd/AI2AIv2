@@ -67,7 +67,14 @@ const server = http.createServer(async (req, res) => {
         url.pathname === "/study.html")
     ) {
       const html = await readFile(path.join(WEB_ROOT, "study.html"), "utf-8");
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      // No-cache so design/copy/CSS changes pushed to Railway show up
+      // immediately on the next page load, no hard-refresh needed.
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+      });
       res.end(html);
       return;
     }
@@ -81,7 +88,10 @@ const server = http.createServer(async (req, res) => {
     // Operator-facing dev demo (legacy single-page form). Kept for QA.
     if (req.method === "GET" && (url.pathname === "/dev" || url.pathname === "/index.html")) {
       const html = await readFile(path.join(WEB_ROOT, "index.html"), "utf-8");
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+      });
       res.end(html);
       return;
     }
@@ -1026,7 +1036,10 @@ function requireAdmin(req: http.IncomingMessage, res: http.ServerResponse): bool
 async function handleAdminPage(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (!requireAdmin(req, res)) return;
   const html = await readFile(path.join(WEB_ROOT, "admin.html"), "utf-8");
-  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+  res.writeHead(200, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+  });
   res.end(html);
 }
 
