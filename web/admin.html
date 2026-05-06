@@ -148,10 +148,13 @@ function renderStats(d) {
 }
 
 function renderFunnel(rows) {
+  // Step 1 (role pick) was removed — /blx and /slx URLs preset the role and
+  // the SPA jumps straight to consent. Step 1 may still appear in the funnel
+  // for legacy participants from before the URL-routed flow.
   const SCREEN_NAMES = {
-    1: "Role pick", 2: "Consent", 3: "Instructions", 4: "Listing",
+    1: "Role pick (legacy)", 2: "Consent", 3: "Instructions", 4: "Listing",
     5: "Personal context", 6: "Behavior prompt", 7: "Negotiation",
-    8: "Survey", 9: "Demographics", 10: "Thanks",
+    8: "Survey + transcript", 9: "Demographics", 10: "Thanks",
   };
   if (rows.length === 0) {
     $("funnel").innerHTML = "<p style='color:var(--dim);font-size:13px'>No event data yet — first participant who completes will populate this.</p>";
@@ -247,6 +250,18 @@ function closeDetail() {
   $("overview").style.display = "block";
 }
 
+// Friendly labels for post-survey question keys. Mirror of POST_QUESTIONS in
+// web/study.html (plus free_text which is the open-ended comment field).
+const SURVEY_LABELS = {
+  satisfaction:      "Satisfied with the outcome?",
+  agent_represented: "Your agent represented your preferences well?",
+  control:           "Felt in control of how your agent negotiated?",
+  opponent_fair:     "The opponent's agent seemed fair?",
+  trust_ai:          "Trust in AI to handle real negotiations on your behalf?",
+  would_use_again:   "Would you use a tool like this in real life?",
+  free_text:         "Any comments on the study?",
+};
+
 function renderDetail(id, d) {
   const p = d.participant;
   const meta = [
@@ -257,15 +272,33 @@ function renderDetail(id, d) {
     ["completion code", p.completion_code || "—"],
   ];
   let html = `<h2>Participant ${id}</h2>
-    <div class="panel"><h2>Demographics & meta</h2>
+    <div class="panel"><h2>Demographics &amp; meta</h2>
       <table><tbody>${meta.map(([k, v]) => `<tr><td style="color:var(--dim)">${k}</td><td>${v ?? "—"}</td></tr>`).join("")}</tbody></table>
     </div>`;
 
-  // Behavior prompts. Legacy revisions (pre-free-text) had a 7-axis signal
-  // vector in mapped_signals_json; new revisions store the JSON literal "null"
-  // and the prompt_text alone is the participant's instruction to their agent.
+  // Panels are ordered to mirror the participant's actual journey through the
+  // study, so a researcher reading a row top-to-bottom retraces what the
+  // participant did:
+  //
+  //   1. Demographics & meta (researcher overview, kept at top)
+  //   2. Personal context  (screen 5 — what they wrote about themselves)
+  //   3. Behavior prompt   (screen 6 — instructions they gave their agent)
+  //   4. Opponent agent    (engine setup — who their agent faced)
+  //   5. Negotiation       (screen 7 — the actual transcript)
+  //   6. Post-survey       (screen 8 — Likerts + open-ended comment)
+  //   7. Events            (raw telemetry, kept at bottom)
+
+  // 2. Personal context — what the participant wrote about themselves.
+  const ctxRow = (d.participant_responses || []).find(r => r.screen === "context" && r.key === "personal_context");
+  if (ctxRow) {
+    html += `<div class="panel"><h2>Personal context</h2><pre>${escapeHtml(ctxRow.value_text || "")}</pre></div>`;
+  }
+
+  // 3. Behavior prompt — instructions the participant gave their agent.
+  // Legacy revisions (pre-free-text) had a 7-axis signal vector in
+  // mapped_signals_json; new revisions store the JSON literal "null".
   if (d.behavior_prompts && d.behavior_prompts.length > 0) {
-    html += `<div class="panel"><h2>Behavior prompts (${d.behavior_prompts.length} revision${d.behavior_prompts.length > 1 ? "s" : ""})</h2>`;
+    html += `<div class="panel"><h2>Behavior prompt (${d.behavior_prompts.length} revision${d.behavior_prompts.length > 1 ? "s" : ""})</h2>`;
     for (const bp of d.behavior_prompts) {
       let sigs = "";
       try {
@@ -285,7 +318,7 @@ function renderDetail(id, d) {
     html += `</div>`;
   }
 
-  // Opponent — pre-written personality (free-text mode) OR random 7-axis
+  // 4. Opponent agent — pre-written personality (current) OR random 7-axis
   // signals (legacy). Read from participant_responses(screen='engine').
   const personalityRow = (d.participant_responses || []).find(r => r.screen === "engine" && r.key === "opponent_personality");
   const oppSigRow = (d.participant_responses || []).find(r => r.screen === "engine" && r.key === "opponent_signals");
@@ -304,23 +337,7 @@ function renderDetail(id, d) {
     html += `</div>`;
   }
 
-  // Personal context
-  const ctxRow = (d.participant_responses || []).find(r => r.screen === "context" && r.key === "personal_context");
-  if (ctxRow) {
-    html += `<div class="panel"><h2>Personal context (step 5)</h2><pre>${escapeHtml(ctxRow.value_text || "")}</pre></div>`;
-  }
-
-  // Survey responses
-  const survey = (d.participant_responses || []).filter(r => r.screen === "post_survey" && !r.key.startsWith("_"));
-  if (survey.length > 0) {
-    html += `<div class="panel"><h2>Post-survey</h2><table><tbody>`;
-    for (const r of survey) {
-      html += `<tr><td style="color:var(--dim)">${r.key}</td><td>${r.value_int ?? escapeHtml(r.value_text || "")}</td></tr>`;
-    }
-    html += `</tbody></table></div>`;
-  }
-
-  // Negotiation transcript
+  // 5. Negotiation transcript.
   if (d.session && d.session.turns && d.session.turns.length > 0) {
     html += `<div class="panel"><h2>Negotiation transcript (${d.session.turns.length} turns)</h2>`;
     html += `<div style='font-size:13px;margin-bottom:8px;color:var(--dim)'>Outcome: <strong>${d.session.outcome_type || "?"}</strong> ${d.session.outcome_summary ? "· " + escapeHtml(d.session.outcome_summary) : ""}</div>`;
@@ -342,7 +359,28 @@ function renderDetail(id, d) {
     html += `</div>`;
   }
 
-  // Events count
+  // 6. Post-survey responses — Likerts (1-7) + open-ended comment, with the
+  // human-readable question as the row label instead of the raw DB key.
+  const survey = (d.participant_responses || []).filter(r => r.screen === "post_survey" && !r.key.startsWith("_"));
+  if (survey.length > 0) {
+    html += `<div class="panel"><h2>Post-survey</h2><table><tbody>`;
+    // Sort so Likerts appear first (in question order), then free_text last.
+    const order = ["satisfaction","agent_represented","control","opponent_fair","trust_ai","would_use_again","free_text"];
+    const sorted = [...survey].sort((a,b) => {
+      const ai = order.indexOf(a.key); const bi = order.indexOf(b.key);
+      return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+    });
+    for (const r of sorted) {
+      const label = SURVEY_LABELS[r.key] || r.key;
+      const value = r.value_int != null
+        ? `<strong>${r.value_int}</strong> <span style="color:var(--dim);font-size:11px">/ 7</span>`
+        : escapeHtml(r.value_text || "—");
+      html += `<tr><td style="color:var(--dim);width:42%">${escapeHtml(label)}</td><td>${value}</td></tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  // 7. Events count
   const eventsCount = (d.participant_events || []).length;
   if (eventsCount > 0) {
     const byType = {};
