@@ -249,15 +249,19 @@ function renderDetail(id, d) {
       <table><tbody>${meta.map(([k, v]) => `<tr><td style="color:var(--dim)">${k}</td><td>${v ?? "—"}</td></tr>`).join("")}</tbody></table>
     </div>`;
 
-  // Behavior prompts
+  // Behavior prompts. Legacy revisions (pre-free-text) had a 7-axis signal
+  // vector in mapped_signals_json; new revisions store the JSON literal "null"
+  // and the prompt_text alone is the participant's instruction to their agent.
   if (d.behavior_prompts && d.behavior_prompts.length > 0) {
     html += `<div class="panel"><h2>Behavior prompts (${d.behavior_prompts.length} revision${d.behavior_prompts.length > 1 ? "s" : ""})</h2>`;
     for (const bp of d.behavior_prompts) {
       let sigs = "";
       try {
         const s = JSON.parse(bp.mapped_signals_json);
-        sigs = "<div style='font-family:ui-monospace,monospace;font-size:11px;color:var(--dim);margin-top:8px'>"
-          + Object.entries(s).map(([k, v]) => `${k}=${v > 0 ? "+" + v : v}`).join(" · ") + "</div>";
+        if (s && typeof s === "object") {
+          sigs = "<div style='font-family:ui-monospace,monospace;font-size:11px;color:var(--dim);margin-top:8px'><strong>(legacy 7-axis signals)</strong> "
+            + Object.entries(s).map(([k, v]) => `${k}=${v > 0 ? "+" + v : v}`).join(" · ") + "</div>";
+        }
       } catch {}
       html += `<div style="margin-bottom:12px">
         <div style="color:var(--dim);font-size:12px">Revision ${bp.revision} · ${bp.submitted_at}</div>
@@ -265,6 +269,25 @@ function renderDetail(id, d) {
         ${sigs}
         ${bp.mapped_notes ? "<div style='font-size:12px;color:var(--dim);margin-top:6px'><em>" + escapeHtml(bp.mapped_notes) + "</em></div>" : ""}
       </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Opponent — pre-written personality (free-text mode) OR random 7-axis
+  // signals (legacy). Read from participant_responses(screen='engine').
+  const personalityRow = (d.participant_responses || []).find(r => r.screen === "engine" && r.key === "opponent_personality");
+  const oppSigRow = (d.participant_responses || []).find(r => r.screen === "engine" && r.key === "opponent_signals");
+  if (personalityRow || oppSigRow) {
+    html += `<div class="panel"><h2>Opponent agent</h2>`;
+    if (personalityRow) {
+      html += `<div>Personality: <strong>${escapeHtml(personalityRow.value_text || "")}</strong> <span style='color:var(--dim);font-size:12px'>(picked at random per session, frozen in pack)</span></div>`;
+    }
+    if (oppSigRow) {
+      try {
+        const s = JSON.parse(oppSigRow.value_text || "{}");
+        html += "<div style='font-family:ui-monospace,monospace;font-size:11px;color:var(--dim);margin-top:6px'><strong>(legacy 7-axis signals)</strong> "
+          + Object.entries(s).map(([k, v]) => `${k}=${v > 0 ? "+" + v : v}`).join(" · ") + "</div>";
+      } catch {}
     }
     html += `</div>`;
   }

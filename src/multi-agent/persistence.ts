@@ -512,8 +512,10 @@ export class SqlitePersistence implements Persistence {
   insertBehaviorPrompt(args: {
     participantId: string;
     promptText: string;
-    mappedSignals: unknown;
-    mappedNotes: string;
+    /** Optional — only set under the legacy 7-axis mapping path. New flow passes null. */
+    mappedSignals?: unknown | null;
+    /** Optional — paired with mappedSignals on the legacy path. */
+    mappedNotes?: string | null;
   }): { revision: number } {
     const row = this.db
       .prepare(
@@ -521,6 +523,13 @@ export class SqlitePersistence implements Persistence {
       )
       .get(args.participantId) as { max: number };
     const revision = row.max + 1;
+    // The schema declares mapped_signals_json NOT NULL; we satisfy that by
+    // writing the JSON literal "null" when no signals were computed. Consumers
+    // that read this column should `JSON.parse()` and check for null.
+    const signalsJson =
+      args.mappedSignals === undefined || args.mappedSignals === null
+        ? "null"
+        : JSON.stringify(args.mappedSignals);
     this.db
       .prepare(
         `INSERT INTO behavior_prompts
@@ -532,8 +541,8 @@ export class SqlitePersistence implements Persistence {
         args.participantId,
         revision,
         args.promptText,
-        JSON.stringify(args.mappedSignals),
-        args.mappedNotes,
+        signalsJson,
+        args.mappedNotes ?? null,
         new Date().toISOString(),
       );
     return { revision };

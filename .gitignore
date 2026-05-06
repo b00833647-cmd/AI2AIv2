@@ -40,3 +40,5 @@ AI2AI-backup-*/
 
 # Claude Code internal state (intelligence cache, sessions etc.)
 .claude-flow/
+.claude/*.lock
+.claude/local/

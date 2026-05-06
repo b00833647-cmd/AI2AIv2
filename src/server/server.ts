@@ -15,8 +15,12 @@ import path from "node:path";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { nanoid } from "nanoid";
 import { runSession } from "../multi-agent/session-runner.ts";
-import { mapUserBehavior, randomizeSignals, type BehaviorSignals } from "../multi-agent/behavior-mapper.ts";
-import { buildPack, type IntakeAnswers, type Role } from "../multi-agent/pack-builder.ts";
+import {
+  buildPack,
+  pickOpponentPersonality,
+  type IntakeAnswers,
+  type Role,
+} from "../multi-agent/pack-builder.ts";
 import { openPersistence, type SqlitePersistence } from "../multi-agent/persistence.ts";
 
 const PORT = Number(process.env["AI2AI_PORT"] ?? 3737);
@@ -296,27 +300,15 @@ async function handleRun(req: http.IncomingMessage, res: http.ServerResponse): P
   });
 
   try {
-    // 1. Map user behavior → 7-signal vector + residual notes.
-    send("status", { stage: "mapping", message: "Translating your behavior prompt into the 7-dim signal vector…" });
-    const mapped = await mapUserBehavior({
-      role: answers.userRole,
-      behaviorPrompt: answers.userBehaviorPrompt,
-      personalContext: answers.userPersonalContext,
-    });
-    if (aborted) return;
-    send("user_signals", { role: answers.userRole, signals: mapped.signals, notes: mapped.notes });
-
-    // 2. Randomize the opponent.
-    const opponentSignals: BehaviorSignals = randomizeSignals();
+    // 1. Pick opponent personality (free-text mode — no behavior mapping).
+    const opponentPersonality = pickOpponentPersonality();
     const opponentRole = answers.userRole === "buyer" ? "seller" : "buyer";
-    send("opponent_signals", { role: opponentRole, signals: opponentSignals });
+    send("opponent_personality", { role: opponentRole, personality: opponentPersonality });
 
-    // 3. Build pack and persist it on disk for transparency.
+    // 2. Build pack and persist it on disk for transparency.
     const pack = buildPack({
       answers,
-      userSignals: mapped.signals,
-      userNotes: mapped.notes,
-      opponentSignals,
+      opponentPersonality,
       scenarioId: SCENARIO_ID,
     });
     const outPath = path.resolve(`scenarios/${SCENARIO_ID}/pack.json`);
@@ -665,7 +657,6 @@ async function handleParticipantPrompt(req: http.IncomingMessage, res: http.Serv
   if (!require400(res, typeof body.participantId === "string", "participantId required")) return;
   if (!require400(res, typeof body.promptText === "string" && body.promptText.length > 0, "promptText required")) return;
 
-  // Look up role on the participant row — required to map behavior properly.
   const participant = withDb((db) => db.getStudyParticipant(body.participantId));
   if (!participant) {
     sendJson(res, 404, { error: "unknown participantId" });
@@ -676,31 +667,19 @@ async function handleParticipantPrompt(req: http.IncomingMessage, res: http.Serv
     return;
   }
 
-  try {
-    const mapped = await mapUserBehavior({
-      role: participant.role as Role,
-      behaviorPrompt: body.promptText,
-      personalContext: body.personalContext,
-    });
+  // Free-text mode: no signal mapping, no extra LLM call. The participant's
+  // prompt goes straight into the agent's system prompt at session start.
+  // mapped_signals_json is stored as JSON literal `null` (column is NOT NULL).
+  const { revision } = withDb((db) =>
+    db.insertBehaviorPrompt({
+      participantId: body.participantId,
+      promptText: body.promptText,
+      mappedSignals: null,
+      mappedNotes: null,
+    }),
+  );
 
-    const { revision } = withDb((db) =>
-      db.insertBehaviorPrompt({
-        participantId: body.participantId,
-        promptText: body.promptText,
-        mappedSignals: mapped.signals,
-        mappedNotes: mapped.notes,
-      }),
-    );
-
-    sendJson(res, 200, {
-      revision,
-      signals: mapped.signals,
-      notes: mapped.notes,
-    });
-  } catch (err) {
-    console.error("[server] /api/p/prompt error:", err);
-    sendJson(res, 502, { error: (err as Error).message });
-  }
+  sendJson(res, 200, { revision });
 }
 
 interface PromptConfirmBody {
@@ -767,8 +746,6 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
     sendJson(res, 400, { error: "no behavior prompt submitted yet" });
     return;
   }
-  const userSignals = JSON.parse(promptRow.mapped_signals_json) as BehaviorSignals;
-  const userNotes = promptRow.mapped_notes ?? "";
   const role = participant.role as Role;
 
   // Fetch the participant's saved personal-context text (from screen 5).
@@ -781,23 +758,21 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
     userBehaviorPrompt: promptRow.prompt_text,
   };
 
-  // Randomize the opponent's behavioral profile once per session — uniform
-  // draw over {-1, 0, +1} on each of the 7 dimensions. The full pack is
-  // persisted to sessions.scenario_pack_json by the engine, so we can
-  // always recover what each participant faced. We also write a
-  // participant_responses row keyed `opponent_signals` for easier querying.
-  const opponentSignals: BehaviorSignals = randomizeSignals();
+  // Pick the opponent's personality once per session — uniform over the three
+  // pre-written profiles (easygoing | moderate | tough). The pack is persisted
+  // to sessions.scenario_pack_json so we can always recover what the
+  // participant faced. We also write a participant_responses row keyed
+  // 'opponent_personality' for easier admin querying.
+  const opponentPersonality = pickOpponentPersonality();
   withDb((db) => {
     db.insertParticipantResponses(body.participantId, "engine", [
-      { key: "opponent_signals", valueText: JSON.stringify(opponentSignals) },
+      { key: "opponent_personality", valueText: opponentPersonality },
     ]);
   });
 
   const pack = buildPack({
     answers: intake,
-    userSignals,
-    userNotes,
-    opponentSignals,
+    opponentPersonality,
     scenarioId: SCENARIO_ID,
   });
   const outPath = path.resolve(`scenarios/${SCENARIO_ID}/pack.json`);
@@ -820,10 +795,9 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
   });
 
   send("status", { message: "Negotiation starting…" });
-  send("user_signals", { role, signals: userSignals, notes: userNotes });
-  send("opponent_signals", {
+  send("opponent_personality", {
     role: role === "buyer" ? "seller" : "buyer",
-    signals: opponentSignals,
+    personality: opponentPersonality,
   });
 
   const persistence = openPersistence();

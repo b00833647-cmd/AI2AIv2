@@ -3,25 +3,21 @@
 // Flow:
 //   1. Operator picks the role they're playing — buyer or seller.
 //   2. Shared car-fact intake (mileage, customizations, market price).
-//   3. Both sides' price intake (seller listing/min, buyer target/max). The
-//      operator enters both because the experiment needs targets on both
-//      sides; only one side's *behavior* is operator-supplied.
+//   3. Both sides' price intake (seller listing/min, buyer target/max).
 //   4. The user's personal context (free text, only for their role).
-//   5. The user's BEHAVIOR PROMPT (free text, only for their role) — describes
-//      how they want their agent to behave during the negotiation.
-//   6. An LLM call maps {behavior prompt + personal context} → a fixed
-//      7-dimensional signal vector + residual persona notes.
-//   7. The OPPONENT side gets a random 7-dim signal vector (no behavior prompt
-//      and no personal context — fully random).
-//   8. Pack written to scenarios/toyota-camry-negotiation/pack.json with both
-//      vectors baked into the briefs and rendered into the system prompts.
+//   5. The user's BEHAVIOR PROMPT (free text, only for their role) — embedded
+//      verbatim in their agent's system prompt at session start.
+//   6. The OPPONENT side gets one of three pre-written negotiating
+//      personalities (easygoing | moderate | tough), drawn at random.
+//   7. Pack written to scenarios/toyota-camry-negotiation/pack.json with the
+//      participant text and chosen opponent personality baked in.
 //
 // Usage:
 //   npm run setup
 //   npm run setup -- --run            # also run the negotiation right after
 //   npm run setup -- --from <path>    # non-interactive: read answers from JSON
 //
-// Reproducibility: the random opponent signals are baked into the pack at
+// Reproducibility: the chosen opponent personality is baked into the pack at
 // setup time, so replays / batch runs against the same pack.json reuse the
 // same opponent. Re-run setup to reroll the opponent.
 
@@ -31,20 +27,18 @@ import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
-  mapUserBehavior,
-  randomizeSignals,
-  type BehaviorSignals,
-} from "../multi-agent/behavior-mapper.ts";
-import { buildPack, type IntakeAnswers, type Role } from "../multi-agent/pack-builder.ts";
+  buildPack,
+  pickOpponentPersonality,
+  type IntakeAnswers,
+  type OpponentPersonality,
+  type Role,
+} from "../multi-agent/pack-builder.ts";
 
 const SCENARIO_ID = "toyota-camry-negotiation";
 
 interface SetupAnswers extends IntakeAnswers {
-  // Optional: skip LLM mapping by supplying pre-baked signals (for fixtures).
-  userSignalsOverride?: BehaviorSignals;
-  userNotesOverride?: string;
-  // Optional: pin the opponent's signals (for fixture replays).
-  opponentSignalsOverride?: BehaviorSignals;
+  /** Optional: pin the opponent's personality (for fixture replays). */
+  opponentPersonalityOverride?: OpponentPersonality;
 }
 
 interface CliArgs {
@@ -73,39 +67,21 @@ async function main(): Promise<void> {
   const answers = args.fromFile ? await readAnswers(args.fromFile) : await interactiveIntake();
   validate(answers);
 
-  // Map user-side behavior → signals + residual notes (one LLM call), OR use
-  // the override if the fixture supplied pre-baked signals.
-  let userSignals: BehaviorSignals;
-  let userNotes: string;
-  if (answers.userSignalsOverride) {
-    userSignals = answers.userSignalsOverride;
-    userNotes = answers.userNotesOverride ?? "";
-  } else {
-    const mapped = await mapUserBehavior({
-      role: answers.userRole,
-      behaviorPrompt: answers.userBehaviorPrompt,
-      personalContext: answers.userPersonalContext,
-    });
-    userSignals = mapped.signals;
-    userNotes = mapped.notes;
-  }
+  const opponentPersonality =
+    answers.opponentPersonalityOverride ?? pickOpponentPersonality();
 
-  const opponentSignals = answers.opponentSignalsOverride ?? randomizeSignals();
-
-  const pack = buildPack({ answers, userSignals, userNotes, opponentSignals, scenarioId: SCENARIO_ID });
+  const pack = buildPack({ answers, opponentPersonality, scenarioId: SCENARIO_ID });
 
   const outPath = path.resolve(`scenarios/${SCENARIO_ID}/pack.json`);
   await mkdir(path.dirname(outPath), { recursive: true });
   await writeFile(outPath, JSON.stringify(pack, null, 2));
   console.log(`\nWrote ${outPath}`);
 
-  console.log(`\nUser side (${answers.userRole}) — mapped signals:`);
-  printSignals(userSignals);
-  if (userNotes.trim().length > 0) console.log(`  notes: ${userNotes.trim()}`);
+  console.log(`\nUser side (${answers.userRole}) — behavior prompt:`);
+  console.log(`  ${answers.userBehaviorPrompt.trim().slice(0, 200)}${answers.userBehaviorPrompt.length > 200 ? "…" : ""}`);
 
   const opponentRole: Role = answers.userRole === "buyer" ? "seller" : "buyer";
-  console.log(`\nOpponent side (${opponentRole}) — random signals:`);
-  printSignals(opponentSignals);
+  console.log(`\nOpponent side (${opponentRole}) — personality: ${opponentPersonality}`);
 
   if (args.run) {
     console.log(`\nRunning the negotiation…\n`);
@@ -117,13 +93,6 @@ async function main(): Promise<void> {
     process.exit(res.status ?? 0);
   } else {
     console.log(`\nRun with:  npm run run -- ${SCENARIO_ID}`);
-  }
-}
-
-function printSignals(s: BehaviorSignals): void {
-  for (const [k, v] of Object.entries(s)) {
-    const sign = v > 0 ? "+1" : v < 0 ? "-1" : " 0";
-    console.log(`  ${k.padEnd(24, " ")} ${sign}`);
   }
 }
 
@@ -164,8 +133,8 @@ async function interactiveIntake(): Promise<SetupAnswers> {
 
     // ─── Role selection ────────────────────────────────────────────────────
     rule("STEP 0 — Which role are you playing?");
-    console.log("\nOnly your side's behavior is operator-controlled. Your opponent gets a random");
-    console.log("seven-dimensional behavior profile.\n");
+    console.log("\nOnly your side's behavior is operator-controlled. Your opponent gets one of");
+    console.log("three pre-written personalities (easygoing | moderate | tough), drawn at random.\n");
     const userRole = await pickRole(rl);
 
     // ─── Shared car facts ──────────────────────────────────────────────────
@@ -210,8 +179,8 @@ async function interactiveIntake(): Promise<SetupAnswers> {
     console.log(
       "\nDescribe how you want your AI agent to behave during the negotiation.\n" +
         "Be specific about tactics, tone, risk appetite, time pressure, trust posture,\n" +
-        "or any other behavioral preferences. Free-form prose — the system will\n" +
-        "translate this into a 7-dimensional behavior profile.\n" +
+        "or any other behavioral preferences. Your prose is embedded verbatim in\n" +
+        "your agent's system prompt — no translation step.\n" +
         "(End input with a single '.' on its own line.)\n",
     );
     const userBehaviorPrompt = await multilineQ(rl);

@@ -10,7 +10,7 @@
 
 ## Last touched
 
-2026-05-05
+2026-05-06
 
 ## Host project context
 
@@ -40,8 +40,8 @@ _(checklist — update items in place; don't append)_
 - [x] Batch runner harness (`src/cli/batch.ts` — concurrency, matrix sweeps)
 - [x] LLM-as-judge scoring (`src/cli/judge.ts`)
 - [x] **Participant-study web app:** 10-screen SPA, 7 `/api/p/*` endpoints, SSE-streamed live negotiation
-- [x] **Behavior mapper:** free-text prompt → 7-dim signal vector via Claude (Sonnet 4.6, JSON-schema-constrained output)
-- [x] **Random opponent per session** + persisted in `participant_responses(screen='engine', key='opponent_signals')`
+- [x] **Free-text agent briefing** (replaced 7-axis behavior mapping 2026-05-06): the participant's personal context + behavior prompt are embedded verbatim in their agent's system prompt — no LLM mapping step, no signal numbers
+- [x] **Opponent personality library:** 3 pre-written negotiating profiles (`easygoing` | `moderate` | `tough`) with buyer + seller variants; one drawn at random per session, persisted in `participant_responses(screen='engine', key='opponent_personality')`
 - [x] **Behavioral telemetry:** `participant_events` table + auto-instrumented client tracker (clicks/focus/blur/scroll/visibility/idle/paste/resize)
 - [x] **Browser metadata at start:** viewport, screen, timezone, language, referrer, parsed browser/OS/device class
 - [x] **Admin dashboard at /admin** (Basic Auth) — overview stats, funnel, participant table with computed flags, per-participant detail, export + erase actions
@@ -67,6 +67,12 @@ Push to GitHub, deploy to Railway or Fly with the secrets set, generate a public
 ## Recent session notes
 
 _(short log of what each session accomplished — most recent first, ~3 bullets per session)_
+
+### 2026-05-06 — free-text agent briefing (removed 7-axis mapping)
+
+- Replaced behavior-mapper with verbatim text embedding: participant's screen-5 personal context and screen-6 behavior prompt go straight into their agent's system prompt. No LLM round-trip on screen 6 submit (~$0.005 + 2-4s saved per participant).
+- Added 3 opponent personalities (`easygoing` | `moderate` | `tough`) with buyer + seller variants in `pack-builder.ts`. One picked at random per session via `pickOpponentPersonality()`, persisted to `participant_responses(screen='engine', key='opponent_personality')`.
+- Verified end-to-end via live preview (buyer participant + moderate seller) — agreed at $23,000 in 12 turns. The buyer agent quoted the participant's "relocated to Paris" + "cash buyer" details across 5 of 6 turns; seller stayed in moderate-personality character (mirrored concessions, cited car virtues). Admin dashboard updated to render personality + null-safe legacy signals.
 
 ### 2026-05-05 — production-ready release
 
