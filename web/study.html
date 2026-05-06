@@ -43,7 +43,13 @@
     line-height: 1.55;
     font-size: 16px;
   }
-  main { max-width: 1400px; margin: 0 auto; padding: 24px 24px 96px; }
+  /* Main is a fluid container — fills the viewport with sensible padding,
+     but caps at 1600px on ultra-wide so the layout doesn't stretch absurdly. */
+  main {
+    max-width: min(1600px, 96vw);
+    margin: 0 auto;
+    padding: clamp(16px, 2.5vw, 32px) clamp(14px, 2.5vw, 32px) 96px;
+  }
   @media (max-width: 480px) { main { padding: 16px 14px 96px; } }
 
   .screen { display: none; }
@@ -77,12 +83,11 @@
     margin: 0 0 12px;
   }
   .mobile-block-card a { color: var(--accent); }
-  /* Pre-paint suppression for role-specific URLs (/blx, /slx). Without this
-     the browser would render screen-1 (role pick) for one frame before the
-     boot script swaps it. The `data-preset-role` attribute is set in the
-     synchronous <head> script above, before the body parses. */
+  /* Pre-paint hide of the role-pick screen on /blx and /slx — paired with
+     a tiny inline script after screen-2's closing tag (search for
+     "preset-role-active-swap") that moves the `.active` class from screen-1
+     to screen-2 synchronously during parse, before the browser paints. */
   html[data-preset-role] #screen-1 { display: none !important; }
-  html[data-preset-role] #screen-2 { display: block; }
 
   /* Landscape split utility. */
   .split {
@@ -112,9 +117,22 @@
   @media (max-width: 900px) {
     .panel.sticky, .panel.scrollable { position: static; max-height: none; }
   }
-  .panel.center {
-    max-width: 640px; margin-left: auto; margin-right: auto;
-  }
+  /* Every screen now fills the full main container — same width as the car
+     listing (screen 4) on every deck. The legacy `.panel.center` class is a
+     no-op (kept so we don't have to strip it from all the section markup).
+     For text-heavy screens, paragraphs inside the panel are still capped at
+     a comfortable reading width so line length stays scannable on wide
+     monitors; everything else (forms, listing, transcript) spans full. */
+  .panel.center { margin: 0; max-width: 100%; }
+  /* Tier classes are aliases now — kept so the HTML doesn't have to change. */
+  .panel.center.narrow,
+  .panel.center.reading,
+  .panel.center.medium,
+  .panel.center.wide,
+  .panel.center.full { max-width: 100%; }
+  /* Cap paragraph line-length inside text-heavy screens for readability. */
+  .panel.center.reading p,
+  .panel.center.reading li { max-width: 78ch; }
 
   h2 { margin: 0 0 14px; font-size: 18px; font-weight: 600; }
   h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -660,7 +678,7 @@
 
 <!-- ─── SCREEN 1 — pick role only ─── -->
 <section id="screen-1" class="screen active">
-  <div class="panel center">
+  <div class="panel center reading">
     <h2 style="font-size: 24px;">Which side will you play?</h2>
     <p class="muted">In the real study, this is randomly assigned. For the demo, you choose.</p>
 
@@ -683,7 +701,7 @@
 
 <!-- ─── SCREEN 2 — formal IRB-style consent form ─── -->
 <section id="screen-2" class="screen">
-  <div class="panel center consent-form" style="max-width: 760px;">
+  <div class="panel center consent-form reading">
     <h2 style="font-size: 22px; line-height: 1.3;">Consent Form for Participation in a Research Study</h2>
     <p class="muted" style="margin: 0 0 4px; font-weight: 600; color: var(--text);">ESSEC Business School</p>
     <p class="muted" style="margin: 0 0 20px;">Consumer Behavior Study</p>
@@ -732,10 +750,22 @@
     <button class="btn-primary" id="btn-2-continue">Yes, I consent to participate in this study.</button>
   </div>
 </section>
+<script>
+  // preset-role-active-swap: synchronously move .active from screen-1 to
+  // screen-2 during HTML parse (before paint) when the URL is /blx or /slx.
+  // Pairs with the html[data-preset-role] #screen-1 hide rule and the head
+  // script that sets the attribute. Result: zero flash, screen-2 is the
+  // first thing painted.
+  if (document.documentElement.hasAttribute("data-preset-role")) {
+    var s1 = document.getElementById("screen-1");
+    var s2 = document.getElementById("screen-2");
+    if (s1 && s2) { s1.classList.remove("active"); s2.classList.add("active"); }
+  }
+</script>
 
 <!-- ─── SCREEN 3 — instructions / scenario framing ─── -->
 <section id="screen-3" class="screen">
-  <div class="panel center" style="max-width: 760px;">
+  <div class="panel center reading">
     <h2 id="instructions-heading">The scenario</h2>
 
     <p id="instructions-intro">You are shopping for a used car on an online marketplace.
@@ -866,7 +896,7 @@
 
 <!-- ─── SCREEN 5 — your personal context (free text) ─── -->
 <section id="screen-5" class="screen">
-  <div class="panel center" style="max-width: 760px;">
+  <div class="panel center medium">
     <h2 id="context-heading">Your situation</h2>
 
     <p id="context-intro"></p>
@@ -886,7 +916,7 @@ Honestly I just graduated and moved to Reston, Virginia for my first real job, s
 
 <!-- ─── SCREEN 6 — behavior prompt ─── -->
 <section id="screen-6" class="screen">
-  <div class="panel center" style="max-width: 820px;">
+  <div class="panel center medium">
     <h2 id="prompt-heading">Now brief your AI agent</h2>
 
     <p>You're the <strong id="prompt-role-banner">buyer</strong>. Your AI agent will do the
@@ -975,7 +1005,7 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
 
 <!-- ─── SCREEN 7 — about the participant ─── -->
 <section id="screen-9" class="screen">
-  <div class="panel center">
+  <div class="panel center narrow">
     <h2>A few things about you</h2>
     <p class="muted">These help us understand who participated. None of this is shared with anyone outside the research team.</p>
 
@@ -1030,7 +1060,7 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
 
 <!-- ─── SCREEN 8 — thanks ─── -->
 <section id="screen-10" class="screen">
-  <div class="panel center">
+  <div class="panel center narrow">
     <div class="thanks-hero">
       <div class="check">✓</div>
       <h2>Thank you for participating</h2>
