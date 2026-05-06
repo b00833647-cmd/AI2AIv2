@@ -39,6 +39,13 @@ ENV NODE_ENV=production
 ENV AI2AI_PORT=3737
 ENV AI2AI_DB_PATH=/data/sessions.db
 
+# Rate-limiting OFF by default in containerized deploys so QA/researchers can
+# test from their own IP without tripping the per-IP-per-24h limit. Re-enable
+# for a Prolific launch by setting AI2AI_RATE_LIMIT=on in your platform's
+# environment variables (Railway → Variables; Fly → fly secrets) — that
+# overrides this Dockerfile default at container start.
+ENV AI2AI_RATE_LIMIT=off
+
 # Make sure the volume mount point exists (won't be persistent without -v).
 RUN mkdir -p /data
 
