@@ -2,7 +2,7 @@
 // a row. The orchestrator's reasoning is auditable and replayable.
 
 import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import type {
   OrchestratorDecision,
@@ -198,6 +198,8 @@ const MIGRATIONS: string[] = [
   "ALTER TABLE study_participants ADD COLUMN os TEXT",
   "ALTER TABLE study_participants ADD COLUMN device_type TEXT",
   "ALTER TABLE study_participants ADD COLUMN connection_type TEXT",
+  // Test-data marker — researcher-set "this run was QA, exclude from analysis"
+  "ALTER TABLE study_participants ADD COLUMN test_data INTEGER NOT NULL DEFAULT 0",
 ];
 
 export class SqlitePersistence implements Persistence {
@@ -454,6 +456,7 @@ export class SqlitePersistence implements Persistence {
       completion_code: string;
       excluded: boolean;
       excluded_reason: string;
+      test_data: boolean;
     }>,
   ): void {
     const cols: string[] = [];
@@ -752,10 +755,14 @@ export class SqlitePersistence implements Persistence {
     outcome_type: string | null;
     outcome_terms_json: string | null;
     tokens_total: number | null;
+    turns_consumed: number | null;
     last_screen: number | null;
     total_events: number;
     total_time_sec: number | null;
     device_type: string | null;
+    opponent_personality: string | null;
+    excluded: number;
+    test_data: number;
     flag_speeding: number;
     flag_short_prompt: number;
     flag_mobile: number;
@@ -772,9 +779,15 @@ export class SqlitePersistence implements Persistence {
            sp.completion_code,
            sp.session_id,
            sp.device_type,
+           sp.excluded,
+           sp.test_data,
            s.outcome_type,
            s.outcome_terms_json,
            s.tokens_total,
+           s.turns_consumed,
+           (SELECT value_text FROM participant_responses
+              WHERE participant_id = sp.id AND screen = 'engine' AND key = 'opponent_personality'
+              LIMIT 1) AS opponent_personality,
            (SELECT MAX(screen) FROM participant_events WHERE participant_id = sp.id) AS last_screen,
            (SELECT COUNT(*) FROM participant_events WHERE participant_id = sp.id) AS total_events,
            CASE WHEN sp.finished_at IS NOT NULL
@@ -807,10 +820,14 @@ export class SqlitePersistence implements Persistence {
       outcome_type: string | null;
       outcome_terms_json: string | null;
       tokens_total: number | null;
+      turns_consumed: number | null;
       last_screen: number | null;
       total_events: number;
       total_time_sec: number | null;
       device_type: string | null;
+      opponent_personality: string | null;
+      excluded: number;
+      test_data: number;
       flag_speeding: number;
       flag_short_prompt: number;
       flag_mobile: number;
@@ -855,6 +872,663 @@ export class SqlitePersistence implements Persistence {
       .prepare(`SELECT COUNT(*) AS n FROM study_participants WHERE finished_at IS NOT NULL`)
       .get() as { n: number };
     return { total: t.n, finished: f.n };
+  }
+
+  // ─── Analytics: aggregates, distributions, time series ──────────────────
+
+  /**
+   * Per-condition (role × opponent_personality) aggregate stats.
+   * The "paper-ready" table — counts, outcome rates, mean prices, mean turns.
+   */
+  aggregateByCondition(): Array<{
+    role: string | null;
+    personality: string | null;
+    n: number;
+    n_finished: number;
+    n_agreed: number;
+    n_impasse: number;
+    n_rejected: number;
+    pct_agreed: number;
+    mean_price: number | null;
+    median_price: number | null;
+    mean_turns: number | null;
+    mean_total_time_sec: number | null;
+  }> {
+    const rows = this.db
+      .prepare(
+        `SELECT
+           sp.role AS role,
+           op.value_text AS personality,
+           sp.id,
+           sp.finished_at,
+           s.outcome_type,
+           s.outcome_terms_json,
+           s.turns_consumed,
+           CASE WHEN sp.finished_at IS NOT NULL
+             THEN (julianday(sp.finished_at) - julianday(sp.created_at)) * 86400
+             ELSE NULL END AS total_time_sec
+         FROM study_participants sp
+         LEFT JOIN sessions s ON s.id = sp.session_id
+         LEFT JOIN participant_responses op
+           ON op.participant_id = sp.id
+           AND op.screen = 'engine'
+           AND op.key = 'opponent_personality'
+         WHERE sp.excluded = 0`,
+      )
+      .all() as Array<{
+      role: string | null;
+      personality: string | null;
+      id: string;
+      finished_at: string | null;
+      outcome_type: string | null;
+      outcome_terms_json: string | null;
+      turns_consumed: number | null;
+      total_time_sec: number | null;
+    }>;
+
+    const groups = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const key = `${r.role || "—"}|${r.personality || "—"}`;
+      const arr = groups.get(key);
+      if (arr) arr.push(r);
+      else groups.set(key, [r]);
+    }
+
+    const out: ReturnType<SqlitePersistence["aggregateByCondition"]> = [];
+    for (const [key, group] of groups) {
+      const [role, personality] = key.split("|");
+      const prices: number[] = [];
+      let nAgreed = 0, nImpasse = 0, nRejected = 0;
+      const turns: number[] = [];
+      const times: number[] = [];
+      for (const r of group) {
+        if (r.outcome_type === "agreed") nAgreed++;
+        else if (r.outcome_type === "impasse" || r.outcome_type === "timeout") nImpasse++;
+        else if (r.outcome_type === "rejected") nRejected++;
+        if (r.outcome_terms_json) {
+          try {
+            const t = JSON.parse(r.outcome_terms_json);
+            if (typeof t?.price === "number") prices.push(t.price);
+          } catch { /* skip */ }
+        }
+        if (typeof r.turns_consumed === "number" && r.turns_consumed > 0) turns.push(r.turns_consumed);
+        if (typeof r.total_time_sec === "number") times.push(r.total_time_sec);
+      }
+      const finished = group.filter(r => r.finished_at).length;
+      const mean = (xs: number[]): number | null => xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length;
+      const median = (xs: number[]): number | null => {
+        if (xs.length === 0) return null;
+        const sorted = [...xs].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
+      };
+      out.push({
+        role: role === "—" ? null : role!,
+        personality: personality === "—" ? null : personality!,
+        n: group.length,
+        n_finished: finished,
+        n_agreed: nAgreed,
+        n_impasse: nImpasse,
+        n_rejected: nRejected,
+        pct_agreed: group.length > 0 ? Math.round((nAgreed / group.length) * 100) : 0,
+        mean_price: mean(prices),
+        median_price: median(prices),
+        mean_turns: mean(turns),
+        mean_total_time_sec: mean(times),
+      });
+    }
+    return out.sort((a, b) =>
+      (a.role || "").localeCompare(b.role || "") ||
+      (a.personality || "").localeCompare(b.personality || ""),
+    );
+  }
+
+  /** Outcome counts. */
+  outcomeDistribution(): Array<{ outcome_type: string; count: number }> {
+    return this.db
+      .prepare(
+        `SELECT s.outcome_type, COUNT(*) AS count
+           FROM study_participants sp
+           JOIN sessions s ON s.id = sp.session_id
+           WHERE sp.excluded = 0 AND s.outcome_type IS NOT NULL
+           GROUP BY s.outcome_type
+           ORDER BY count DESC`,
+      )
+      .all() as Array<{ outcome_type: string; count: number }>;
+  }
+
+  /** Final-price histogram. Rounds to nearest $500 bucket. */
+  priceDistribution(): Array<{ bucket: number; count: number }> {
+    return this.db
+      .prepare(
+        `SELECT
+           CAST(json_extract(s.outcome_terms_json, '$.price') / 500 AS INTEGER) * 500 AS bucket,
+           COUNT(*) AS count
+         FROM study_participants sp
+         JOIN sessions s ON s.id = sp.session_id
+         WHERE sp.excluded = 0
+           AND s.outcome_type = 'agreed'
+           AND s.outcome_terms_json IS NOT NULL
+           AND json_extract(s.outcome_terms_json, '$.price') IS NOT NULL
+         GROUP BY bucket
+         ORDER BY bucket`,
+      )
+      .all() as Array<{ bucket: number; count: number }>;
+  }
+
+  /** Turns-to-outcome histogram. */
+  turnCountDistribution(): Array<{ turns: number; count: number }> {
+    return this.db
+      .prepare(
+        `SELECT s.turns_consumed AS turns, COUNT(*) AS count
+           FROM study_participants sp
+           JOIN sessions s ON s.id = sp.session_id
+           WHERE sp.excluded = 0 AND s.turns_consumed IS NOT NULL
+           GROUP BY s.turns_consumed
+           ORDER BY s.turns_consumed`,
+      )
+      .all() as Array<{ turns: number; count: number }>;
+  }
+
+  /** Mean Likert per question, broken down by role. */
+  surveyAggregates(): Array<{ role: string | null; key: string; n: number; mean: number }> {
+    const rows = this.db
+      .prepare(
+        `SELECT sp.role AS role, pr.key, pr.value_int
+           FROM participant_responses pr
+           JOIN study_participants sp ON sp.id = pr.participant_id
+           WHERE sp.excluded = 0
+             AND pr.screen = 'post_survey'
+             AND pr.value_int IS NOT NULL
+             AND pr.key NOT LIKE '\\_%' ESCAPE '\\'`,
+      )
+      .all() as Array<{ role: string | null; key: string; value_int: number }>;
+    const groups = new Map<string, number[]>();
+    for (const r of rows) {
+      const k = `${r.role || "—"}|${r.key}`;
+      const arr = groups.get(k);
+      if (arr) arr.push(r.value_int);
+      else groups.set(k, [r.value_int]);
+    }
+    const out: Array<{ role: string | null; key: string; n: number; mean: number }> = [];
+    for (const [k, values] of groups) {
+      const [role, key] = k.split("|");
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      out.push({ role: role === "—" ? null : role!, key: key!, n: values.length, mean });
+    }
+    return out.sort((a, b) =>
+      (a.role || "").localeCompare(b.role || "") || a.key.localeCompare(b.key),
+    );
+  }
+
+  /** Per-day spend summary (last N days). */
+  spendByDay(days = 14): Array<{ day: string; tokens: number; sessions: number }> {
+    return this.db
+      .prepare(
+        `SELECT
+           substr(started_at, 1, 10) AS day,
+           SUM(tokens_total) AS tokens,
+           COUNT(*) AS sessions
+         FROM sessions
+         WHERE started_at >= datetime('now', ?)
+         GROUP BY day
+         ORDER BY day ASC`,
+      )
+      .all(`-${days} days`) as Array<{ day: string; tokens: number; sessions: number }>;
+  }
+
+  /** Cost broken down by opponent personality. */
+  costByPersonality(): Array<{ personality: string; n: number; tokens: number; mean_tokens: number }> {
+    return this.db
+      .prepare(
+        `SELECT
+           op.value_text AS personality,
+           COUNT(*) AS n,
+           COALESCE(SUM(s.tokens_total), 0) AS tokens,
+           CAST(COALESCE(AVG(s.tokens_total), 0) AS INTEGER) AS mean_tokens
+         FROM participant_responses op
+         JOIN study_participants sp ON sp.id = op.participant_id
+         LEFT JOIN sessions s ON s.id = sp.session_id
+         WHERE op.screen = 'engine'
+           AND op.key = 'opponent_personality'
+         GROUP BY op.value_text
+         ORDER BY tokens DESC`,
+      )
+      .all() as Array<{ personality: string; n: number; tokens: number; mean_tokens: number }>;
+  }
+
+  // ─── Quality flags: extended set ────────────────────────────────────────
+
+  /**
+   * Compute extended flags per participant (in addition to the basic flags
+   * already in listParticipantsForAdmin). Flags are computed from
+   * participant_events + sessions tables.
+   */
+  extendedFlags(participantIds?: string[]): Map<string, {
+    flag_paste: number;
+    flag_tab_switch: number;
+    flag_degraded: number;
+    flag_mobile_blocked: number;
+  }> {
+    const filter = participantIds && participantIds.length > 0
+      ? `AND participant_id IN (${participantIds.map(() => "?").join(",")})`
+      : "";
+    const params = participantIds ?? [];
+    const eventCounts = this.db
+      .prepare(
+        `SELECT participant_id, event_type, screen, COUNT(*) AS n
+           FROM participant_events
+           WHERE 1=1 ${filter}
+           GROUP BY participant_id, event_type, screen`,
+      )
+      .all(...params) as Array<{ participant_id: string; event_type: string; screen: number | null; n: number }>;
+    const degraded = this.db
+      .prepare(
+        `SELECT sp.id AS participant_id, s.degraded
+           FROM study_participants sp
+           JOIN sessions s ON s.id = sp.session_id
+           WHERE s.degraded = 1`,
+      )
+      .all() as Array<{ participant_id: string; degraded: number }>;
+    const map = new Map<string, {
+      flag_paste: number;
+      flag_tab_switch: number;
+      flag_degraded: number;
+      flag_mobile_blocked: number;
+    }>();
+    const get = (id: string) => {
+      let v = map.get(id);
+      if (!v) {
+        v = { flag_paste: 0, flag_tab_switch: 0, flag_degraded: 0, flag_mobile_blocked: 0 };
+        map.set(id, v);
+      }
+      return v;
+    };
+    for (const r of eventCounts) {
+      if (r.event_type === "paste") get(r.participant_id).flag_paste = 1;
+      // Visibility-change events ON the negotiation screen (7) suggest tab switching during agents' turns.
+      if (r.event_type === "visibilitychange" && r.screen === 7 && r.n >= 2) {
+        get(r.participant_id).flag_tab_switch = 1;
+      }
+      if (r.event_type === "mobile_blocked") get(r.participant_id).flag_mobile_blocked = 1;
+    }
+    for (const r of degraded) get(r.participant_id).flag_degraded = 1;
+    return map;
+  }
+
+  /** Toggle / set the excluded flag on a participant. */
+  setExcluded(participantId: string, excluded: boolean): void {
+    this.db
+      .prepare(`UPDATE study_participants SET excluded = ?, excluded_reason = COALESCE(excluded_reason, ?) WHERE id = ?`)
+      .run(excluded ? 1 : 0, excluded ? "manually excluded by researcher" : null, participantId);
+  }
+
+  /** Toggle / set the test_data flag (kept separate from excluded). */
+  setTestData(participantId: string, testData: boolean): void {
+    this.db
+      .prepare(`UPDATE study_participants SET test_data = ? WHERE id = ?`)
+      .run(testData ? 1 : 0, participantId);
+  }
+
+  // ─── Replay data ────────────────────────────────────────────────────────
+
+  /**
+   * Full per-session replay payload: pack, all turns, all orchestrator
+   * decisions, outcome. Used by /adx/replay/<sessionId>.
+   */
+  replaySession(sessionId: string): {
+    session: Record<string, unknown>;
+    pack: ScenarioPack;
+    turns: Turn[];
+    decisions: OrchestratorDecision[];
+  } | null {
+    const sessionRow = this.db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(sessionId) as
+      | (Record<string, unknown> & { scenario_pack_json: string })
+      | undefined;
+    if (!sessionRow) return null;
+    const pack = JSON.parse(sessionRow.scenario_pack_json) as ScenarioPack;
+    const turns = this.db
+      .prepare(
+        `SELECT id, turn_number, emitter, emitter_id, tool_calls_json, message,
+                thinking, tokens_json, latency_ms, model, timestamp
+           FROM turns WHERE session_id = ? ORDER BY turn_number ASC`,
+      )
+      .all(sessionId) as Array<{
+      id: string; turn_number: number; emitter: string; emitter_id: string;
+      tool_calls_json: string; message: string | null; thinking: string | null;
+      tokens_json: string; latency_ms: number; model: string; timestamp: string;
+    }>;
+    const decisions = this.db
+      .prepare(
+        `SELECT decision_index, turn_number, tool_name, tool_input_json, rationale, thinking, tokens_used, timestamp
+           FROM orchestrator_decisions WHERE session_id = ? ORDER BY decision_index ASC`,
+      )
+      .all(sessionId) as Array<{
+      decision_index: number; turn_number: number; tool_name: string;
+      tool_input_json: string; rationale: string | null; thinking: string | null;
+      tokens_used: number; timestamp: string;
+    }>;
+    return {
+      session: sessionRow,
+      pack,
+      turns: turns.map((r) => ({
+        id: r.id,
+        sessionId,
+        turnNumber: r.turn_number,
+        emitter: r.emitter as Turn["emitter"],
+        emitterId: r.emitter_id,
+        toolCalls: JSON.parse(r.tool_calls_json),
+        message: r.message ?? undefined,
+        thinking: r.thinking ?? undefined,
+        tokens: JSON.parse(r.tokens_json),
+        latencyMs: r.latency_ms,
+        model: r.model,
+        timestamp: r.timestamp,
+      })),
+      decisions: decisions.map((d) => ({
+        turnNumber: d.turn_number,
+        toolCall: { name: d.tool_name, input: JSON.parse(d.tool_input_json) },
+        rationale: d.rationale ?? undefined,
+        thinking: d.thinking ?? undefined,
+        timestamp: d.timestamp,
+      })),
+    };
+  }
+
+  // ─── Bulk export helpers ────────────────────────────────────────────────
+
+  /**
+   * Wide-format flat row per participant for the "single-row XLSX" export.
+   * Joins everything: meta, demographics, free text, opponent, outcome,
+   * survey, computed flags, dwell times.
+   */
+  exportFlatParticipants(): Array<Record<string, unknown>> {
+    const participants = this.listParticipantsForAdmin(10000);
+    const out: Array<Record<string, unknown>> = [];
+    for (const p of participants) {
+      const detail = this.exportParticipant(p.id);
+      if (!detail) continue;
+      const part = detail["participant"] as Record<string, unknown>;
+      const responses = (detail["participant_responses"] as Array<Record<string, unknown>>) || [];
+      const session = detail["session"] as Record<string, unknown> | null;
+      const prompts = (detail["behavior_prompts"] as Array<Record<string, unknown>>) || [];
+      const events = (detail["participant_events"] as Array<Record<string, unknown>>) || [];
+
+      const findResp = (screen: string, key: string) =>
+        responses.find((r) => r["screen"] === screen && r["key"] === key);
+      const personalCtx = findResp("context", "personal_context")?.["value_text"] ?? null;
+      const opponent = findResp("engine", "opponent_personality")?.["value_text"] ?? null;
+      const latestPrompt = prompts.length > 0 ? prompts[prompts.length - 1] : null;
+      const promptText = (latestPrompt?.["prompt_text"] as string) ?? null;
+      const promptRevisions = prompts.length;
+
+      // Survey responses by key
+      const surveyKeys = ["satisfaction","agent_represented","control","opponent_fair","trust_ai","would_use_again"];
+      const surveyValues: Record<string, number | null> = {};
+      for (const k of surveyKeys) {
+        const r = findResp("post_survey", k);
+        surveyValues[k] = (r?.["value_int"] as number) ?? null;
+      }
+      const freeText = findResp("post_survey", "free_text")?.["value_text"] ?? null;
+
+      // Dwell times by screen — _time_on_screen_ms keys
+      const dwell: Record<string, number | null> = {
+        time_on_consent_ms: (findResp("consent", "_time_on_screen_ms")?.["value_int"] as number) ?? null,
+        time_on_context_ms: (findResp("context", "_time_on_screen_ms")?.["value_int"] as number) ?? null,
+        time_on_demographics_ms: (findResp("demographics", "_time_on_screen_ms")?.["value_int"] as number) ?? null,
+        time_on_post_survey_ms: (findResp("post_survey", "_time_on_screen_ms")?.["value_int"] as number) ?? null,
+      };
+
+      // Event counts by type
+      const eventCounts: Record<string, number> = {};
+      for (const e of events) {
+        const t = e["event_type"] as string;
+        eventCounts[t] = (eventCounts[t] || 0) + 1;
+      }
+
+      // Outcome / pricing / turns
+      let outcomeType: string | null = null;
+      let finalPrice: number | null = null;
+      let turnsConsumed: number | null = null;
+      let tokensTotal: number | null = null;
+      let degraded = 0;
+      let buyerFirstOffer: number | null = null;
+      let buyerLastOffer: number | null = null;
+      let sellerFirstOffer: number | null = null;
+      let sellerLastOffer: number | null = null;
+      if (session) {
+        outcomeType = (session["outcome_type"] as string) ?? null;
+        turnsConsumed = (session["turns_consumed"] as number) ?? null;
+        tokensTotal = (session["tokens_total"] as number) ?? null;
+        degraded = (session["degraded"] as number) ?? 0;
+        try {
+          const terms = session["outcome_terms_json"]
+            ? JSON.parse(session["outcome_terms_json"] as string)
+            : null;
+          if (typeof terms?.price === "number") finalPrice = terms.price;
+        } catch {}
+        const turns = (session["turns"] as Array<Record<string, unknown>>) || [];
+        for (const t of turns) {
+          let proposedPrice: number | null = null;
+          try {
+            const tc = JSON.parse((t["tool_calls_json"] as string) || "[]") as Array<{ name: string; input: { issues?: Array<{ name: string; value: number }> } }>;
+            const proposal = tc.find((c) => c.name === "submit_proposal");
+            if (proposal) {
+              const priceIssue = proposal.input.issues?.find((i) => i.name === "price");
+              if (priceIssue && typeof priceIssue.value === "number") proposedPrice = priceIssue.value;
+            }
+          } catch {}
+          if (proposedPrice == null) continue;
+          if (t["emitter_id"] === "buyer") {
+            if (buyerFirstOffer === null) buyerFirstOffer = proposedPrice;
+            buyerLastOffer = proposedPrice;
+          } else if (t["emitter_id"] === "seller") {
+            if (sellerFirstOffer === null) sellerFirstOffer = proposedPrice;
+            sellerLastOffer = proposedPrice;
+          }
+        }
+      }
+      const estCostUsd = tokensTotal !== null ? Math.round((tokensTotal / 1_000_000) * 9 * 1000) / 1000 : null;
+
+      out.push({
+        // Identity
+        participant_id: p.id,
+        external_id: part["external_id"] ?? null,
+        role: p.role,
+        opponent_personality: opponent,
+        condition: p.role && opponent ? `${p.role}_vs_${opponent}` : null,
+        excluded: part["excluded"] ?? 0,
+        excluded_reason: part["excluded_reason"] ?? null,
+        test_data: part["test_data"] ?? 0,
+        // Timing
+        created_at: p.created_at,
+        finished_at: p.finished_at,
+        total_time_sec: p.total_time_sec,
+        completion_code: p.completion_code,
+        // Consent + demographics
+        consent: part["consent"] ?? 0,
+        age: part["age"] ?? null,
+        gender: part["gender"] ?? null,
+        experience: part["experience"] ?? null,
+        ai_familiarity: part["ai_familiarity"] ?? null,
+        // Browser / device
+        device_type: part["device_type"] ?? null,
+        browser: part["browser"] ?? null,
+        os: part["os"] ?? null,
+        viewport_w: part["viewport_w"] ?? null,
+        viewport_h: part["viewport_h"] ?? null,
+        screen_w: part["screen_w"] ?? null,
+        screen_h: part["screen_h"] ?? null,
+        timezone: part["timezone"] ?? null,
+        language: part["language"] ?? null,
+        connection_type: part["connection_type"] ?? null,
+        user_agent: part["user_agent"] ?? null,
+        // Quality flags
+        flag_mobile: p.flag_mobile,
+        flag_speeding: p.flag_speeding,
+        flag_short_prompt: p.flag_short_prompt,
+        flag_degraded: degraded,
+        // Free-text inputs
+        personal_context: personalCtx,
+        personal_context_length: typeof personalCtx === "string" ? personalCtx.length : 0,
+        behavior_prompt: promptText,
+        behavior_prompt_length: typeof promptText === "string" ? promptText.length : 0,
+        behavior_prompt_revisions: promptRevisions,
+        // Negotiation
+        session_id: p.session_id,
+        outcome_type: outcomeType,
+        final_price: finalPrice,
+        turns_consumed: turnsConsumed,
+        tokens_total: tokensTotal,
+        est_cost_usd: estCostUsd,
+        buyer_first_offer: buyerFirstOffer,
+        buyer_last_offer: buyerLastOffer,
+        seller_first_offer: sellerFirstOffer,
+        seller_last_offer: sellerLastOffer,
+        // Survey
+        ...surveyValues,
+        free_text: freeText,
+        // Dwell times
+        ...dwell,
+        // Event counts
+        events_total: p.total_events,
+        last_screen: p.last_screen,
+        clicks: eventCounts["click"] || 0,
+        focus_events: eventCounts["focus"] || 0,
+        blur_events: eventCounts["blur"] || 0,
+        paste_events: eventCounts["paste"] || 0,
+        scroll_events: eventCounts["scroll"] || 0,
+        visibility_changes: eventCounts["visibilitychange"] || 0,
+        idle_periods: eventCounts["idle"] || 0,
+        mobile_blocked_count: eventCounts["mobile_blocked"] || 0,
+      });
+    }
+    return out;
+  }
+
+  /** All turns across all sessions, flat — for the "transcripts" export sheet. */
+  exportAllTurns(): Array<Record<string, unknown>> {
+    return this.db
+      .prepare(
+        `SELECT
+           t.session_id,
+           sp.id AS participant_id,
+           sp.role AS participant_role,
+           t.turn_number,
+           t.emitter,
+           t.emitter_id,
+           t.message,
+           t.tool_calls_json,
+           t.tokens_json,
+           t.latency_ms,
+           t.model,
+           t.timestamp
+         FROM turns t
+         LEFT JOIN study_participants sp ON sp.session_id = t.session_id
+         ORDER BY t.session_id, t.turn_number ASC`,
+      )
+      .all() as Array<Record<string, unknown>>;
+  }
+
+  /** All orchestrator decisions across all sessions. */
+  exportAllDecisions(): Array<Record<string, unknown>> {
+    return this.db
+      .prepare(
+        `SELECT
+           od.session_id,
+           sp.id AS participant_id,
+           od.decision_index,
+           od.turn_number,
+           od.tool_name,
+           od.tool_input_json,
+           od.rationale,
+           od.tokens_used,
+           od.timestamp
+         FROM orchestrator_decisions od
+         LEFT JOIN study_participants sp ON sp.session_id = od.session_id
+         ORDER BY od.session_id, od.decision_index ASC`,
+      )
+      .all() as Array<Record<string, unknown>>;
+  }
+
+  /** All behavior-prompt revisions, flat. */
+  exportAllBehaviorPrompts(): Array<Record<string, unknown>> {
+    return this.db
+      .prepare(
+        `SELECT bp.participant_id, sp.role, bp.revision, bp.prompt_text,
+                bp.mapped_signals_json, bp.mapped_notes, bp.match_rating,
+                bp.correction_note, bp.submitted_at
+         FROM behavior_prompts bp
+         LEFT JOIN study_participants sp ON sp.id = bp.participant_id
+         ORDER BY bp.participant_id, bp.revision`,
+      )
+      .all() as Array<Record<string, unknown>>;
+  }
+
+  /** All survey responses flat, one row per (participant × question). */
+  exportAllSurvey(): Array<Record<string, unknown>> {
+    return this.db
+      .prepare(
+        `SELECT pr.participant_id, sp.role, pr.key, pr.value_int, pr.value_text, pr.submitted_at
+         FROM participant_responses pr
+         LEFT JOIN study_participants sp ON sp.id = pr.participant_id
+         WHERE pr.screen = 'post_survey'
+         ORDER BY pr.participant_id, pr.key`,
+      )
+      .all() as Array<Record<string, unknown>>;
+  }
+
+  /** All events, flat. Useful for telemetry deep-dives. */
+  exportAllEvents(limit = 100_000): Array<Record<string, unknown>> {
+    return this.db
+      .prepare(
+        `SELECT participant_id, client_ts, server_ts, screen, event_type, payload_json
+           FROM participant_events
+           ORDER BY id ASC
+           LIMIT ?`,
+      )
+      .all(limit) as Array<Record<string, unknown>>;
+  }
+
+  /** Plain-text per-session transcript for qualitative analysis. */
+  buildTranscriptText(sessionId: string): string | null {
+    const replay = this.replaySession(sessionId);
+    if (!replay) return null;
+    const lines: string[] = [];
+    lines.push(`=== Session ${sessionId} ===`);
+    lines.push(`Status: ${replay.session["status"]}`);
+    lines.push(`Outcome: ${replay.session["outcome_type"]} — ${replay.session["outcome_summary"] || "—"}`);
+    if (replay.session["outcome_terms_json"]) {
+      try {
+        const t = JSON.parse(replay.session["outcome_terms_json"] as string);
+        lines.push(`Terms: ${JSON.stringify(t)}`);
+      } catch {}
+    }
+    lines.push(`Turns: ${replay.turns.length}`);
+    lines.push(``);
+    for (const turn of replay.turns) {
+      lines.push(`--- Turn ${turn.turnNumber} · ${turn.emitterId} ---`);
+      lines.push(turn.message ?? "(no public message)");
+      const proposal = turn.toolCalls.find((c) => c.name === "submit_proposal");
+      if (proposal) {
+        const input = proposal.input as { action?: string; issues?: Array<{ name: string; value: number }> };
+        const priceIssue = input.issues?.find((i) => i.name === "price");
+        if (priceIssue) lines.push(`→ ${input.action || "propose"} @ $${priceIssue.value.toLocaleString()}`);
+      }
+      lines.push(``);
+    }
+    return lines.join("\n");
+  }
+
+  /** Snapshot the SQLite DB to a temp path and return its bytes. Used by /adx/backup. */
+  backupBytes(): Buffer {
+    // SQLite VACUUM INTO creates a clean, defragmented copy at the target path.
+    // Use a temp file in the OS temp dir; read its bytes; delete.
+    const tmpPath = `/tmp/ai2ai-backup-${Date.now()}-${Math.random().toString(36).slice(2)}.db`;
+    this.db.exec(`VACUUM INTO '${tmpPath}'`);
+    const bytes = readFileSync(tmpPath);
+    try { unlinkSync(tmpPath); } catch { /* best-effort */ }
+    return bytes;
   }
 
   close(): void {

@@ -16,6 +16,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
     "better-sqlite3": "^11.5.0",
+    "exceljs": "^4.4.0",
     "nanoid": "^5.0.0",
     "zod": "^3.23.8"
   },

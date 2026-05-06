@@ -9,6 +9,7 @@
     --bg: #0f1115; --panel: #161922; --panel-2: #1d2230; --panel-3: #232838;
     --text: #e7eaf0; --dim: #9aa1ae; --accent: #6aa9ff;
     --good: #6dd084; --warn: #e5a558; --bad: #e76f6f;
+    --buyer: #6dd084; --seller: #e5a558;
     --border: #2a2f3d;
   }
   * { box-sizing: border-box; }
@@ -16,72 +17,145 @@
          font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
          font-size: 14px; line-height: 1.5; }
   header.topbar { padding: 12px 24px; border-bottom: 1px solid var(--border);
-                  display: flex; justify-content: space-between; align-items: center; }
+                  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
   header.topbar h1 { margin: 0; font-size: 16px; font-weight: 600; }
-  header.topbar .links a { color: var(--dim); text-decoration: none; margin-left: 16px; font-size: 13px; }
-  header.topbar .links a:hover { color: var(--accent); }
+  header.topbar .links a, header.topbar .links button {
+    color: var(--dim); text-decoration: none; margin-left: 14px; font-size: 13px;
+    background: none; border: none; cursor: pointer; font: inherit; padding: 0;
+  }
+  header.topbar .links a:hover, header.topbar .links button:hover { color: var(--accent); }
+
+  /* Tab navigation */
+  nav.tabs {
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 0 24px; display: flex; gap: 4px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  nav.tabs button {
+    background: none; border: none; color: var(--dim); cursor: pointer;
+    padding: 12px 16px; font: inherit; font-size: 13px; font-weight: 500;
+    border-bottom: 2px solid transparent;
+  }
+  nav.tabs button:hover { color: var(--text); }
+  nav.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+
   main { max-width: 1600px; margin: 0 auto; padding: 24px; }
   .panel { background: var(--panel); border: 1px solid var(--border);
            border-radius: 10px; padding: 18px; margin-bottom: 16px; }
   h2 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); font-weight: 600; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
   .stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
   .stat .label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
-  .stat .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .stat .value { font-size: 26px; font-weight: 700; margin-top: 4px; }
   .stat .sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
-  .funnel { display: grid; grid-template-columns: 80px 1fr 60px; gap: 8px; align-items: center; font-size: 13px; }
-  .funnel-bar { background: var(--panel-3); height: 24px; border-radius: 4px; overflow: hidden; }
+
+  .funnel { display: grid; grid-template-columns: 80px 1fr 60px; gap: 8px; align-items: center; font-size: 13px; margin-bottom: 4px; }
+  .funnel-bar { background: var(--panel-3); height: 22px; border-radius: 4px; overflow: hidden; }
   .funnel-bar > .fill { background: var(--accent); height: 100%; transition: width 240ms; }
+
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); font-weight: 600; }
   tr:hover td { background: var(--panel-2); }
-  td a { color: var(--accent); text-decoration: none; font-family: ui-monospace, monospace; }
-  td a:hover { text-decoration: underline; }
+  td a, td button.linklike { color: var(--accent); text-decoration: none; font-family: ui-monospace, monospace; background: none; border: none; padding: 0; cursor: pointer; font: inherit; font-family: ui-monospace, monospace; font-size: 13px; }
+  td a:hover, td button.linklike:hover { text-decoration: underline; }
+
   .badge { display: inline-block; font-size: 11px; padding: 2px 6px; border-radius: 99px; font-weight: 600; }
   .badge.ok { background: rgba(109,208,132,0.15); color: var(--good); }
   .badge.warn { background: rgba(229,165,88,0.15); color: var(--warn); }
   .badge.bad { background: rgba(231,111,111,0.15); color: var(--bad); }
   .badge.dim { background: var(--panel-3); color: var(--dim); }
-  .controls { margin-bottom: 12px; }
-  .controls input[type="text"] { background: var(--panel-2); color: var(--text);
-                                 border: 1px solid var(--border); border-radius: 6px;
-                                 padding: 8px 10px; font: inherit; font-size: 13px; min-width: 240px; }
+  .badge.accent { background: rgba(106,169,255,0.15); color: var(--accent); }
+
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+  .controls input[type="text"], .controls select, .controls input[type="date"] {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 10px; font: inherit; font-size: 13px;
+  }
+  .controls input[type="text"] { min-width: 220px; }
+  .controls label { font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 4px; }
+  .controls label input[type="checkbox"] { margin-right: 0; }
   .scroll-x { overflow-x: auto; }
-  #detail { display: none; }
-  #detail .back { color: var(--accent); cursor: pointer; font-size: 13px; margin-bottom: 12px; display: inline-block; }
+
+  .btn {
+    background: var(--panel-3); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 12px; font: inherit; font-size: 12px; font-weight: 500;
+    cursor: pointer; text-decoration: none; display: inline-block;
+  }
+  .btn:hover { background: var(--panel-2); border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #0f1115; border-color: var(--accent); }
+  .btn.primary:hover { background: #82b8ff; color: #0f1115; }
+  .btn.danger { color: var(--bad); border-color: var(--bad); }
+  .btn.danger:hover { background: rgba(231,111,111,0.1); color: var(--bad); }
+
+  /* Tab pages */
+  .tab-page { display: none; }
+  .tab-page.active { display: block; }
+
+  /* Charts */
+  .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+  .chart-card { background: var(--panel-2); border-radius: 8px; padding: 14px; border: 1px solid var(--border); }
+  .chart-card h3 { margin: 0 0 10px; font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .chart-svg { width: 100%; }
+
+  /* Detail view */
+  #detail, #replay { display: none; }
+  #detail .back, #replay .back { color: var(--accent); cursor: pointer; font-size: 13px; margin-bottom: 12px; display: inline-block; }
   pre { background: var(--panel-2); border: 1px solid var(--border); padding: 10px; border-radius: 6px;
         font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+
+  /* Transcript bubbles in detail + replay */
   .turn { padding: 8px 10px; border-left: 3px solid var(--border); background: var(--panel-2); border-radius: 4px; margin-bottom: 6px; }
-  .turn.buyer { border-left-color: var(--good); }
-  .turn.seller { border-left-color: var(--warn); }
+  .turn.buyer { border-left-color: var(--buyer); }
+  .turn.seller { border-left-color: var(--seller); }
   .turn .meta { font-size: 11px; color: var(--dim); }
-  .turn .msg { white-space: pre-wrap; }
+  .turn .msg { white-space: pre-wrap; margin-top: 4px; }
   .turn .msg strong { color: var(--text); font-weight: 600; }
   .turn .msg em { font-style: italic; }
   .turn .msg del { color: var(--dim); text-decoration: line-through; }
   .turn .msg code {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 12px;
-    background: rgba(255,255,255,0.06);
-    padding: 1px 5px;
-    border-radius: 4px;
-    color: var(--accent);
+    font-size: 12px; background: rgba(255,255,255,0.06);
+    padding: 1px 5px; border-radius: 4px; color: var(--accent);
   }
+
+  /* Orchestrator decision strip in replay */
+  .orch { padding: 6px 10px; background: rgba(106,169,255,0.06); border-left: 3px solid var(--accent);
+          border-radius: 4px; margin-bottom: 6px; font-size: 12px; color: var(--dim); }
+  .orch strong { color: var(--accent); }
+  .orch .rationale { display: block; margin-top: 2px; color: var(--dim); }
+
+  /* Export button row */
+  .export-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .export-row .btn { font-family: ui-monospace, monospace; font-size: 12px; }
+  .export-row .group-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 4px; }
 </style>
 </head>
 <body>
 <header class="topbar">
   <h1>AI2AI · Admin Dashboard</h1>
   <div class="links">
-    <a href="/study" target="_blank">→ Study</a>
-    <a href="#" onclick="loadData(); return false;">⟳ Refresh</a>
+    <a href="/blx" target="_blank">→ Buyer flow</a>
+    <a href="/slx" target="_blank">→ Seller flow</a>
+    <button onclick="loadAll()">⟳ Refresh</button>
   </div>
 </header>
 
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="overview">Overview</button>
+  <button class="tab-btn" data-tab="analytics">Analytics</button>
+  <button class="tab-btn" data-tab="quality">Quality</button>
+  <button class="tab-btn" data-tab="cost">Cost</button>
+  <button class="tab-btn" data-tab="exports">Exports</button>
+</nav>
+
 <main>
 
-<div id="overview">
+<!-- ─── Overview tab ─── -->
+<div id="tab-overview" class="tab-page active">
   <div class="panel">
     <h2>Overview</h2>
     <div class="stats" id="stats">Loading…</div>
@@ -95,40 +169,246 @@
   <div class="panel">
     <h2>Participants</h2>
     <div class="controls">
-      <input type="text" id="filter" placeholder="filter by id, role, outcome, code…" />
+      <input type="text" id="filter" placeholder="filter by id / role / outcome / code…" />
+      <select id="filter-role"><option value="">All roles</option><option value="buyer">Buyer</option><option value="seller">Seller</option></select>
+      <select id="filter-outcome"><option value="">All outcomes</option><option value="agreed">Agreed</option><option value="impasse">Impasse</option><option value="rejected">Rejected</option><option value="aborted">Aborted</option></select>
+      <select id="filter-personality"><option value="">All personalities</option><option value="easygoing">Easygoing</option><option value="moderate">Moderate</option><option value="tough">Tough</option></select>
+      <select id="filter-status"><option value="">All status</option><option value="finished">Finished</option><option value="in_progress">In progress</option></select>
+      <label><input type="checkbox" id="filter-hide-flagged" /> Hide flagged</label>
+      <label><input type="checkbox" id="filter-hide-test" checked /> Hide test data</label>
+      <span style="color:var(--dim);font-size:12px;margin-left:auto" id="filter-count">—</span>
     </div>
     <div class="scroll-x">
       <table id="participants-table">
         <thead>
           <tr>
-            <th>ID</th><th>Role</th><th>Status</th><th>Outcome</th><th>Final $</th>
-            <th>Tokens</th><th>Time</th><th>Last screen</th><th>Events</th>
-            <th>Flags</th><th>Code</th>
+            <th>ID</th><th>Role</th><th>Personality</th><th>Status</th><th>Outcome</th><th>Final $</th>
+            <th>Turns</th><th>Tokens</th><th>Time</th><th>Last screen</th><th>Events</th>
+            <th>Flags</th><th>Code</th><th></th>
           </tr>
         </thead>
-        <tbody id="participants-body"><tr><td colspan="11">Loading…</td></tr></tbody>
+        <tbody id="participants-body"><tr><td colspan="14">Loading…</td></tr></tbody>
       </table>
     </div>
   </div>
 </div>
 
+<!-- ─── Analytics tab ─── -->
+<div id="tab-analytics" class="tab-page">
+  <div class="panel">
+    <h2>Distributions</h2>
+    <div class="chart-grid" id="chart-grid">
+      <div class="chart-card"><h3>Outcome distribution</h3><svg id="chart-outcomes" class="chart-svg" viewBox="0 0 360 180" preserveAspectRatio="xMidYMid meet"></svg></div>
+      <div class="chart-card"><h3>Final price (agreed deals)</h3><svg id="chart-prices" class="chart-svg" viewBox="0 0 360 180" preserveAspectRatio="xMidYMid meet"></svg></div>
+      <div class="chart-card"><h3>Turns until outcome</h3><svg id="chart-turns" class="chart-svg" viewBox="0 0 360 180" preserveAspectRatio="xMidYMid meet"></svg></div>
+      <div class="chart-card"><h3>Survey means (1-7)</h3><div id="chart-survey" style="font-size:12px"></div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Per-condition aggregates · the paper-ready table</h2>
+    <p style="font-size:12px;color:var(--dim);margin-top:0">One row per (role × opponent personality). Excluded participants omitted.</p>
+    <div class="scroll-x">
+      <table id="agg-table">
+        <thead>
+          <tr>
+            <th>Role</th><th>Opponent</th><th>N</th><th>Finished</th>
+            <th>% Agreed</th><th>% Impasse</th><th>% Rejected</th>
+            <th>Mean price</th><th>Median price</th>
+            <th>Mean turns</th><th>Mean time (s)</th>
+          </tr>
+        </thead>
+        <tbody id="agg-body"><tr><td colspan="11">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Quality tab ─── -->
+<div id="tab-quality" class="tab-page">
+  <div class="panel">
+    <h2>Flagged participants</h2>
+    <p style="font-size:12px;color:var(--dim);margin-top:0">
+      Each badge means a quality concern. Click a participant to see their detail; click "Exclude" to remove them
+      from analytics aggregates and exports (the raw row stays in the database — GDPR-friendly).
+    </p>
+    <div class="scroll-x">
+      <table id="quality-table">
+        <thead>
+          <tr>
+            <th>ID</th><th>Role</th><th>Status</th><th>Outcome</th><th>Total time</th><th>Flags</th><th>Excluded?</th><th>Test data?</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="quality-body"><tr><td colspan="9">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Cost tab ─── -->
+<div id="tab-cost" class="tab-page">
+  <div class="panel">
+    <h2>Cost summary</h2>
+    <div class="stats" id="cost-stats">Loading…</div>
+  </div>
+  <div class="panel">
+    <h2>Daily spend (last 14 days)</h2>
+    <svg id="chart-spend" class="chart-svg" viewBox="0 0 720 200" preserveAspectRatio="xMidYMid meet" style="background: var(--panel-2); border-radius: 6px"></svg>
+  </div>
+  <div class="panel">
+    <h2>Cost by opponent personality</h2>
+    <div class="scroll-x">
+      <table id="cost-personality-table">
+        <thead>
+          <tr><th>Personality</th><th>Sessions</th><th>Total tokens</th><th>Mean tokens / session</th><th>Est. cost</th></tr>
+        </thead>
+        <tbody id="cost-personality-body"><tr><td colspan="5">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Exports tab ─── -->
+<div id="tab-exports" class="tab-page">
+  <div class="panel">
+    <h2>Download data</h2>
+    <p style="font-size:13px;color:var(--dim);margin-top:0">All exports include excluded/test rows by default; the wide-format
+       Participants exports include flag columns so you can filter in your analysis tool.</p>
+
+    <h3>Per-participant tables</h3>
+    <div class="export-row" style="margin-bottom:14px">
+      <span class="group-label">XLSX</span>
+      <a class="btn primary" href="/adx/export/participants.xlsx">📊 Participants (wide)</a>
+      <a class="btn" href="/adx/export/full.xlsx">📚 Full workbook (multi-sheet)</a>
+      <span class="group-label" style="margin-left:14px">CSV</span>
+      <a class="btn" href="/adx/export/participants.csv">📄 Participants (CSV)</a>
+      <span class="group-label" style="margin-left:14px">JSON</span>
+      <a class="btn" href="/adx/export/all.json">{ } Full JSON bundle</a>
+    </div>
+
+    <h3>Qualitative analysis</h3>
+    <div class="export-row" style="margin-bottom:14px">
+      <a class="btn" href="/adx/export/transcripts.zip">📜 Per-session transcripts (.zip)</a>
+      <span style="font-size:12px;color:var(--dim)">One .txt per session — drop into NVivo or Atlas.ti.</span>
+    </div>
+
+    <h3>Operations</h3>
+    <div class="export-row">
+      <a class="btn" href="/adx/backup">💾 Database backup (.db)</a>
+      <span style="font-size:12px;color:var(--dim)">Full SQLite snapshot. Open in DB Browser for SQLite or load in Python via sqlite3.</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>What's in each export</h2>
+    <details style="font-size:13px;line-height:1.7">
+      <summary style="cursor:pointer;color:var(--accent);margin-bottom:8px">Participants (wide) — columns</summary>
+      <p style="color:var(--dim)">One row per participant. ~70 columns: identity, role, opponent personality, condition, demographics,
+        device/browser, flags, free-text inputs, outcome, prices, turns, tokens, est cost, all 7 survey responses, dwell times,
+        and event-type counts.</p>
+    </details>
+    <details style="font-size:13px;line-height:1.7">
+      <summary style="cursor:pointer;color:var(--accent);margin-bottom:8px">Full workbook — sheets</summary>
+      <p style="color:var(--dim)">Participants · By Condition · Behavior Prompts · Survey · Turns · Orchestrator · Events.</p>
+    </details>
+    <details style="font-size:13px;line-height:1.7">
+      <summary style="cursor:pointer;color:var(--accent);margin-bottom:8px">JSON bundle — structure</summary>
+      <p style="color:var(--dim)">Hierarchical: each participant nests their behavior prompts, survey, events, full session
+        with turns and orchestrator decisions. Plus pre-computed aggregates.</p>
+    </details>
+    <details style="font-size:13px;line-height:1.7">
+      <summary style="cursor:pointer;color:var(--accent);margin-bottom:8px">Database backup — what it is</summary>
+      <p style="color:var(--dim)">A defragmented copy of the live SQLite file via VACUUM INTO. Bit-for-bit identical schema,
+        immediately openable. Useful for: snapshot before risky operations, share with collaborators, run advanced SQL queries.</p>
+    </details>
+  </div>
+</div>
+
+<!-- Per-participant detail view (overlays the tabs) -->
 <div id="detail">
   <a class="back" onclick="closeDetail()">← back to overview</a>
   <div id="detail-body"></div>
 </div>
 
+<!-- Per-session replay viewer (overlays the tabs) -->
+<div id="replay">
+  <a class="back" onclick="closeReplay()">← back</a>
+  <div id="replay-body"></div>
+</div>
+
 </main>
 
 <script>
+// ─── Utilities ──────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function renderMarkdown(s) {
+  if (s == null) return "";
+  let html = String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  html = html.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([^_\n]+?)__/g, '<strong>$1</strong>');
+  html = html.replace(/~~([^~\n]+?)~~/g, '<del>$1</del>');
+  html = html.replace(/(^|\W)\*([^\s*][^*\n]*?)\*(?=\W|$)/g, '$1<em>$2</em>');
+  html = html.replace(/(^|\W)_([^\s_][^_\n]*?)_(?=\W|$)/g, '$1<em>$2</em>');
+  return html;
+}
+function formatTime(sec) {
+  if (sec == null) return "—";
+  if (sec < 60) return sec + "s";
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m + "m " + s + "s";
+}
+function fmt$(n) { return n == null ? "—" : "$" + Math.round(n).toLocaleString(); }
+
+// ─── Tab navigation ─────────────────────────────────────────────────────
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    const tab = btn.getAttribute("data-tab");
+    document.querySelectorAll(".tab-page").forEach((p) => p.classList.toggle("active", p.id === "tab-" + tab));
+    closeDetail(); closeReplay();
+  });
+});
+
+// ─── Data fetching ──────────────────────────────────────────────────────
+let allData = null;       // /adx/data
+let allAggregates = null; // /adx/aggregates
+
+async function loadAll() {
+  await Promise.all([loadData(), loadAggregates()]);
+}
+
 async function loadData() {
-  const res = await fetch("/admin/data");
+  const res = await fetch("/adx/data");
   if (!res.ok) { document.body.innerHTML = "<p style='padding:20px'>Auth required.</p>"; return; }
   const d = await res.json();
+  allData = d;
   renderStats(d);
   renderFunnel(d.funnel);
   renderParticipants(d.participants);
+  renderQuality(d.participants);
+  renderCost(d);
 }
 
+async function loadAggregates() {
+  const res = await fetch("/adx/aggregates");
+  if (!res.ok) return;
+  const a = await res.json();
+  allAggregates = a;
+  renderAggregateTable(a.byCondition);
+  drawOutcomeChart(a.outcomes);
+  drawPriceHistogram(a.prices);
+  drawTurnHistogram(a.turns);
+  renderSurveyMeans(a.survey);
+  drawSpendChart(a.spendByDay);
+  renderCostByPersonality(a.costByPersonality);
+}
+
+// ─── Overview: stats + funnel ───────────────────────────────────────────
 function renderStats(d) {
   const c = d.counts, s = d.spend;
   const dropRate = c.total > 0 ? Math.round(((c.total - c.finished) / c.total) * 100) : 0;
@@ -143,21 +423,17 @@ function renderStats(d) {
       <div class="label">${s.label}</div>
       <div class="value">${s.value}</div>
       <div class="sub">${s.sub}</div>
-    </div>
-  `).join("");
+    </div>`).join("");
 }
 
 function renderFunnel(rows) {
-  // Step 1 (role pick) was removed — /blx and /slx URLs preset the role and
-  // the SPA jumps straight to consent. Step 1 may still appear in the funnel
-  // for legacy participants from before the URL-routed flow.
   const SCREEN_NAMES = {
     1: "Role pick (legacy)", 2: "Consent", 3: "Instructions", 4: "Listing",
     5: "Personal context", 6: "Behavior prompt", 7: "Negotiation",
     8: "Survey + transcript", 9: "Demographics", 10: "Thanks",
   };
-  if (rows.length === 0) {
-    $("funnel").innerHTML = "<p style='color:var(--dim);font-size:13px'>No event data yet — first participant who completes will populate this.</p>";
+  if (!rows || rows.length === 0) {
+    $("funnel").innerHTML = "<p style='color:var(--dim);font-size:13px'>No event data yet.</p>";
     return;
   }
   const max = Math.max(...rows.map(r => r.reached));
@@ -171,28 +447,52 @@ function renderFunnel(rows) {
   }).join("");
 }
 
+// ─── Overview: participants table with filters ─────────────────────────
 let allParticipants = [];
-function renderParticipants(rows) {
-  allParticipants = rows;
-  applyFilter();
-}
-
+function renderParticipants(rows) { allParticipants = rows; applyFilter(); }
 $("filter").addEventListener("input", applyFilter);
+$("filter-role").addEventListener("change", applyFilter);
+$("filter-outcome").addEventListener("change", applyFilter);
+$("filter-personality").addEventListener("change", applyFilter);
+$("filter-status").addEventListener("change", applyFilter);
+$("filter-hide-flagged").addEventListener("change", applyFilter);
+$("filter-hide-test").addEventListener("change", applyFilter);
+
 function applyFilter() {
   const q = $("filter").value.toLowerCase().trim();
-  const filtered = q
-    ? allParticipants.filter(p =>
-        p.id.toLowerCase().includes(q) ||
-        (p.role || "").toLowerCase().includes(q) ||
-        (p.outcome_type || "").toLowerCase().includes(q) ||
-        (p.completion_code || "").toLowerCase().includes(q))
-    : allParticipants;
+  const role = $("filter-role").value;
+  const outcome = $("filter-outcome").value;
+  const personality = $("filter-personality").value;
+  const status = $("filter-status").value;
+  const hideFlagged = $("filter-hide-flagged").checked;
+  const hideTest = $("filter-hide-test").checked;
+
+  // Need to look up personality from another endpoint — derived from /adx/data/p/<id>?
+  // For speed, we already have outcome_terms_json and most flags. Personality isn't on the row
+  // by default; it's joined-in only in the aggregates endpoint. We work around that by
+  // including the personality in the per-participant detail; for the table filter we leave
+  // personality filtering operating on rows that have a personality attached after detail load.
+  const filtered = allParticipants.filter(p => {
+    if (q) {
+      const blob = (p.id + " " + (p.role||"") + " " + (p.outcome_type||"") + " " + (p.completion_code||"")).toLowerCase();
+      if (!blob.includes(q)) return false;
+    }
+    if (role && p.role !== role) return false;
+    if (outcome && p.outcome_type !== outcome) return false;
+    if (personality && p.opponent_personality !== personality) return false;
+    if (status === "finished" && !p.finished_at) return false;
+    if (status === "in_progress" && p.finished_at) return false;
+    if (hideFlagged && (p.flag_mobile || p.flag_speeding || p.flag_short_prompt)) return false;
+    if (hideTest && p.test_data) return false;
+    return true;
+  });
+  $("filter-count").textContent = filtered.length + " of " + allParticipants.length + " shown";
   renderTable(filtered);
 }
 
 function renderTable(rows) {
   if (rows.length === 0) {
-    $("participants-body").innerHTML = "<tr><td colspan='11' style='text-align:center;color:var(--dim)'>No participants yet.</td></tr>";
+    $("participants-body").innerHTML = "<tr><td colspan='14' style='text-align:center;color:var(--dim)'>No participants match.</td></tr>";
     return;
   }
   $("participants-body").innerHTML = rows.map(p => {
@@ -205,41 +505,278 @@ function renderTable(rows) {
     const tokens = p.tokens_total ? p.tokens_total.toLocaleString() : "—";
     const time = p.total_time_sec != null ? formatTime(p.total_time_sec) : "—";
     const flags = [];
-    if (p.flag_mobile) flags.push("<span class='badge bad' title='Used a phone or tablet — against consent rules'>mobile</span>");
+    if (p.flag_mobile) flags.push("<span class='badge bad' title='Phone or tablet'>mobile</span>");
     if (p.flag_speeding) flags.push("<span class='badge bad'>speed</span>");
     if (p.flag_short_prompt) flags.push("<span class='badge warn'>short</span>");
+    const personality = p.opponent_personality ? `<span class='badge accent'>${p.opponent_personality}</span>` : "—";
+    const replayBtn = p.session_id ? `<button class="btn" onclick="openReplay('${p.session_id}')">replay</button>` : "";
     return `<tr>
-      <td><a onclick="openDetail('${p.id}')">${p.id}</a></td>
+      <td><button class="linklike" onclick="openDetail('${p.id}')">${p.id}</button></td>
       <td>${p.role || "—"}</td>
+      <td>${personality}</td>
       <td>${status}</td>
       <td>${outcome}</td>
       <td style="font-family:ui-monospace,monospace">${price}</td>
+      <td style="font-family:ui-monospace,monospace">${p.turns_consumed ?? "—"}</td>
       <td style="font-family:ui-monospace,monospace">${tokens}</td>
       <td>${time}</td>
       <td>${p.last_screen ?? "—"}</td>
       <td style="font-family:ui-monospace,monospace">${p.total_events}</td>
       <td>${flags.join(" ") || "—"}</td>
       <td style="font-family:ui-monospace,monospace;font-size:11px">${p.completion_code || "—"}</td>
+      <td>${replayBtn}</td>
+    </tr>`;
+  }).join("");
+}
+function outcomeColor(t) {
+  if (t === "agreed") return "ok";
+  if (t === "impasse" || t === "timeout") return "warn";
+  return "bad";
+}
+
+// ─── Analytics: aggregate table + charts ────────────────────────────────
+function renderAggregateTable(rows) {
+  if (!rows || rows.length === 0) {
+    $("agg-body").innerHTML = "<tr><td colspan='11' style='text-align:center;color:var(--dim)'>No data yet.</td></tr>";
+    return;
+  }
+  const fmt = (n, d=0) => n == null ? "—" : Number(n).toFixed(d);
+  $("agg-body").innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.role || "—"}</td>
+      <td>${r.personality ? `<span class='badge accent'>${r.personality}</span>` : "—"}</td>
+      <td style="font-family:ui-monospace,monospace">${r.n}</td>
+      <td style="font-family:ui-monospace,monospace">${r.n_finished}</td>
+      <td style="font-family:ui-monospace,monospace">${r.pct_agreed}%</td>
+      <td style="font-family:ui-monospace,monospace">${r.n > 0 ? Math.round(r.n_impasse / r.n * 100) : 0}%</td>
+      <td style="font-family:ui-monospace,monospace">${r.n > 0 ? Math.round(r.n_rejected / r.n * 100) : 0}%</td>
+      <td style="font-family:ui-monospace,monospace">${r.mean_price != null ? fmt$(r.mean_price) : "—"}</td>
+      <td style="font-family:ui-monospace,monospace">${r.median_price != null ? fmt$(r.median_price) : "—"}</td>
+      <td style="font-family:ui-monospace,monospace">${fmt(r.mean_turns, 1)}</td>
+      <td style="font-family:ui-monospace,monospace">${fmt(r.mean_total_time_sec, 0)}</td>
+    </tr>`).join("");
+}
+
+// SVG charts — small self-contained renderers.
+function drawOutcomeChart(rows) {
+  const svg = $("chart-outcomes");
+  if (!rows || rows.length === 0) { svg.innerHTML = '<text x="180" y="90" fill="#9aa1ae" font-size="11" text-anchor="middle">No data</text>'; return; }
+  const colors = { agreed: "#6dd084", impasse: "#e5a558", timeout: "#e5a558", rejected: "#e76f6f", aborted: "#e76f6f" };
+  const total = rows.reduce((a, r) => a + r.count, 0);
+  let cumStart = 0;
+  const cy = 90, cx = 90, r = 70;
+  const slices = rows.map((row) => {
+    const startAngle = (cumStart / total) * Math.PI * 2 - Math.PI / 2;
+    cumStart += row.count;
+    const endAngle = (cumStart / total) * Math.PI * 2 - Math.PI / 2;
+    const x1 = cx + r * Math.cos(startAngle), y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle),   y2 = cy + r * Math.sin(endAngle);
+    const large = (endAngle - startAngle) > Math.PI ? 1 : 0;
+    const color = colors[row.outcome_type] || "#6aa9ff";
+    return `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} Z" fill="${color}" opacity="0.85"/>`;
+  }).join("");
+  const legend = rows.map((row, i) => `
+    <rect x="180" y="${20 + i*22}" width="12" height="12" fill="${colors[row.outcome_type] || "#6aa9ff"}" />
+    <text x="200" y="${30 + i*22}" fill="#e7eaf0" font-size="12">${row.outcome_type}</text>
+    <text x="340" y="${30 + i*22}" fill="#9aa1ae" font-size="11" text-anchor="end">${row.count} (${Math.round(row.count/total*100)}%)</text>
+  `).join("");
+  svg.innerHTML = slices + legend;
+}
+
+function drawPriceHistogram(rows) {
+  drawHistogram($("chart-prices"), rows, "bucket", "$", 500);
+}
+function drawTurnHistogram(rows) {
+  drawHistogram($("chart-turns"), rows, "turns", "", 1);
+}
+function drawHistogram(svg, rows, keyName, prefix, step) {
+  if (!rows || rows.length === 0) { svg.innerHTML = '<text x="180" y="90" fill="#9aa1ae" font-size="11" text-anchor="middle">No data</text>'; return; }
+  const W = 360, H = 180, padL = 30, padR = 10, padT = 10, padB = 30;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const max = Math.max(...rows.map(r => r.count));
+  const barW = Math.max(2, innerW / rows.length - 2);
+  const bars = rows.map((row, i) => {
+    const x = padL + i * (innerW / rows.length);
+    const h = (row.count / max) * innerH;
+    const y = padT + (innerH - h);
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="#6aa9ff" opacity="0.75" />`;
+  }).join("");
+  // x-axis labels (every nth bar)
+  const labelEvery = Math.max(1, Math.ceil(rows.length / 6));
+  const labels = rows.map((row, i) => {
+    if (i % labelEvery !== 0) return "";
+    const x = padL + i * (innerW / rows.length) + barW / 2;
+    return `<text x="${x.toFixed(1)}" y="${(H - padB + 14).toFixed(1)}" fill="#9aa1ae" font-size="10" text-anchor="middle">${prefix}${row[keyName]}</text>`;
+  }).join("");
+  // y-axis ticks
+  const yTicks = [];
+  for (let t = 0; t <= 4; t++) {
+    const v = Math.round((max / 4) * t);
+    const y = padT + innerH - (v / max) * innerH;
+    yTicks.push(`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#2a2f3d" stroke-width="0.5" />`);
+    yTicks.push(`<text x="${padL - 4}" y="${(y + 3).toFixed(1)}" fill="#9aa1ae" font-size="10" text-anchor="end">${v}</text>`);
+  }
+  svg.innerHTML = yTicks.join("") + bars + labels;
+}
+
+function renderSurveyMeans(rows) {
+  if (!rows || rows.length === 0) { $("chart-survey").innerHTML = "<span style='color:var(--dim)'>No data</span>"; return; }
+  const LABELS = {
+    satisfaction: "Satisfaction with outcome",
+    agent_represented: "Agent represented preferences well",
+    control: "Felt in control",
+    opponent_fair: "Opponent seemed fair",
+    trust_ai: "Trust in AI for real negotiation",
+    would_use_again: "Would use again",
+  };
+  const byKey = {};
+  for (const r of rows) {
+    if (!byKey[r.key]) byKey[r.key] = {};
+    byKey[r.key][r.role || "all"] = { mean: r.mean, n: r.n };
+  }
+  const html = Object.keys(LABELS).map((k) => {
+    const buyer = byKey[k]?.buyer;
+    const seller = byKey[k]?.seller;
+    const all = byKey[k]?.all;
+    const cell = (x) => x ? `<span style="font-family:ui-monospace,monospace">${x.mean.toFixed(2)}</span> <span style="color:var(--dim);font-size:11px">(n=${x.n})</span>` : "—";
+    return `<div style="display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div>${LABELS[k]}</div>
+      <div>buyer: ${cell(buyer)}</div>
+      <div>seller: ${cell(seller)}</div>
+      <div>all: ${cell(all)}</div>
+    </div>`;
+  }).join("");
+  $("chart-survey").innerHTML = `<div style="display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:0.06em"><div>Question</div><div>Buyer</div><div>Seller</div><div>Total</div></div>` + html;
+}
+
+// ─── Quality tab ─────────────────────────────────────────────────────────
+function renderQuality(rows) {
+  if (!rows) return;
+  const flagged = rows.filter(p => p.flag_mobile || p.flag_speeding || p.flag_short_prompt || p.excluded || p.test_data);
+  if (flagged.length === 0) {
+    $("quality-body").innerHTML = "<tr><td colspan='9' style='text-align:center;color:var(--dim)'>No flagged participants. ✓</td></tr>";
+    return;
+  }
+  $("quality-body").innerHTML = flagged.map(p => {
+    const status = p.finished_at ? "<span class='badge ok'>finished</span>" : "<span class='badge dim'>in progress</span>";
+    const outcome = p.outcome_type ? `<span class='badge ${outcomeColor(p.outcome_type)}'>${p.outcome_type}</span>` : "—";
+    const flags = [];
+    if (p.flag_mobile) flags.push("<span class='badge bad'>mobile</span>");
+    if (p.flag_speeding) flags.push("<span class='badge bad'>speed</span>");
+    if (p.flag_short_prompt) flags.push("<span class='badge warn'>short</span>");
+    const excluded = p.excluded ? "<span class='badge bad'>yes</span>" : "<span class='badge dim'>no</span>";
+    const testData = p.test_data ? "<span class='badge warn'>yes</span>" : "<span class='badge dim'>no</span>";
+    return `<tr>
+      <td><button class="linklike" onclick="openDetail('${p.id}')">${p.id}</button></td>
+      <td>${p.role || "—"}</td>
+      <td>${status}</td>
+      <td>${outcome}</td>
+      <td>${formatTime(p.total_time_sec)}</td>
+      <td>${flags.join(" ") || "—"}</td>
+      <td>${excluded}</td>
+      <td>${testData}</td>
+      <td>
+        <button class="btn ${p.excluded ? '' : 'danger'}" onclick="toggleExclude('${p.id}', ${!p.excluded})">${p.excluded ? "Re-include" : "Exclude"}</button>
+        <button class="btn" onclick="toggleTestData('${p.id}', ${!p.test_data})">${p.test_data ? "Mark real" : "Mark test"}</button>
+      </td>
     </tr>`;
   }).join("");
 }
 
-function outcomeColor(t) {
-  if (t === "agreed") return "ok";
-  if (t === "impasse" || t === "timeout") return "warn";
-  if (t === "rejected" || t === "aborted") return "bad";
-  return "dim";
+async function toggleExclude(id, excluded) {
+  await fetch("/adx/exclude", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ participantId: id, excluded }) });
+  await loadAll();
 }
-function formatTime(sec) {
-  if (sec < 60) return sec + "s";
-  return Math.floor(sec / 60) + "m " + (sec % 60) + "s";
+async function toggleTestData(id, testData) {
+  await fetch("/adx/test-data", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ participantId: id, testData }) });
+  await loadAll();
 }
 
+// ─── Cost tab ────────────────────────────────────────────────────────────
+function renderCost(d) {
+  const c = d.counts, s = d.spend;
+  const perSession = s.sessions > 0 ? s.tokens_total / s.sessions : 0;
+  const perParticipantUsd = c.finished > 0 ? d.estUsd / c.finished : 0;
+  const stats = [
+    { label: "Today's spend", value: "—", sub: "Computed daily on the server" },
+    { label: "Lifetime spend", value: "$" + d.estUsd, sub: s.tokens_total.toLocaleString() + " tokens" },
+    { label: "Per session", value: Math.round(perSession).toLocaleString(), sub: "tokens (mean)" },
+    { label: "Per participant", value: "$" + perParticipantUsd.toFixed(3), sub: "(of " + c.finished + " finished)" },
+  ];
+  $("cost-stats").innerHTML = stats.map(s => `
+    <div class="stat">
+      <div class="label">${s.label}</div>
+      <div class="value">${s.value}</div>
+      <div class="sub">${s.sub}</div>
+    </div>`).join("");
+}
+
+function drawSpendChart(rows) {
+  const svg = $("chart-spend");
+  if (!svg) return;
+  if (!rows || rows.length === 0) { svg.innerHTML = '<text x="360" y="100" fill="#9aa1ae" font-size="12" text-anchor="middle">No spend yet</text>'; return; }
+  const W = 720, H = 200, padL = 50, padR = 14, padT = 14, padB = 28;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const max = Math.max(...rows.map(r => r.tokens), 1);
+  const barW = Math.max(8, innerW / rows.length - 4);
+  const bars = rows.map((row, i) => {
+    const x = padL + i * (innerW / rows.length);
+    const h = (row.tokens / max) * innerH;
+    const y = padT + (innerH - h);
+    const usd = (row.tokens / 1_000_000 * 9).toFixed(2);
+    return `<g><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="#6aa9ff" opacity="0.8"><title>${row.day}: ${row.tokens.toLocaleString()} tokens · $${usd} · ${row.sessions} sessions</title></rect></g>`;
+  }).join("");
+  const labels = rows.map((row, i) => {
+    const x = padL + i * (innerW / rows.length) + barW / 2;
+    const dayLabel = row.day.slice(5);
+    return `<text x="${x.toFixed(1)}" y="${(H - padB + 14).toFixed(1)}" fill="#9aa1ae" font-size="10" text-anchor="middle">${dayLabel}</text>`;
+  }).join("");
+  const yTicks = [];
+  for (let t = 0; t <= 4; t++) {
+    const v = Math.round((max / 4) * t);
+    const y = padT + innerH - (v / max) * innerH;
+    yTicks.push(`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#2a2f3d" stroke-width="0.5" />`);
+    yTicks.push(`<text x="${padL - 6}" y="${(y + 3).toFixed(1)}" fill="#9aa1ae" font-size="10" text-anchor="end">${v.toLocaleString()}</text>`);
+  }
+  svg.innerHTML = yTicks.join("") + bars + labels;
+}
+
+function renderCostByPersonality(rows) {
+  if (!rows || rows.length === 0) {
+    $("cost-personality-body").innerHTML = "<tr><td colspan='5' style='text-align:center;color:var(--dim)'>No data yet.</td></tr>";
+    return;
+  }
+  $("cost-personality-body").innerHTML = rows.map(r => {
+    const usd = (r.tokens / 1_000_000 * 9).toFixed(3);
+    return `<tr>
+      <td><span class='badge accent'>${r.personality || "—"}</span></td>
+      <td style="font-family:ui-monospace,monospace">${r.n}</td>
+      <td style="font-family:ui-monospace,monospace">${r.tokens.toLocaleString()}</td>
+      <td style="font-family:ui-monospace,monospace">${r.mean_tokens.toLocaleString()}</td>
+      <td style="font-family:ui-monospace,monospace">$${usd}</td>
+    </tr>`;
+  }).join("");
+}
+
+// ─── Per-participant detail (overlay) ───────────────────────────────────
+const SURVEY_LABELS = {
+  satisfaction: "Satisfied with the outcome?",
+  agent_represented: "Your agent represented your preferences well?",
+  control: "Felt in control of how your agent negotiated?",
+  opponent_fair: "The opponent's agent seemed fair?",
+  trust_ai: "Trust in AI to handle real negotiations on your behalf?",
+  would_use_again: "Would you use a tool like this in real life?",
+  free_text: "Any comments on the study?",
+};
+
 async function openDetail(id) {
-  $("overview").style.display = "none";
+  closeReplay();
+  document.querySelectorAll(".tab-page").forEach((p) => p.classList.remove("active"));
   $("detail").style.display = "block";
   $("detail-body").innerHTML = "<p style='color:var(--dim)'>Loading…</p>";
-  const res = await fetch("/admin/p/" + encodeURIComponent(id));
+  const res = await fetch("/adx/p/" + encodeURIComponent(id));
   if (!res.ok) { $("detail-body").innerHTML = "<p>Not found.</p>"; return; }
   const d = await res.json();
   renderDetail(id, d);
@@ -247,72 +784,45 @@ async function openDetail(id) {
 
 function closeDetail() {
   $("detail").style.display = "none";
-  $("overview").style.display = "block";
+  const activeBtn = document.querySelector(".tab-btn.active");
+  const tab = activeBtn ? activeBtn.getAttribute("data-tab") : "overview";
+  document.querySelectorAll(".tab-page").forEach((p) => p.classList.toggle("active", p.id === "tab-" + tab));
 }
-
-// Friendly labels for post-survey question keys. Mirror of POST_QUESTIONS in
-// web/study.html (plus free_text which is the open-ended comment field).
-const SURVEY_LABELS = {
-  satisfaction:      "Satisfied with the outcome?",
-  agent_represented: "Your agent represented your preferences well?",
-  control:           "Felt in control of how your agent negotiated?",
-  opponent_fair:     "The opponent's agent seemed fair?",
-  trust_ai:          "Trust in AI to handle real negotiations on your behalf?",
-  would_use_again:   "Would you use a tool like this in real life?",
-  free_text:         "Any comments on the study?",
-};
 
 function renderDetail(id, d) {
   const p = d.participant;
-  // Pull device + browser fields from the participant row (added during boot).
   const deviceLabel = p.device_type
     ? (p.device_type === "phone" || p.device_type === "tablet"
         ? `<span style="color:#ff6b5e;font-weight:600">${escapeHtml(p.device_type)}</span> ⚠ violates consent`
         : escapeHtml(p.device_type))
     : "—";
   const browserOs = [p.browser, p.os].filter(Boolean).join(" / ") || "—";
-  // Count mobile_blocked telemetry events (set when the post-consent gate fires).
-  const mobileBlockedCount = (d.participant_events || [])
-    .filter(e => e.event_type === "mobile_blocked").length;
+  const mobileBlockedCount = (d.participant_events || []).filter(e => e.event_type === "mobile_blocked").length;
   const meta = [
     ["id", p.id], ["role", p.role],
     ["device", deviceLabel],
     ["browser / OS", browserOs],
-    ...(mobileBlockedCount > 0
-      ? [["mobile-block fired", `<strong style="color:#ff6b5e">${mobileBlockedCount}× — participant tried to continue on mobile</strong>`]]
-      : []),
+    ...(mobileBlockedCount > 0 ? [["mobile-block fired", `<strong style="color:#ff6b5e">${mobileBlockedCount}× — participant tried mobile</strong>`]] : []),
     ["age", p.age], ["gender", p.gender],
     ["experience", p.experience], ["AI familiarity", p.ai_familiarity],
     ["consent", p.consent ? "yes" : "no"],
     ["created", p.created_at], ["finished", p.finished_at || "—"],
     ["completion code", p.completion_code || "—"],
+    ["excluded", p.excluded ? "<span class='badge bad'>yes</span>" : "no"],
+    ["test data", p.test_data ? "<span class='badge warn'>yes</span>" : "no"],
   ];
   let html = `<h2>Participant ${id}</h2>
     <div class="panel"><h2>Demographics &amp; meta</h2>
       <table><tbody>${meta.map(([k, v]) => `<tr><td style="color:var(--dim)">${k}</td><td>${v ?? "—"}</td></tr>`).join("")}</tbody></table>
     </div>`;
 
-  // Panels are ordered to mirror the participant's actual journey through the
-  // study, so a researcher reading a row top-to-bottom retraces what the
-  // participant did:
-  //
-  //   1. Demographics & meta (researcher overview, kept at top)
-  //   2. Personal context  (screen 5 — what they wrote about themselves)
-  //   3. Behavior prompt   (screen 6 — instructions they gave their agent)
-  //   4. Opponent agent    (engine setup — who their agent faced)
-  //   5. Negotiation       (screen 7 — the actual transcript)
-  //   6. Post-survey       (screen 8 — Likerts + open-ended comment)
-  //   7. Events            (raw telemetry, kept at bottom)
-
-  // 2. Personal context — what the participant wrote about themselves.
+  // Personal context.
   const ctxRow = (d.participant_responses || []).find(r => r.screen === "context" && r.key === "personal_context");
   if (ctxRow) {
     html += `<div class="panel"><h2>Personal context</h2><pre>${escapeHtml(ctxRow.value_text || "")}</pre></div>`;
   }
 
-  // 3. Behavior prompt — instructions the participant gave their agent.
-  // Legacy revisions (pre-free-text) had a 7-axis signal vector in
-  // mapped_signals_json; new revisions store the JSON literal "null".
+  // Behavior prompts.
   if (d.behavior_prompts && d.behavior_prompts.length > 0) {
     html += `<div class="panel"><h2>Behavior prompt (${d.behavior_prompts.length} revision${d.behavior_prompts.length > 1 ? "s" : ""})</h2>`;
     for (const bp of d.behavior_prompts) {
@@ -326,37 +836,24 @@ function renderDetail(id, d) {
       } catch {}
       html += `<div style="margin-bottom:12px">
         <div style="color:var(--dim);font-size:12px">Revision ${bp.revision} · ${bp.submitted_at}</div>
-        <pre>${escapeHtml(bp.prompt_text)}</pre>
-        ${sigs}
-        ${bp.mapped_notes ? "<div style='font-size:12px;color:var(--dim);margin-top:6px'><em>" + escapeHtml(bp.mapped_notes) + "</em></div>" : ""}
+        <pre>${escapeHtml(bp.prompt_text)}</pre>${sigs}
       </div>`;
     }
     html += `</div>`;
   }
 
-  // 4. Opponent agent — pre-written personality (current) OR random 7-axis
-  // signals (legacy). Read from participant_responses(screen='engine').
+  // Opponent agent.
   const personalityRow = (d.participant_responses || []).find(r => r.screen === "engine" && r.key === "opponent_personality");
-  const oppSigRow = (d.participant_responses || []).find(r => r.screen === "engine" && r.key === "opponent_signals");
-  if (personalityRow || oppSigRow) {
+  if (personalityRow) {
     html += `<div class="panel"><h2>Opponent agent</h2>`;
-    if (personalityRow) {
-      html += `<div>Personality: <strong>${escapeHtml(personalityRow.value_text || "")}</strong> <span style='color:var(--dim);font-size:12px'>(picked at random per session, frozen in pack)</span></div>`;
-    }
-    if (oppSigRow) {
-      try {
-        const s = JSON.parse(oppSigRow.value_text || "{}");
-        html += "<div style='font-family:ui-monospace,monospace;font-size:11px;color:var(--dim);margin-top:6px'><strong>(legacy 7-axis signals)</strong> "
-          + Object.entries(s).map(([k, v]) => `${k}=${v > 0 ? "+" + v : v}`).join(" · ") + "</div>";
-      } catch {}
-    }
+    html += `<div>Personality: <strong>${escapeHtml(personalityRow.value_text || "")}</strong> <span style='color:var(--dim);font-size:12px'>(picked at random per session, frozen in pack)</span></div>`;
     html += `</div>`;
   }
 
-  // 5. Negotiation transcript.
+  // Negotiation transcript with replay link.
   if (d.session && d.session.turns && d.session.turns.length > 0) {
     html += `<div class="panel"><h2>Negotiation transcript (${d.session.turns.length} turns)</h2>`;
-    html += `<div style='font-size:13px;margin-bottom:8px;color:var(--dim)'>Outcome: <strong>${d.session.outcome_type || "?"}</strong> ${d.session.outcome_summary ? "· " + escapeHtml(d.session.outcome_summary) : ""}</div>`;
+    html += `<div style='font-size:13px;margin-bottom:8px;color:var(--dim)'>Outcome: <strong>${d.session.outcome_type || "?"}</strong> ${d.session.outcome_summary ? "· " + escapeHtml(d.session.outcome_summary) : ""} · <button class="linklike" onclick="openReplay('${d.session.id}')">open replay →</button></div>`;
     for (const t of d.session.turns) {
       let tools = "";
       try {
@@ -375,15 +872,13 @@ function renderDetail(id, d) {
     html += `</div>`;
   }
 
-  // 6. Post-survey responses — Likerts (1-7) + open-ended comment, with the
-  // human-readable question as the row label instead of the raw DB key.
+  // Post-survey.
   const survey = (d.participant_responses || []).filter(r => r.screen === "post_survey" && !r.key.startsWith("_"));
   if (survey.length > 0) {
     html += `<div class="panel"><h2>Post-survey</h2><table><tbody>`;
-    // Sort so Likerts appear first (in question order), then free_text last.
     const order = ["satisfaction","agent_represented","control","opponent_fair","trust_ai","would_use_again","free_text"];
-    const sorted = [...survey].sort((a,b) => {
-      const ai = order.indexOf(a.key); const bi = order.indexOf(b.key);
+    const sorted = [...survey].sort((a, b) => {
+      const ai = order.indexOf(a.key), bi = order.indexOf(b.key);
       return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
     });
     for (const r of sorted) {
@@ -396,56 +891,120 @@ function renderDetail(id, d) {
     html += `</tbody></table></div>`;
   }
 
-  // 7. Events count
+  // Events count.
   const eventsCount = (d.participant_events || []).length;
   if (eventsCount > 0) {
     const byType = {};
     for (const e of d.participant_events) byType[e.event_type] = (byType[e.event_type] || 0) + 1;
-    html += `<div class="panel"><h2>Events (${eventsCount})</h2>
-      <div style="font-family:ui-monospace,monospace;font-size:12px">
-        ${Object.entries(byType).sort((a,b) => b[1]-a[1]).map(([k,v]) => `<span style="margin-right:14px">${k}=<strong>${v}</strong></span>`).join("")}
-      </div>
-    </div>`;
+    html += `<div class="panel"><h2>Events (${eventsCount})</h2><div style="font-family:ui-monospace,monospace;font-size:12px">${
+      Object.entries(byType).sort((a,b) => b[1]-a[1]).map(([k,v]) => `<span style="margin-right:14px">${k}=<strong>${v}</strong></span>`).join("")
+    }</div></div>`;
   }
 
-  // Actions
-  html += `<div class="panel"><h2>Actions</h2>
-    <a href="/api/p/export?id=${encodeURIComponent(id)}" target="_blank" style="color:var(--accent);margin-right:18px">⬇ Download full JSON export</a>
-    <a href="#" style="color:var(--bad)" onclick="eraseParticipant('${id}'); return false;">🗑 Erase (GDPR)</a>
+  // Quick actions.
+  html += `<div class="panel">
+    <h2>Actions</h2>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn" href="/api/p/export?id=${encodeURIComponent(p.id)}">Download JSON</a>
+      <button class="btn ${p.excluded ? '' : 'danger'}" onclick="toggleExclude('${p.id}', ${!p.excluded})">${p.excluded ? "Re-include in analytics" : "Exclude from analytics"}</button>
+      <button class="btn" onclick="toggleTestData('${p.id}', ${!p.test_data})">${p.test_data ? "Mark as real data" : "Mark as test data"}</button>
+    </div>
   </div>`;
 
   $("detail-body").innerHTML = html;
 }
 
-async function eraseParticipant(id) {
-  if (!confirm("Erase ALL data for participant " + id + "? This cannot be undone.")) return;
-  const res = await fetch("/api/p/erase?id=" + encodeURIComponent(id), { method: "DELETE" });
-  if (res.ok) { alert("Erased."); closeDetail(); loadData(); }
-  else { alert("Failed: " + (await res.text())); }
+// ─── Replay viewer (overlay) ────────────────────────────────────────────
+async function openReplay(sessionId) {
+  closeDetail();
+  document.querySelectorAll(".tab-page").forEach((p) => p.classList.remove("active"));
+  $("replay").style.display = "block";
+  $("replay-body").innerHTML = "<p style='color:var(--dim)'>Loading replay…</p>";
+  const res = await fetch("/adx/replay/" + encodeURIComponent(sessionId));
+  if (!res.ok) { $("replay-body").innerHTML = "<p>Replay not found.</p>"; return; }
+  const r = await res.json();
+  renderReplay(sessionId, r);
+}
+function closeReplay() {
+  $("replay").style.display = "none";
+  const activeBtn = document.querySelector(".tab-btn.active");
+  const tab = activeBtn ? activeBtn.getAttribute("data-tab") : "overview";
+  document.querySelectorAll(".tab-page").forEach((p) => p.classList.toggle("active", p.id === "tab-" + tab));
 }
 
-function $(id) { return document.getElementById(id); }
-function escapeHtml(s) {
-  if (s == null) return "";
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-// Same renderer as web/study.html. Kept inline so admin.html has no dependency.
-function renderMarkdown(s) {
-  if (s == null) return "";
-  let html = String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-  html = html.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__([^_\n]+?)__/g, '<strong>$1</strong>');
-  html = html.replace(/~~([^~\n]+?)~~/g, '<del>$1</del>');
-  html = html.replace(/(^|\W)\*([^\s*][^*\n]*?)\*(?=\W|$)/g, '$1<em>$2</em>');
-  html = html.replace(/(^|\W)_([^\s_][^_\n]*?)_(?=\W|$)/g, '$1<em>$2</em>');
-  return html;
+function renderReplay(sessionId, r) {
+  const turns = r.turns || [];
+  const decisions = r.decisions || [];
+  const session = r.session || {};
+  // Build a chronological merge: orchestrator decisions come BEFORE the turn they triggered.
+  const stream = [];
+  const decByTurn = {};
+  for (const d of decisions) {
+    if (!decByTurn[d.turnNumber]) decByTurn[d.turnNumber] = [];
+    decByTurn[d.turnNumber].push(d);
+  }
+  for (const t of turns) {
+    if (decByTurn[t.turnNumber]) {
+      for (const d of decByTurn[t.turnNumber]) stream.push({ kind: "orch", value: d });
+    }
+    stream.push({ kind: "turn", value: t });
+  }
+  // Trailing decisions (e.g. declare_outcome at the end)
+  const usedTurnNums = new Set(turns.map(t => t.turnNumber));
+  for (const d of decisions) {
+    if (!usedTurnNums.has(d.turnNumber)) stream.push({ kind: "orch", value: d });
+  }
+
+  let html = `<h2>Session ${sessionId}</h2>`;
+  html += `<div class="panel">
+    <h2>Outcome</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+      <div><span style="color:var(--dim)">Type:</span> <strong class="badge ${outcomeColor(session.outcome_type)}">${session.outcome_type || "—"}</strong></div>
+      <div><span style="color:var(--dim)">Turns:</span> ${turns.length}</div>
+      <div><span style="color:var(--dim)">Total tokens:</span> ${(session.tokens_total || 0).toLocaleString()}</div>
+      <div><span style="color:var(--dim)">Started:</span> ${session.started_at || "—"}</div>
+      <div><span style="color:var(--dim)">Ended:</span> ${session.ended_at || "—"}</div>
+      <div><span style="color:var(--dim)">Degraded:</span> ${session.degraded ? "<span class='badge bad'>yes</span>" : "no"}</div>
+    </div>
+    ${session.outcome_summary ? `<div style="margin-top:10px;font-size:13px"><strong>Summary:</strong> ${escapeHtml(session.outcome_summary)}</div>` : ""}
+    ${session.outcome_rationale ? `<div style="margin-top:6px;font-size:13px;color:var(--dim)"><strong>Rationale:</strong> ${escapeHtml(session.outcome_rationale)}</div>` : ""}
+  </div>`;
+
+  html += `<div class="panel">
+    <h2>Timeline (turns interleaved with orchestrator decisions)</h2>
+    <p style="font-size:12px;color:var(--dim);margin-top:0">Cyan boxes are orchestrator decisions; bordered bubbles are participant turns.</p>`;
+  for (const item of stream) {
+    if (item.kind === "orch") {
+      const d = item.value;
+      const inputJson = JSON.stringify(d.toolCall.input || {});
+      const inputShort = inputJson.length > 200 ? inputJson.slice(0, 200) + "…" : inputJson;
+      html += `<div class="orch">
+        ↪ <strong>${escapeHtml(d.toolCall.name || "?")}</strong> <span style="color:var(--dim);font-size:11px">(turn ${d.turnNumber} · ${d.timestamp})</span>
+        <code style="display:block;margin-top:2px;background:var(--panel-3);padding:4px 8px;border-radius:4px;font-size:11px">${escapeHtml(inputShort)}</code>
+        ${d.rationale ? `<span class="rationale">"${escapeHtml(d.rationale)}"</span>` : ""}
+      </div>`;
+    } else {
+      const t = item.value;
+      let tools = "";
+      const proposal = (t.toolCalls || []).find(c => c.name === "submit_proposal");
+      if (proposal && proposal.input && proposal.input.issues) {
+        const price = (proposal.input.issues.find(i => i.name === "price") || {}).value;
+        if (price != null) tools = ` · ${proposal.input.action} @ $${Number(price).toLocaleString()}`;
+      }
+      const tokens = t.tokens ? ` · ${(t.tokens.input + t.tokens.output).toLocaleString()} tok · ${t.latencyMs}ms` : "";
+      html += `<div class="turn ${t.emitterId}">
+        <div class="meta">turn #${t.turnNumber} · ${t.emitterId}${tools}${tokens}</div>
+        <div class="msg">${renderMarkdown(t.message || "")}</div>
+      </div>`;
+    }
+  }
+  html += `</div>`;
+
+  $("replay-body").innerHTML = html;
 }
 
-loadData();
+// ─── Boot ───────────────────────────────────────────────────────────────
+loadAll();
 </script>
 </body>
 </html>

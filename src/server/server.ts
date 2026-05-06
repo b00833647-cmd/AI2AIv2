@@ -12,6 +12,7 @@
 
 import http from "node:http";
 import path from "node:path";
+import zlib from "node:zlib";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { nanoid } from "nanoid";
 import { runSession } from "../multi-agent/session-runner.ts";
@@ -180,6 +181,49 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname.startsWith("/adx/p/")) {
       const pid = url.pathname.slice("/adx/p/".length);
       await handleAdminParticipantDetail(req, res, pid);
+      return;
+    }
+
+    // ─── Admin extensions: aggregates / exports / quality / replay / ops ──
+    if (req.method === "GET" && (url.pathname === "/adx/aggregates" || url.pathname === "/admin/aggregates")) {
+      await handleAdminAggregates(req, res);
+      return;
+    }
+    if (req.method === "POST" && (url.pathname === "/adx/exclude" || url.pathname === "/admin/exclude")) {
+      await handleAdminExclude(req, res);
+      return;
+    }
+    if (req.method === "POST" && (url.pathname === "/adx/test-data" || url.pathname === "/admin/test-data")) {
+      await handleAdminTestData(req, res);
+      return;
+    }
+    if (req.method === "GET" && (url.pathname === "/adx/backup" || url.pathname === "/admin/backup")) {
+      await handleAdminBackup(req, res);
+      return;
+    }
+    if (req.method === "GET" && url.pathname.startsWith("/adx/replay/")) {
+      const sid = url.pathname.slice("/adx/replay/".length);
+      await handleAdminReplay(req, res, sid);
+      return;
+    }
+    if (req.method === "GET" && (url.pathname === "/adx/export/participants.xlsx" || url.pathname === "/admin/export/participants.xlsx")) {
+      await handleAdminExportParticipantsXlsx(req, res);
+      return;
+    }
+    if (req.method === "GET" && (url.pathname === "/adx/export/full.xlsx" || url.pathname === "/admin/export/full.xlsx")) {
+      await handleAdminExportFullXlsx(req, res);
+      return;
+    }
+    if (req.method === "GET" && (url.pathname === "/adx/export/participants.csv" || url.pathname === "/admin/export/participants.csv")) {
+      await handleAdminExportParticipantsCsv(req, res);
+      return;
+    }
+    if (req.method === "GET" && (url.pathname === "/adx/export/all.json" || url.pathname === "/admin/export/all.json")) {
+      await handleAdminExportAllJson(req, res);
+      return;
+    }
+    if (req.method === "GET" && (url.pathname === "/adx/export/transcripts.zip" || url.pathname === "/admin/export/transcripts.zip")) {
+      await handleAdminExportTranscriptsZip(req, res);
       return;
     }
 
@@ -1067,4 +1111,298 @@ async function handleAdminParticipantDetail(
     return;
   }
   sendJson(res, 200, data);
+}
+
+// ─── Admin extension handlers ────────────────────────────────────────────
+
+async function handleAdminAggregates(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+  const data = withDb((db) => ({
+    byCondition: db.aggregateByCondition(),
+    outcomes: db.outcomeDistribution(),
+    prices: db.priceDistribution(),
+    turns: db.turnCountDistribution(),
+    survey: db.surveyAggregates(),
+    spendByDay: db.spendByDay(14),
+    costByPersonality: db.costByPersonality(),
+  }));
+  sendJson(res, 200, data);
+}
+
+async function handleAdminExclude(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+  const body = await readJson<{ participantId: string; excluded: boolean }>(req, res);
+  if (body === null) return;
+  if (!require400(res, typeof body.participantId === "string", "participantId required")) return;
+  withDb((db) => db.setExcluded(body.participantId, body.excluded === true));
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleAdminTestData(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+  const body = await readJson<{ participantId: string; testData: boolean }>(req, res);
+  if (body === null) return;
+  if (!require400(res, typeof body.participantId === "string", "participantId required")) return;
+  withDb((db) => db.setTestData(body.participantId, body.testData === true));
+  sendJson(res, 200, { ok: true });
+}
+
+async function handleAdminBackup(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+  const bytes = withDb((db) => db.backupBytes());
+  const fname = `ai2ai-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.db`;
+  res.writeHead(200, {
+    "Content-Type": "application/octet-stream",
+    "Content-Disposition": `attachment; filename="${fname}"`,
+    "Content-Length": String(bytes.length),
+  });
+  res.end(bytes);
+}
+
+async function handleAdminReplay(req: http.IncomingMessage, res: http.ServerResponse, sessionId: string): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+  const data = withDb((db) => db.replaySession(sessionId));
+  if (!data) {
+    sendJson(res, 404, { error: "unknown sessionId" });
+    return;
+  }
+  sendJson(res, 200, data);
+}
+
+// ─── Export handlers ─────────────────────────────────────────────────────
+
+/** Tiny CSV serializer that quotes any cell containing comma, newline, or quote. */
+function toCsv(rows: Array<Record<string, unknown>>): string {
+  if (rows.length === 0) return "";
+  const headers = Object.keys(rows[0]!);
+  const escape = (v: unknown): string => {
+    if (v === null || v === undefined) return "";
+    const s = typeof v === "string" ? v : (typeof v === "number" || typeof v === "boolean") ? String(v) : JSON.stringify(v);
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  const lines = [headers.join(",")];
+  for (const row of rows) {
+    lines.push(headers.map((h) => escape(row[h])).join(","));
+  }
+  return lines.join("\n");
+}
+
+async function handleAdminExportParticipantsXlsx(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+  const rows = withDb((db) => db.exportFlatParticipants());
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "AI2AI";
+  wb.created = new Date();
+  const ws = wb.addWorksheet("Participants");
+  if (rows.length === 0) {
+    ws.addRow(["No data yet."]);
+  } else {
+    const headers = Object.keys(rows[0]!);
+    ws.columns = headers.map((h) => ({ header: h, key: h, width: Math.min(40, Math.max(12, h.length + 2)) }));
+    ws.getRow(1).font = { bold: true };
+    ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1D2230" } };
+    ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    ws.views = [{ state: "frozen", ySplit: 1 }];
+    for (const row of rows) ws.addRow(row);
+  }
+  const buf = await wb.xlsx.writeBuffer();
+  const fname = `ai2ai-participants-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  res.writeHead(200, {
+    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "Content-Disposition": `attachment; filename="${fname}"`,
+    "Content-Length": String(buf.byteLength),
+  });
+  res.end(Buffer.from(buf));
+}
+
+async function handleAdminExportFullXlsx(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+  const data = withDb((db) => ({
+    participants: db.exportFlatParticipants(),
+    behaviorPrompts: db.exportAllBehaviorPrompts(),
+    survey: db.exportAllSurvey(),
+    turns: db.exportAllTurns(),
+    decisions: db.exportAllDecisions(),
+    events: db.exportAllEvents(50_000),
+    aggregates: db.aggregateByCondition(),
+  }));
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "AI2AI";
+  wb.created = new Date();
+  const headerStyle = (ws: import("exceljs").Worksheet) => {
+    if (ws.rowCount > 0) {
+      ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+      ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1D2230" } };
+      ws.views = [{ state: "frozen", ySplit: 1 }];
+    }
+  };
+  const addSheet = (name: string, rows: Array<Record<string, unknown>>) => {
+    const ws = wb.addWorksheet(name);
+    if (rows.length === 0) { ws.addRow(["(empty)"]); return; }
+    const headers = Object.keys(rows[0]!);
+    ws.columns = headers.map((h) => ({ header: h, key: h, width: Math.min(40, Math.max(12, h.length + 2)) }));
+    for (const r of rows) ws.addRow(r);
+    headerStyle(ws);
+  };
+  addSheet("Participants", data.participants);
+  addSheet("By Condition", data.aggregates as Array<Record<string, unknown>>);
+  addSheet("Behavior Prompts", data.behaviorPrompts);
+  addSheet("Survey", data.survey);
+  addSheet("Turns", data.turns);
+  addSheet("Orchestrator", data.decisions);
+  addSheet("Events", data.events);
+  const buf = await wb.xlsx.writeBuffer();
+  const fname = `ai2ai-full-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  res.writeHead(200, {
+    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "Content-Disposition": `attachment; filename="${fname}"`,
+    "Content-Length": String(buf.byteLength),
+  });
+  res.end(Buffer.from(buf));
+}
+
+async function handleAdminExportParticipantsCsv(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+  const rows = withDb((db) => db.exportFlatParticipants());
+  const csv = toCsv(rows);
+  const fname = `ai2ai-participants-${new Date().toISOString().slice(0, 10)}.csv`;
+  res.writeHead(200, {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${fname}"`,
+  });
+  res.end(csv);
+}
+
+async function handleAdminExportAllJson(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+  const data = withDb((db) => {
+    const participants = db.listParticipantsForAdmin(10000);
+    return {
+      _exported_at: new Date().toISOString(),
+      _participant_count: participants.length,
+      participants: participants.map((p) => db.exportParticipant(p.id)),
+      aggregates: {
+        byCondition: db.aggregateByCondition(),
+        outcomes: db.outcomeDistribution(),
+        prices: db.priceDistribution(),
+        turns: db.turnCountDistribution(),
+        survey: db.surveyAggregates(),
+        spendByDay: db.spendByDay(60),
+        costByPersonality: db.costByPersonality(),
+      },
+    };
+  });
+  const fname = `ai2ai-full-${new Date().toISOString().slice(0, 10)}.json`;
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${fname}"`,
+  });
+  res.end(JSON.stringify(data, null, 2));
+}
+
+/**
+ * ZIP bundle of per-session text transcripts for qualitative analysis.
+ * Implemented without an external zip library — Node has zlib + deflateRaw,
+ * which is enough to assemble a valid ZIP file. (Stored entries would also
+ * work but DEFLATE keeps the file small.)
+ */
+async function handleAdminExportTranscriptsZip(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+  const transcripts = withDb((db) => {
+    const participants = db.listParticipantsForAdmin(10000);
+    const out: Array<{ name: string; content: string }> = [];
+    for (const p of participants) {
+      if (!p.session_id) continue;
+      const text = db.buildTranscriptText(p.session_id);
+      if (text) {
+        const tag = `${p.role || "noroles"}-${p.id}`;
+        out.push({ name: `${tag}.txt`, content: text });
+      }
+    }
+    return out;
+  });
+  const zipBuffer = buildZip(transcripts);
+  const fname = `ai2ai-transcripts-${new Date().toISOString().slice(0, 10)}.zip`;
+  res.writeHead(200, {
+    "Content-Type": "application/zip",
+    "Content-Disposition": `attachment; filename="${fname}"`,
+    "Content-Length": String(zipBuffer.length),
+  });
+  res.end(zipBuffer);
+}
+
+// Minimal ZIP writer (DEFLATE) — enough for plain UTF-8 text bundles.
+// Implements local file headers + central directory + end-of-central-directory
+// per the ZIP appnote spec. No external deps.
+function buildZip(entries: Array<{ name: string; content: string }>): Buffer {
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const nameBuf = Buffer.from(entry.name, "utf-8");
+    const data = Buffer.from(entry.content, "utf-8");
+    const compressed = zlib.deflateRawSync(data);
+    const crc = zlib.crc32 ? zlib.crc32(data) : crc32Fallback(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);            // local file header signature
+    local.writeUInt16LE(20, 4);                    // version needed
+    local.writeUInt16LE(0, 6);                     // general purpose flags
+    local.writeUInt16LE(8, 8);                     // compression method = DEFLATE
+    local.writeUInt16LE(0, 10);                    // last mod time
+    local.writeUInt16LE(0, 12);                    // last mod date
+    local.writeUInt32LE(crc, 14);                  // CRC-32
+    local.writeUInt32LE(compressed.length, 18);    // compressed size
+    local.writeUInt32LE(data.length, 22);          // uncompressed size
+    local.writeUInt16LE(nameBuf.length, 26);       // file name length
+    local.writeUInt16LE(0, 28);                    // extra field length
+    localParts.push(local, nameBuf, compressed);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);                  // version made by
+    central.writeUInt16LE(20, 6);                  // version needed
+    central.writeUInt16LE(0, 8);                   // flags
+    central.writeUInt16LE(8, 10);                  // method
+    central.writeUInt16LE(0, 12);
+    central.writeUInt16LE(0, 14);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(compressed.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(nameBuf.length, 28);
+    central.writeUInt16LE(0, 30);                  // extra
+    central.writeUInt16LE(0, 32);                  // comment
+    central.writeUInt16LE(0, 34);                  // disk
+    central.writeUInt16LE(0, 36);                  // internal attrs
+    central.writeUInt32LE(0, 38);                  // external attrs
+    central.writeUInt32LE(offset, 42);             // relative offset of local header
+    centralParts.push(central, nameBuf);
+    offset += local.length + nameBuf.length + compressed.length;
+  }
+  const centralStart = offset;
+  const centralBuf = Buffer.concat(centralParts);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(0, 4);                        // disk number
+  eocd.writeUInt16LE(0, 6);                        // disk where central starts
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(centralBuf.length, 12);
+  eocd.writeUInt32LE(centralStart, 16);
+  eocd.writeUInt16LE(0, 20);                       // comment length
+  return Buffer.concat([...localParts, centralBuf, eocd]);
+}
+
+// CRC-32 fallback — older Node versions don't expose zlib.crc32.
+function crc32Fallback(buf: Buffer): number {
+  let crc = ~0;
+  for (let i = 0; i < buf.length; i++) {
+    crc ^= buf[i]!;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1));
+    }
+  }
+  return ~crc >>> 0;
 }
