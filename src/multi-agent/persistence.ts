@@ -748,6 +748,8 @@ export class SqlitePersistence implements Persistence {
     role: string | null;
     created_at: string;
     finished_at: string | null;
+    last_activity_at: string;
+    status: "finished" | "in_progress" | "abandoned";
     age: number | null;
     attention_check_pass: number | null;
     completion_code: string | null;
@@ -767,6 +769,12 @@ export class SqlitePersistence implements Persistence {
     flag_short_prompt: number;
     flag_mobile: number;
   }> {
+    // Idle threshold: a participant is considered "in progress" only if their
+    // most recent client/server activity is within this many seconds. Past
+    // that they're "abandoned" (started the study but never made it to the
+    // thanks screen). Tuned to 10 minutes — the entire flow including
+    // streamed negotiation typically takes 4-7 minutes.
+    const idleThresholdSec = 10 * 60;
     return this.db
       .prepare(
         `SELECT
@@ -793,6 +801,26 @@ export class SqlitePersistence implements Persistence {
            CASE WHEN sp.finished_at IS NOT NULL
              THEN CAST((julianday(sp.finished_at) - julianday(sp.created_at)) * 86400 AS INTEGER)
              ELSE NULL END AS total_time_sec,
+           -- last_activity_at: best-available timestamp of the participant's
+           -- most recent observed action — newest of last event, last response
+           -- submission, or fallback to created_at if neither exists.
+           COALESCE(
+             (SELECT MAX(server_ts) FROM participant_events WHERE participant_id = sp.id),
+             (SELECT MAX(submitted_at) FROM participant_responses WHERE participant_id = sp.id),
+             sp.created_at
+           ) AS last_activity_at,
+           -- Ternary status: finished | in_progress | abandoned. "In progress"
+           -- is reserved for participants currently doing the task — anyone
+           -- idle past the threshold without a completion code is abandoned.
+           CASE
+             WHEN sp.finished_at IS NOT NULL THEN 'finished'
+             WHEN (julianday('now') - julianday(COALESCE(
+               (SELECT MAX(server_ts) FROM participant_events WHERE participant_id = sp.id),
+               (SELECT MAX(submitted_at) FROM participant_responses WHERE participant_id = sp.id),
+               sp.created_at
+             ))) * 86400 < ${idleThresholdSec} THEN 'in_progress'
+             ELSE 'abandoned'
+           END AS status,
            -- Speeding flag: finished in under 90 seconds (very rough).
            CASE WHEN sp.finished_at IS NOT NULL
              AND (julianday(sp.finished_at) - julianday(sp.created_at)) * 86400 < 90
@@ -813,6 +841,8 @@ export class SqlitePersistence implements Persistence {
       role: string | null;
       created_at: string;
       finished_at: string | null;
+      last_activity_at: string;
+      status: "finished" | "in_progress" | "abandoned";
       age: number | null;
       attention_check_pass: number | null;
       completion_code: string | null;
@@ -866,12 +896,38 @@ export class SqlitePersistence implements Persistence {
     return row;
   }
 
-  countStudyParticipants(): { total: number; finished: number } {
-    const t = this.db.prepare(`SELECT COUNT(*) AS n FROM study_participants`).get() as { n: number };
-    const f = this.db
-      .prepare(`SELECT COUNT(*) AS n FROM study_participants WHERE finished_at IS NOT NULL`)
-      .get() as { n: number };
-    return { total: t.n, finished: f.n };
+  countStudyParticipants(): { total: number; finished: number; in_progress: number; abandoned: number } {
+    const idleThresholdSec = 10 * 60;
+    const row = this.db
+      .prepare(
+        `SELECT
+           COUNT(*) AS total,
+           SUM(CASE WHEN sp.finished_at IS NOT NULL THEN 1 ELSE 0 END) AS finished,
+           SUM(CASE
+             WHEN sp.finished_at IS NULL
+                  AND (julianday('now') - julianday(COALESCE(
+                    (SELECT MAX(server_ts) FROM participant_events WHERE participant_id = sp.id),
+                    (SELECT MAX(submitted_at) FROM participant_responses WHERE participant_id = sp.id),
+                    sp.created_at
+                  ))) * 86400 < ${idleThresholdSec}
+             THEN 1 ELSE 0 END) AS in_progress,
+           SUM(CASE
+             WHEN sp.finished_at IS NULL
+                  AND (julianday('now') - julianday(COALESCE(
+                    (SELECT MAX(server_ts) FROM participant_events WHERE participant_id = sp.id),
+                    (SELECT MAX(submitted_at) FROM participant_responses WHERE participant_id = sp.id),
+                    sp.created_at
+                  ))) * 86400 >= ${idleThresholdSec}
+             THEN 1 ELSE 0 END) AS abandoned
+         FROM study_participants sp`,
+      )
+      .get() as { total: number; finished: number; in_progress: number; abandoned: number };
+    return {
+      total: row.total ?? 0,
+      finished: row.finished ?? 0,
+      in_progress: row.in_progress ?? 0,
+      abandoned: row.abandoned ?? 0,
+    };
   }
 
   // ─── Analytics: aggregates, distributions, time series ──────────────────
