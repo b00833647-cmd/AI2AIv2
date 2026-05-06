@@ -1033,15 +1033,7 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
       <label class="choice"><input type="radio" name="ai_familiarity" value="very" /> Very</label>
     </div>
 
-    <label><strong>Attention check.</strong> Please pick "A lot" below.</label>
-    <div class="radio-grid">
-      <label class="choice"><input type="radio" name="attn" value="none" /> None</label>
-      <label class="choice"><input type="radio" name="attn" value="little" /> A little</label>
-      <label class="choice"><input type="radio" name="attn" value="moderate" /> Moderate</label>
-      <label class="choice"><input type="radio" name="attn" value="lot" /> A lot</label>
-    </div>
-
-    <button class="btn-primary" id="btn-9-finish">Submit & finish</button>
+    <button class="btn-primary" id="btn-9-finish">Submit &amp; finish</button>
 
     <div class="spinner-overlay" id="finish-spinner">
       <div class="spinner"></div>
@@ -1904,14 +1896,12 @@ $("btn-9-finish").addEventListener("click", async () => {
   try {
     const exp = document.querySelector('input[name="experience"]:checked')?.value ?? null;
     const aif = document.querySelector('input[name="ai_familiarity"]:checked')?.value ?? null;
-    const attn = document.querySelector('input[name="attn"]:checked')?.value;
     await api("/api/p/demographics", {
       participantId: state.participantId,
       age: Number($("age").value) || null,
       gender: $("gender").value || null,
       experience: exp,
       ai_familiarity: aif,
-      attention_check_pass: attn === "lot",
       timeOnScreenMs: timeOnScreen(),
     });
     const r = await api("/api/p/finish", {

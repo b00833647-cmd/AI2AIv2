@@ -757,7 +757,6 @@ export class SqlitePersistence implements Persistence {
     total_time_sec: number | null;
     device_type: string | null;
     flag_speeding: number;
-    flag_attention: number;
     flag_short_prompt: number;
     flag_mobile: number;
   }> {
@@ -785,8 +784,6 @@ export class SqlitePersistence implements Persistence {
            CASE WHEN sp.finished_at IS NOT NULL
              AND (julianday(sp.finished_at) - julianday(sp.created_at)) * 86400 < 90
              THEN 1 ELSE 0 END AS flag_speeding,
-           -- Attention check failed (selected anything other than 'A lot' on the IMC).
-           CASE WHEN sp.attention_check_pass = 0 THEN 1 ELSE 0 END AS flag_attention,
            -- Behavior prompt under 80 chars (low-effort).
            CASE WHEN EXISTS (
              SELECT 1 FROM behavior_prompts WHERE participant_id = sp.id AND length(prompt_text) < 80
@@ -815,7 +812,6 @@ export class SqlitePersistence implements Persistence {
       total_time_sec: number | null;
       device_type: string | null;
       flag_speeding: number;
-      flag_attention: number;
       flag_short_prompt: number;
       flag_mobile: number;
     }>;

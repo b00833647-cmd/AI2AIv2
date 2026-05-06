@@ -628,7 +628,6 @@ interface DemographicsBody {
   gender?: string | null;
   experience?: string | null;
   ai_familiarity?: string | null;
-  attention_check_pass?: boolean;
   timeOnScreenMs?: number;
 }
 async function handleParticipantDemographics(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
@@ -642,7 +641,6 @@ async function handleParticipantDemographics(req: http.IncomingMessage, res: htt
       gender: body.gender ?? null,
       experience: body.experience ?? null,
       ai_familiarity: body.ai_familiarity ?? null,
-      attention_check_pass: body.attention_check_pass ?? false,
     });
     if (typeof body.timeOnScreenMs === "number") {
       db.insertParticipantResponses(body.participantId, "demographics", [

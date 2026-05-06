@@ -207,7 +207,6 @@ function renderTable(rows) {
     const flags = [];
     if (p.flag_mobile) flags.push("<span class='badge bad' title='Used a phone or tablet — against consent rules'>mobile</span>");
     if (p.flag_speeding) flags.push("<span class='badge bad'>speed</span>");
-    if (p.flag_attention) flags.push("<span class='badge bad'>attn</span>");
     if (p.flag_short_prompt) flags.push("<span class='badge warn'>short</span>");
     return `<tr>
       <td><a onclick="openDetail('${p.id}')">${p.id}</a></td>
@@ -284,7 +283,7 @@ function renderDetail(id, d) {
       : []),
     ["age", p.age], ["gender", p.gender],
     ["experience", p.experience], ["AI familiarity", p.ai_familiarity],
-    ["consent", p.consent ? "yes" : "no"], ["attention check", p.attention_check_pass ? "pass" : "fail"],
+    ["consent", p.consent ? "yes" : "no"],
     ["created", p.created_at], ["finished", p.finished_at || "—"],
     ["completion code", p.completion_code || "—"],
   ];
