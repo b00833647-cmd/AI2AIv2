@@ -46,6 +46,12 @@ ENV AI2AI_DB_PATH=/data/sessions.db
 # overrides this Dockerfile default at container start.
 ENV AI2AI_RATE_LIMIT=off
 
+# Default admin password for /adx and /admin so the dashboard works out of the
+# box on a fresh deploy. CHANGE THIS in your platform's environment variables
+# before going live (Railway → Variables → AI2AI_ADMIN_PASSWORD = …) — the
+# platform value overrides the Dockerfile ENV at container start.
+ENV AI2AI_ADMIN_PASSWORD=demo
+
 # Make sure the volume mount point exists (won't be persistent without -v).
 RUN mkdir -p /data
 
