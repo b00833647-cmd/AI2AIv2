@@ -117,22 +117,16 @@
   @media (max-width: 900px) {
     .panel.sticky, .panel.scrollable { position: static; max-height: none; }
   }
-  /* Every screen now fills the full main container — same width as the car
-     listing (screen 4) on every deck. The legacy `.panel.center` class is a
-     no-op (kept so we don't have to strip it from all the section markup).
-     For text-heavy screens, paragraphs inside the panel are still capped at
-     a comfortable reading width so line length stays scannable on wide
-     monitors; everything else (forms, listing, transcript) spans full. */
-  .panel.center { margin: 0; max-width: 100%; }
-  /* Tier classes are aliases now — kept so the HTML doesn't have to change. */
+  /* Every screen fills the full main container — same width as the car
+     listing on every deck. `.panel.center` and the tier classes are no-ops
+     kept so we don't have to strip them from the section markup.
+     Text inside flows with the deck — no line-length cap. */
+  .panel.center,
   .panel.center.narrow,
   .panel.center.reading,
   .panel.center.medium,
   .panel.center.wide,
-  .panel.center.full { max-width: 100%; }
-  /* Cap paragraph line-length inside text-heavy screens for readability. */
-  .panel.center.reading p,
-  .panel.center.reading li { max-width: 78ch; }
+  .panel.center.full { margin: 0; max-width: 100%; }
 
   h2 { margin: 0 0 14px; font-size: 18px; font-weight: 600; }
   h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -631,7 +625,7 @@
     margin: 14px 0 6px;
     animation: priceCountUp 900ms cubic-bezier(0.2, 0.9, 0.3, 1.05);
   }
-  .outcome-banner .summary { color: var(--text); margin-top: 10px; font-size: 14px; max-width: 540px; margin-left: auto; margin-right: auto; }
+  .outcome-banner .summary { color: var(--text); margin-top: 10px; font-size: 14px; }
   .outcome-banner .continue-prompt {
     margin-top: 24px;
     opacity: 0;
@@ -1064,7 +1058,7 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
     <div class="thanks-hero">
       <div class="check">✓</div>
       <h2>Thank you for participating</h2>
-      <p class="muted" style="max-width: 480px; margin: 0 auto;">
+      <p class="muted">
         Your responses have been recorded. Both negotiators in this study were AI agents — your
         prompt shaped your side, and the opposing agent's behavior was held neutral so we can
         compare across participants.
