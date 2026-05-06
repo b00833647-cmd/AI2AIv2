@@ -48,6 +48,35 @@
 
   .screen { display: none; }
   .screen.active { display: block; }
+
+  /* Mobile-device block — shown after consent if user is on phone/tablet.
+     Non-dismissible full-viewport overlay. */
+  body.mobile-blocked .screen { display: none !important; }
+  body.mobile-blocked main { display: none; }
+  .mobile-block-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 17, 21, 0.96);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; padding: 20px;
+  }
+  .mobile-block-card {
+    background: var(--panel);
+    border: 2px solid #c0392b;
+    padding: 28px 26px;
+    max-width: 480px; width: 100%;
+    border-radius: 12px;
+    text-align: left;
+    box-shadow: 0 18px 46px rgba(0,0,0,0.6);
+  }
+  .mobile-block-card h2 {
+    color: #ff6b5e; margin: 0 0 14px;
+    font-size: 22px; line-height: 1.25;
+  }
+  .mobile-block-card p {
+    font-size: 15px; line-height: 1.55;
+    margin: 0 0 12px;
+  }
+  .mobile-block-card a { color: var(--accent); }
   /* Pre-paint suppression for role-specific URLs (/blx, /slx). Without this
      the browser would render screen-1 (role pick) for one frame before the
      boot script swaps it. The `data-preset-role` attribute is set in the
@@ -1023,6 +1052,29 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
 
 </main>
 
+<!-- ─── Mobile-device blocking overlay ───────────────────────────────────
+     Shown after consent if the participant is on a phone or tablet. The
+     consent form explicitly says "PC or laptop only", so this enforces the
+     rule. Non-dismissible — the only way out is to close the tab. -->
+<div id="mobile-block" class="mobile-block-overlay" style="display: none" role="dialog" aria-modal="true" aria-labelledby="mobile-block-title">
+  <div class="mobile-block-card">
+    <h2 id="mobile-block-title">Mobile device detected</h2>
+    <p>You are using a mobile phone or tablet. The consent form you just agreed
+       to clearly states that this study must be completed on a
+       <strong>PC or laptop computer</strong>.</p>
+    <p>Continuing on a mobile device is against the rules of the experiment
+       you agreed to.</p>
+    <p>Please <strong>"return"</strong> your submission on Prolific by clicking
+       the <em>"Stop without completing"</em> button there. You will not receive
+       payment for this attempt, but you can retry on a desktop or laptop.</p>
+    <p class="muted" style="margin-top: 18px; font-size: 13px;">
+      If you believe you are seeing this in error (e.g. you are on a laptop in
+      tablet mode), contact the researcher at
+      <a href="mailto:faraz.ghodratizadeh@essec.edu">faraz.ghodratizadeh@essec.edu</a>.
+    </p>
+  </div>
+</div>
+
 <script>
 // ─── Config ──────────────────────────────────────────────────────────────
 function apiBase() {
@@ -1382,6 +1434,24 @@ $("btn-1-continue").addEventListener("click", async () => {
 // ─── SCREEN 2 — consent ─────────────────────────────────────────────────
 // The button click IS the consent action (per the IRB form's AGREEMENT
 // section: "this choice will serve as your signature"). No checkbox.
+// Mobile / tablet detection. Conservative — matches anything that's not a
+// desktop browser. The consent form explicitly says "Please take this survey
+// on a PC or laptop computer", so anyone on mobile has already been warned.
+function isMobileDevice() {
+  const ua = navigator.userAgent || "";
+  // Touch + small viewport is a stronger signal than UA alone, but UA is fine
+  // for the rules-enforcement use case here.
+  return /Mobi|Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini|Tablet/i.test(ua);
+}
+
+function showMobileBlock() {
+  $("mobile-block").style.display = "flex";
+  // Tracking so the researcher can count mobile-block hits in /adx.
+  track("mobile_blocked", { ua: (navigator.userAgent || "").slice(0, 200) });
+  // Make absolutely sure the participant can't progress.
+  document.body.classList.add("mobile-blocked");
+}
+
 $("btn-2-continue").addEventListener("click", async () => {
   $("btn-2-continue").disabled = true;
   try {
@@ -1390,6 +1460,13 @@ $("btn-2-continue").addEventListener("click", async () => {
       consent: true,
       timeOnScreenMs: timeOnScreen(),
     });
+    // Hard rules-enforcement gate — runs AFTER consent is recorded so we
+    // still log the attempt, but BEFORE the participant sees any further
+    // study screens. If they're on mobile, we lock them out here.
+    if (isMobileDevice()) {
+      showMobileBlock();
+      return;
+    }
     fillInstructions();
     show(3);
   } catch (err) {
