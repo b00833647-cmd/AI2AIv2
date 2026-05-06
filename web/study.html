@@ -1087,7 +1087,33 @@ async function ensureParticipant() {
     throw err;
   }
 }
-ensureParticipant();
+
+// Read the role hint from the URL path. The server routes /blx and /slx
+// directly to study.html, so the SPA can derive the participant's condition
+// without showing the role-pick screen.
+function detectRoleFromPath() {
+  const p = window.location.pathname;
+  if (/^\/blx(\/|$)/i.test(p)) return "buyer";
+  if (/^\/slx(\/|$)/i.test(p)) return "seller";
+  return null;
+}
+
+// Boot sequence: create participant, then if the URL specified a role, set it
+// server-side and jump straight to the consent screen. Otherwise (e.g. someone
+// loaded /study directly) fall back to the legacy role-pick screen.
+(async function boot() {
+  await ensureParticipant();
+  const presetRole = detectRoleFromPath();
+  if (!presetRole) return; // legacy fallback — leave screen 1 visible
+  state.role = presetRole;
+  try {
+    await api("/api/p/role", { participantId: state.participantId, role: presetRole });
+    show(2);
+  } catch (err) {
+    console.error("[boot] preset role failed:", err);
+    // Leave screen 1 visible so the participant can recover by clicking.
+  }
+})();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 function show(step) {

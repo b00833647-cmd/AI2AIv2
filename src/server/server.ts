@@ -53,12 +53,18 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // `/` is the participant study (the experiment). The old operator-facing
-    // dev demo is still reachable at `/dev` or `/index.html` for QA, but it's
-    // no longer the public landing page.
+    // Public study URLs:
+    //   /blx → buyer condition (SPA reads the path and skips role pick)
+    //   /slx → seller condition (same)
+    //   /   → 302 redirect to /blx (default for anyone who hits the bare
+    //         domain; researchers should distribute /blx and /slx directly)
+    //   /study, /study.html → kept as backward-compat aliases
     if (
       req.method === "GET" &&
-      (url.pathname === "/" || url.pathname === "/study" || url.pathname === "/study.html")
+      (url.pathname === "/blx" ||
+        url.pathname === "/slx" ||
+        url.pathname === "/study" ||
+        url.pathname === "/study.html")
     ) {
       const html = await readFile(path.join(WEB_ROOT, "study.html"), "utf-8");
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -66,6 +72,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/") {
+      res.writeHead(302, { Location: "/blx" });
+      res.end();
+      return;
+    }
+
+    // Operator-facing dev demo (legacy single-page form). Kept for QA.
     if (req.method === "GET" && (url.pathname === "/dev" || url.pathname === "/index.html")) {
       const html = await readFile(path.join(WEB_ROOT, "index.html"), "utf-8");
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -135,16 +148,27 @@ const server = http.createServer(async (req, res) => {
       await handleParticipantErase(req, res, url);
       return;
     }
-    if (req.method === "GET" && (url.pathname === "/admin" || url.pathname === "/admin/")) {
+    if (
+      req.method === "GET" &&
+      (url.pathname === "/admin" ||
+        url.pathname === "/admin/" ||
+        url.pathname === "/adx" ||
+        url.pathname === "/adx/")
+    ) {
       await handleAdminPage(req, res);
       return;
     }
-    if (req.method === "GET" && url.pathname === "/admin/data") {
+    if (req.method === "GET" && (url.pathname === "/admin/data" || url.pathname === "/adx/data")) {
       await handleAdminData(req, res);
       return;
     }
     if (req.method === "GET" && url.pathname.startsWith("/admin/p/")) {
       const pid = url.pathname.slice("/admin/p/".length);
+      await handleAdminParticipantDetail(req, res, pid);
+      return;
+    }
+    if (req.method === "GET" && url.pathname.startsWith("/adx/p/")) {
+      const pid = url.pathname.slice("/adx/p/".length);
       await handleAdminParticipantDetail(req, res, pid);
       return;
     }
@@ -190,7 +214,10 @@ validateBootEnv();
 
 server.listen(PORT, () => {
   console.log(`[boot] ✓ AI2AI server listening on http://localhost:${PORT}`);
-  console.log(`[boot]   participant study at / (or /study), admin dashboard at /admin, dev demo at /dev`);
+  console.log(`[boot]   buyer study  → /blx`);
+  console.log(`[boot]   seller study → /slx`);
+  console.log(`[boot]   admin panel  → /adx (or /admin)`);
+  console.log(`[boot]   dev demo     → /dev`);
 });
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────
