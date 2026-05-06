@@ -205,6 +205,7 @@ function renderTable(rows) {
     const tokens = p.tokens_total ? p.tokens_total.toLocaleString() : "—";
     const time = p.total_time_sec != null ? formatTime(p.total_time_sec) : "—";
     const flags = [];
+    if (p.flag_mobile) flags.push("<span class='badge bad' title='Used a phone or tablet — against consent rules'>mobile</span>");
     if (p.flag_speeding) flags.push("<span class='badge bad'>speed</span>");
     if (p.flag_attention) flags.push("<span class='badge bad'>attn</span>");
     if (p.flag_short_prompt) flags.push("<span class='badge warn'>short</span>");
@@ -264,8 +265,24 @@ const SURVEY_LABELS = {
 
 function renderDetail(id, d) {
   const p = d.participant;
+  // Pull device + browser fields from the participant row (added during boot).
+  const deviceLabel = p.device_type
+    ? (p.device_type === "phone" || p.device_type === "tablet"
+        ? `<span style="color:#ff6b5e;font-weight:600">${escapeHtml(p.device_type)}</span> ⚠ violates consent`
+        : escapeHtml(p.device_type))
+    : "—";
+  const browserOs = [p.browser, p.os].filter(Boolean).join(" / ") || "—";
+  // Count mobile_blocked telemetry events (set when the post-consent gate fires).
+  const mobileBlockedCount = (d.participant_events || [])
+    .filter(e => e.event_type === "mobile_blocked").length;
   const meta = [
-    ["id", p.id], ["role", p.role], ["age", p.age], ["gender", p.gender],
+    ["id", p.id], ["role", p.role],
+    ["device", deviceLabel],
+    ["browser / OS", browserOs],
+    ...(mobileBlockedCount > 0
+      ? [["mobile-block fired", `<strong style="color:#ff6b5e">${mobileBlockedCount}× — participant tried to continue on mobile</strong>`]]
+      : []),
+    ["age", p.age], ["gender", p.gender],
     ["experience", p.experience], ["AI familiarity", p.ai_familiarity],
     ["consent", p.consent ? "yes" : "no"], ["attention check", p.attention_check_pass ? "pass" : "fail"],
     ["created", p.created_at], ["finished", p.finished_at || "—"],

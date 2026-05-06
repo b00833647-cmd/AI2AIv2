@@ -483,12 +483,16 @@ export class SqlitePersistence implements Persistence {
     attention_check_pass: number | null;
     session_id: string | null;
     completion_code: string | null;
+    device_type: string | null;
+    browser: string | null;
+    os: string | null;
+    user_agent: string | null;
   } | undefined {
     return this.db
       .prepare(
         `SELECT id, created_at, finished_at, role, consent, age, gender,
                 experience, ai_familiarity, attention_check_pass, session_id,
-                completion_code
+                completion_code, device_type, browser, os, user_agent
            FROM study_participants WHERE id = ?`,
       )
       .get(id) as
@@ -505,6 +509,10 @@ export class SqlitePersistence implements Persistence {
           attention_check_pass: number | null;
           session_id: string | null;
           completion_code: string | null;
+          device_type: string | null;
+          browser: string | null;
+          os: string | null;
+          user_agent: string | null;
         }
       | undefined;
   }
@@ -747,9 +755,11 @@ export class SqlitePersistence implements Persistence {
     last_screen: number | null;
     total_events: number;
     total_time_sec: number | null;
+    device_type: string | null;
     flag_speeding: number;
     flag_attention: number;
     flag_short_prompt: number;
+    flag_mobile: number;
   }> {
     return this.db
       .prepare(
@@ -762,6 +772,7 @@ export class SqlitePersistence implements Persistence {
            sp.attention_check_pass,
            sp.completion_code,
            sp.session_id,
+           sp.device_type,
            s.outcome_type,
            s.outcome_terms_json,
            s.tokens_total,
@@ -779,7 +790,9 @@ export class SqlitePersistence implements Persistence {
            -- Behavior prompt under 80 chars (low-effort).
            CASE WHEN EXISTS (
              SELECT 1 FROM behavior_prompts WHERE participant_id = sp.id AND length(prompt_text) < 80
-           ) THEN 1 ELSE 0 END AS flag_short_prompt
+           ) THEN 1 ELSE 0 END AS flag_short_prompt,
+           -- Mobile/tablet flag: violates the "PC or laptop only" consent.
+           CASE WHEN sp.device_type IN ('phone', 'tablet') THEN 1 ELSE 0 END AS flag_mobile
          FROM study_participants sp
          LEFT JOIN sessions s ON s.id = sp.session_id
          ORDER BY sp.created_at DESC
@@ -800,9 +813,11 @@ export class SqlitePersistence implements Persistence {
       last_screen: number | null;
       total_events: number;
       total_time_sec: number | null;
+      device_type: string | null;
       flag_speeding: number;
       flag_attention: number;
       flag_short_prompt: number;
+      flag_mobile: number;
     }>;
   }
 
