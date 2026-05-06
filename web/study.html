@@ -476,6 +476,17 @@
   .bubble.seller { border-bottom-right-radius: 4px; border-right: 3px solid var(--seller); }
   .bubble-meta { font-size: 11px; color: var(--dim); margin-bottom: 4px; text-transform: lowercase; }
   .bubble-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  .bubble-text strong { color: var(--text); font-weight: 600; }
+  .bubble-text em { font-style: italic; }
+  .bubble-text del { color: var(--dim); text-decoration: line-through; }
+  .bubble-text code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12.5px;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--accent);
+  }
   .bubble-tool {
     margin-top: 8px;
     padding: 6px 10px;
@@ -1294,6 +1305,34 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Tiny markdown renderer for agent chat output. HTML-escapes first (XSS-safe),
+// then applies a conservative subset:
+//   `code`        → <code>
+//   **bold**      → <strong>
+//   __bold__      → <strong>
+//   *italic*      → <em>     (only between non-word chars, won't eat file_names or apostrophes)
+//   _italic_      → <em>
+//   ~~strike~~    → <del>
+// Newlines preserved by the existing white-space:pre-wrap on .bubble-text.
+function renderMarkdown(s) {
+  if (s == null) return "";
+  let html = String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  // Inline code first — protects markdown inside it from being processed.
+  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // Bold (must run before italic, since ** contains *).
+  html = html.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([^_\n]+?)__/g, '<strong>$1</strong>');
+  // Strikethrough.
+  html = html.replace(/~~([^~\n]+?)~~/g, '<del>$1</del>');
+  // Italic — guard with word boundaries so we don't eat 5*5 or file_name_2.
+  html = html.replace(/(^|\W)\*([^\s*][^*\n]*?)\*(?=\W|$)/g, '$1<em>$2</em>');
+  html = html.replace(/(^|\W)_([^\s_][^_\n]*?)_(?=\W|$)/g, '$1<em>$2</em>');
+  return html;
+}
+
 // ─── SCREEN 1 — role pick ───────────────────────────────────────────────
 $("role-buyer").addEventListener("click", () => pickRole("buyer"));
 $("role-seller").addEventListener("click", () => pickRole("seller"));
@@ -1558,7 +1597,7 @@ function renderTurnNode(t) {
   bubble.className = "bubble " + t.emitterId;
 
   const meta = `<div class="bubble-meta">turn #${t.turnNumber} · ${t.emitterId}</div>`;
-  const body = `<div class="bubble-text">${escapeHtml(t.message || "(no public message)")}</div>`;
+  const body = `<div class="bubble-text">${renderMarkdown(t.message || "(no public message)")}</div>`;
   let toolLine = "";
   const proposal = (t.toolCalls || []).find((c) => c.name === "submit_proposal");
   if (proposal && proposal.input && Array.isArray(proposal.input.issues)) {

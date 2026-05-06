@@ -56,6 +56,18 @@
   .turn.buyer { border-left-color: var(--good); }
   .turn.seller { border-left-color: var(--warn); }
   .turn .meta { font-size: 11px; color: var(--dim); }
+  .turn .msg { white-space: pre-wrap; }
+  .turn .msg strong { color: var(--text); font-weight: 600; }
+  .turn .msg em { font-style: italic; }
+  .turn .msg del { color: var(--dim); text-decoration: line-through; }
+  .turn .msg code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--accent);
+  }
 </style>
 </head>
 <body>
@@ -324,7 +336,7 @@ function renderDetail(id, d) {
       } catch {}
       html += `<div class="turn ${t.emitter_id}">
         <div class="meta">turn #${t.turn_number} · ${t.emitter_id}${tools}</div>
-        <div>${escapeHtml(t.message || "")}</div>
+        <div class="msg">${renderMarkdown(t.message || "")}</div>
       </div>`;
     }
     html += `</div>`;
@@ -362,6 +374,21 @@ function $(id) { return document.getElementById(id); }
 function escapeHtml(s) {
   if (s == null) return "";
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+// Same renderer as web/study.html. Kept inline so admin.html has no dependency.
+function renderMarkdown(s) {
+  if (s == null) return "";
+  let html = String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  html = html.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([^_\n]+?)__/g, '<strong>$1</strong>');
+  html = html.replace(/~~([^~\n]+?)~~/g, '<del>$1</del>');
+  html = html.replace(/(^|\W)\*([^\s*][^*\n]*?)\*(?=\W|$)/g, '$1<em>$2</em>');
+  html = html.replace(/(^|\W)_([^\s_][^_\n]*?)_(?=\W|$)/g, '$1<em>$2</em>');
+  return html;
 }
 
 loadData();
