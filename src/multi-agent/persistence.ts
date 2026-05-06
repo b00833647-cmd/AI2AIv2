@@ -1462,47 +1462,276 @@ export class SqlitePersistence implements Persistence {
     return out;
   }
 
-  /** All turns across all sessions, flat — for the "transcripts" export sheet. */
+  /**
+   * All buyer/seller turns across all sessions, flat. Wide column set: includes
+   * private `thinking`, parsed proposal action + price for easy analysis,
+   * tokens, latency, and the full tool_calls_json payload.
+   */
   exportAllTurns(): Array<Record<string, unknown>> {
-    return this.db
+    const rows = this.db
       .prepare(
         `SELECT
+           t.id AS turn_id,
            t.session_id,
            sp.id AS participant_id,
            sp.role AS participant_role,
            t.turn_number,
            t.emitter,
-           t.emitter_id,
-           t.message,
-           t.tool_calls_json,
-           t.tokens_json,
-           t.latency_ms,
+           t.emitter_id AS agent,
+           t.timestamp,
            t.model,
-           t.timestamp
+           t.latency_ms,
+           t.message,
+           t.thinking,
+           t.tool_calls_json,
+           t.tokens_json
          FROM turns t
          LEFT JOIN study_participants sp ON sp.session_id = t.session_id
          ORDER BY t.session_id, t.turn_number ASC`,
       )
-      .all() as Array<Record<string, unknown>>;
+      .all() as Array<{
+      turn_id: string;
+      session_id: string;
+      participant_id: string | null;
+      participant_role: string | null;
+      turn_number: number;
+      emitter: string;
+      agent: string;
+      timestamp: string;
+      model: string;
+      latency_ms: number;
+      message: string | null;
+      thinking: string | null;
+      tool_calls_json: string;
+      tokens_json: string;
+    }>;
+    // Enrich each row with parsed action/price + tokens broken out, while
+    // preserving the raw JSON columns for full fidelity.
+    return rows.map((r) => {
+      let action: string | null = null;
+      let price: number | null = null;
+      let isFinal = 0;
+      let intent: string | null = null;
+      try {
+        const tc = JSON.parse(r.tool_calls_json) as Array<{ name: string; input: Record<string, unknown> }>;
+        const proposal = tc.find((c) => c.name === "submit_proposal");
+        if (proposal) {
+          action = (proposal.input as { action?: string }).action ?? null;
+          isFinal = (proposal.input as { is_final?: boolean }).is_final ? 1 : 0;
+          const issues = (proposal.input as { issues?: Array<{ name: string; value: number }> }).issues ?? [];
+          const priceIssue = issues.find((i) => i.name === "price");
+          if (priceIssue && typeof priceIssue.value === "number") price = priceIssue.value;
+        } else {
+          const msg = tc.find((c) => c.name === "send_message");
+          if (msg) intent = (msg.input as { intent?: string }).intent ?? null;
+        }
+      } catch { /* preserve raw json */ }
+      let tokensInput: number | null = null;
+      let tokensOutput: number | null = null;
+      let tokensCacheRead: number | null = null;
+      let tokensCacheWrite: number | null = null;
+      try {
+        const tk = JSON.parse(r.tokens_json) as { input?: number; output?: number; cache_read_input?: number; cache_creation_input?: number };
+        tokensInput = typeof tk.input === "number" ? tk.input : null;
+        tokensOutput = typeof tk.output === "number" ? tk.output : null;
+        tokensCacheRead = typeof tk.cache_read_input === "number" ? tk.cache_read_input : null;
+        tokensCacheWrite = typeof tk.cache_creation_input === "number" ? tk.cache_creation_input : null;
+      } catch { /* preserve raw json */ }
+      return {
+        turn_id: r.turn_id,
+        session_id: r.session_id,
+        participant_id: r.participant_id,
+        participant_role: r.participant_role,
+        turn_number: r.turn_number,
+        timestamp: r.timestamp,
+        agent: r.agent,
+        emitter: r.emitter,
+        model: r.model,
+        latency_ms: r.latency_ms,
+        action,
+        price,
+        is_final: isFinal,
+        intent,
+        message: r.message,
+        thinking: r.thinking,
+        tokens_input: tokensInput,
+        tokens_output: tokensOutput,
+        tokens_cache_read: tokensCacheRead,
+        tokens_cache_write: tokensCacheWrite,
+        tokens_total: (tokensInput ?? 0) + (tokensOutput ?? 0),
+        tool_calls_json: r.tool_calls_json,
+        tokens_json: r.tokens_json,
+      };
+    });
   }
 
-  /** All orchestrator decisions across all sessions. */
+  /**
+   * All orchestrator decisions across all sessions, flat. Includes private
+   * `thinking`, the rationale string, the full input JSON of the chosen tool,
+   * and a parsed `target_participant_id` when the decision was a request_turn.
+   */
   exportAllDecisions(): Array<Record<string, unknown>> {
-    return this.db
+    const rows = this.db
       .prepare(
         `SELECT
            od.session_id,
            sp.id AS participant_id,
            od.decision_index,
            od.turn_number,
+           od.timestamp,
            od.tool_name,
            od.tool_input_json,
            od.rationale,
-           od.tokens_used,
-           od.timestamp
+           od.thinking,
+           od.tokens_used
          FROM orchestrator_decisions od
          LEFT JOIN study_participants sp ON sp.session_id = od.session_id
          ORDER BY od.session_id, od.decision_index ASC`,
+      )
+      .all() as Array<{
+      session_id: string;
+      participant_id: string | null;
+      decision_index: number;
+      turn_number: number;
+      timestamp: string;
+      tool_name: string;
+      tool_input_json: string;
+      rationale: string | null;
+      thinking: string | null;
+      tokens_used: number;
+    }>;
+    return rows.map((r) => {
+      let targetParticipant: string | null = null;
+      let instruction: string | null = null;
+      let outcomeType: string | null = null;
+      let outcomeSummary: string | null = null;
+      try {
+        const input = JSON.parse(r.tool_input_json) as Record<string, unknown>;
+        if (typeof input.participant_id === "string") targetParticipant = input.participant_id;
+        if (typeof input.instruction === "string") instruction = input.instruction;
+        if (typeof input.type === "string") outcomeType = input.type;
+        if (typeof input.summary === "string") outcomeSummary = input.summary;
+      } catch { /* preserve raw json */ }
+      return {
+        session_id: r.session_id,
+        participant_id: r.participant_id,
+        decision_index: r.decision_index,
+        turn_number: r.turn_number,
+        timestamp: r.timestamp,
+        agent: "orchestrator",
+        tool_name: r.tool_name,
+        target_participant: targetParticipant,
+        instruction,
+        outcome_type: outcomeType,
+        outcome_summary: outcomeSummary,
+        rationale: r.rationale,
+        thinking: r.thinking,
+        tokens_used: r.tokens_used,
+        tool_input_json: r.tool_input_json,
+      };
+    });
+  }
+
+  /**
+   * Unified per-session agent log — buyer, seller, AND orchestrator
+   * interleaved in chronological order. Each row has a uniform set of columns
+   * so a researcher can read top-to-bottom and see exactly what every agent
+   * said and decided, with timestamps.
+   */
+  exportUnifiedAgentLog(): Array<Record<string, unknown>> {
+    const turns = this.exportAllTurns();
+    const decisions = this.exportAllDecisions();
+    type LogRow = {
+      session_id: string;
+      participant_id: string | null;
+      timestamp: string;
+      agent: string;            // 'buyer' | 'seller' | 'orchestrator'
+      action: string | null;    // proposal action OR orchestrator tool name
+      price: number | null;
+      is_final: number;
+      target_participant: string | null;
+      message_or_instruction: string | null;
+      thinking: string | null;
+      rationale: string | null;
+      model: string | null;
+      latency_ms: number | null;
+      tokens_in: number | null;
+      tokens_out: number | null;
+      tokens_total: number | null;
+      raw_json: string;
+    };
+    const rows: LogRow[] = [];
+    for (const t of turns) {
+      rows.push({
+        session_id: t["session_id"] as string,
+        participant_id: (t["participant_id"] as string | null) ?? null,
+        timestamp: t["timestamp"] as string,
+        agent: t["agent"] as string,
+        action: (t["action"] as string | null) ?? "speak",
+        price: (t["price"] as number | null),
+        is_final: (t["is_final"] as number) ?? 0,
+        target_participant: null,
+        message_or_instruction: (t["message"] as string | null) ?? null,
+        thinking: (t["thinking"] as string | null) ?? null,
+        rationale: null,
+        model: (t["model"] as string | null) ?? null,
+        latency_ms: (t["latency_ms"] as number | null) ?? null,
+        tokens_in: (t["tokens_input"] as number | null) ?? null,
+        tokens_out: (t["tokens_output"] as number | null) ?? null,
+        tokens_total: (t["tokens_total"] as number | null) ?? null,
+        raw_json: (t["tool_calls_json"] as string) ?? "[]",
+      });
+    }
+    for (const d of decisions) {
+      rows.push({
+        session_id: d["session_id"] as string,
+        participant_id: (d["participant_id"] as string | null) ?? null,
+        timestamp: d["timestamp"] as string,
+        agent: "orchestrator",
+        action: (d["tool_name"] as string),
+        price: null,
+        is_final: 0,
+        target_participant: (d["target_participant"] as string | null) ?? null,
+        message_or_instruction: (d["instruction"] as string | null) ?? (d["outcome_summary"] as string | null) ?? null,
+        thinking: (d["thinking"] as string | null) ?? null,
+        rationale: (d["rationale"] as string | null) ?? null,
+        model: null,
+        latency_ms: null,
+        tokens_in: null,
+        tokens_out: null,
+        tokens_total: (d["tokens_used"] as number | null) ?? null,
+        raw_json: (d["tool_input_json"] as string) ?? "{}",
+      });
+    }
+    rows.sort((a, b) => {
+      if (a.session_id !== b.session_id) return a.session_id.localeCompare(b.session_id);
+      return a.timestamp.localeCompare(b.timestamp);
+    });
+    return rows as unknown as Array<Record<string, unknown>>;
+  }
+
+  /**
+   * The "system prompt" briefing of every agent in every session — exactly
+   * what each LLM was told at startup. Useful for reproducibility checks and
+   * for verifying that the participant's behavior prompt was wired through.
+   */
+  exportAllAgentBriefings(): Array<Record<string, unknown>> {
+    return this.db
+      .prepare(
+        `SELECT
+           p.session_id,
+           sp.id AS participant_id,
+           p.participant_id AS agent,
+           p.role,
+           p.model,
+           p.brief_json,
+           p.system_prompt,
+           s.scenario_id,
+           s.started_at AS session_started_at
+         FROM participants p
+         JOIN sessions s ON s.id = p.session_id
+         LEFT JOIN study_participants sp ON sp.session_id = p.session_id
+         ORDER BY p.session_id, p.participant_id`,
       )
       .all() as Array<Record<string, unknown>>;
   }

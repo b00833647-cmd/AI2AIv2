@@ -279,7 +279,7 @@
     <div class="export-row" style="margin-bottom:14px">
       <span class="group-label">XLSX</span>
       <a class="btn primary" href="/adx/export/participants.xlsx">📊 Participants (wide)</a>
-      <a class="btn" href="/adx/export/full.xlsx">📚 Full workbook (multi-sheet)</a>
+      <a class="btn primary" href="/adx/export/full.xlsx">📚 Full workbook (incl. agent logs)</a>
       <span class="group-label" style="margin-left:14px">CSV</span>
       <a class="btn" href="/adx/export/participants.csv">📄 Participants (CSV)</a>
       <span class="group-label" style="margin-left:14px">JSON</span>
@@ -309,7 +309,17 @@
     </details>
     <details style="font-size:13px;line-height:1.7">
       <summary style="cursor:pointer;color:var(--accent);margin-bottom:8px">Full workbook — sheets</summary>
-      <p style="color:var(--dim)">Participants · By Condition · Behavior Prompts · Survey · Turns · Orchestrator · Events.</p>
+      <ul style="color:var(--dim);margin:0;padding-left:20px">
+        <li><strong>Participants</strong> — wide-format row per participant (~70 columns).</li>
+        <li><strong>By Condition</strong> — aggregate stats for role × opponent personality.</li>
+        <li><strong>Behavior Prompts</strong> — every revision the participant submitted.</li>
+        <li><strong>Survey</strong> — Likert + free-text responses, one row per (participant × question).</li>
+        <li><strong>Agent Log</strong> — <strong style="color:var(--text)">all three agents (buyer, seller, orchestrator) interleaved chronologically with full timestamps</strong>. Each row carries: timestamp, agent, action, price (if proposal), target_participant (orchestrator request_turn), message-or-instruction, private thinking, rationale, model, latency, tokens in/out/total, raw JSON.</li>
+        <li><strong>Buyer+Seller Turns</strong> — every participant turn with parsed action/price + raw tool_calls_json + tokens broken out + private thinking.</li>
+        <li><strong>Orchestrator</strong> — every orchestrator decision with tool_name, target_participant, instruction, rationale, private thinking, tokens.</li>
+        <li><strong>Agent Briefings</strong> — the system_prompt and brief_json each LLM was given at session start (reproducibility check).</li>
+        <li><strong>Events</strong> — raw client telemetry events.</li>
+      </ul>
     </details>
     <details style="font-size:13px;line-height:1.7">
       <summary style="cursor:pointer;color:var(--accent);margin-bottom:8px">JSON bundle — structure</summary>

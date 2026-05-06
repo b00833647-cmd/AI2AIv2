@@ -1224,8 +1224,10 @@ async function handleAdminExportFullXlsx(req: http.IncomingMessage, res: http.Se
     participants: db.exportFlatParticipants(),
     behaviorPrompts: db.exportAllBehaviorPrompts(),
     survey: db.exportAllSurvey(),
-    turns: db.exportAllTurns(),
-    decisions: db.exportAllDecisions(),
+    agentLog: db.exportUnifiedAgentLog(),
+    buyerSellerTurns: db.exportAllTurns(),
+    orchestrator: db.exportAllDecisions(),
+    briefings: db.exportAllAgentBriefings(),
     events: db.exportAllEvents(50_000),
     aggregates: db.aggregateByCondition(),
   }));
@@ -1240,20 +1242,42 @@ async function handleAdminExportFullXlsx(req: http.IncomingMessage, res: http.Se
       ws.views = [{ state: "frozen", ySplit: 1 }];
     }
   };
+  // Long-text columns get a bigger fixed width so 'thinking', 'message',
+  // 'system_prompt' etc. are readable when the workbook is opened.
+  const wideCols = new Set([
+    "message", "thinking", "rationale", "instruction", "outcome_summary",
+    "system_prompt", "brief_json", "tool_calls_json", "tool_input_json",
+    "tokens_json", "behavior_prompt", "personal_context", "free_text",
+    "message_or_instruction", "raw_json",
+  ]);
   const addSheet = (name: string, rows: Array<Record<string, unknown>>) => {
     const ws = wb.addWorksheet(name);
     if (rows.length === 0) { ws.addRow(["(empty)"]); return; }
     const headers = Object.keys(rows[0]!);
-    ws.columns = headers.map((h) => ({ header: h, key: h, width: Math.min(40, Math.max(12, h.length + 2)) }));
+    ws.columns = headers.map((h) => ({
+      header: h,
+      key: h,
+      width: wideCols.has(h) ? 60 : Math.min(40, Math.max(12, h.length + 2)),
+    }));
     for (const r of rows) ws.addRow(r);
+    // Wrap text in long-text columns so multiline content is visible.
+    for (const h of headers) {
+      if (wideCols.has(h)) {
+        ws.getColumn(h).alignment = { wrapText: true, vertical: "top" };
+      }
+    }
     headerStyle(ws);
   };
   addSheet("Participants", data.participants);
   addSheet("By Condition", data.aggregates as Array<Record<string, unknown>>);
   addSheet("Behavior Prompts", data.behaviorPrompts);
   addSheet("Survey", data.survey);
-  addSheet("Turns", data.turns);
-  addSheet("Orchestrator", data.decisions);
+  // The unified Agent Log is the new headline sheet — chronological,
+  // includes all 3 agents (buyer, seller, orchestrator), with timestamps.
+  addSheet("Agent Log", data.agentLog);
+  addSheet("Buyer+Seller Turns", data.buyerSellerTurns);
+  addSheet("Orchestrator", data.orchestrator);
+  addSheet("Agent Briefings", data.briefings);
   addSheet("Events", data.events);
   const buf = await wb.xlsx.writeBuffer();
   const fname = `ai2ai-full-${new Date().toISOString().slice(0, 10)}.xlsx`;
