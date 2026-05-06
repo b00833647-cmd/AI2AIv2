@@ -53,15 +53,21 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
-      const html = await readFile(path.join(WEB_ROOT, "index.html"), "utf-8");
+    // `/` is the participant study (the experiment). The old operator-facing
+    // dev demo is still reachable at `/dev` or `/index.html` for QA, but it's
+    // no longer the public landing page.
+    if (
+      req.method === "GET" &&
+      (url.pathname === "/" || url.pathname === "/study" || url.pathname === "/study.html")
+    ) {
+      const html = await readFile(path.join(WEB_ROOT, "study.html"), "utf-8");
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
       return;
     }
 
-    if (req.method === "GET" && (url.pathname === "/study" || url.pathname === "/study.html")) {
-      const html = await readFile(path.join(WEB_ROOT, "study.html"), "utf-8");
+    if (req.method === "GET" && (url.pathname === "/dev" || url.pathname === "/index.html")) {
+      const html = await readFile(path.join(WEB_ROOT, "index.html"), "utf-8");
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
       return;
@@ -184,7 +190,7 @@ validateBootEnv();
 
 server.listen(PORT, () => {
   console.log(`[boot] ✓ AI2AI server listening on http://localhost:${PORT}`);
-  console.log(`[boot]   participant study at /study, admin dashboard at /admin`);
+  console.log(`[boot]   participant study at / (or /study), admin dashboard at /admin, dev demo at /dev`);
 });
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────
