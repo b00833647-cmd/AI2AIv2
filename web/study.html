@@ -767,51 +767,68 @@
     color: var(--accent);
   }
   .chat-action input { display: none; }
-  .chat-input-row {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 8px;
-    align-items: stretch;
-  }
   .chat-price-wrap {
     position: relative;
-    width: 130px;
+    width: 200px;
+    margin-bottom: 8px;
   }
   .chat-price-prefix {
-    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
-    color: var(--dim); font-size: 14px;
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: var(--dim); font-size: 15px;
   }
   #chat-price {
-    width: 100%; padding-left: 22px;
+    width: 100%; padding: 10px 12px 10px 26px;
     background: var(--panel-3);
     border: 1px solid var(--border); border-radius: 6px;
-    color: var(--text); font-size: 14px; font-family: ui-monospace, monospace;
-    height: 100%;
+    color: var(--text); font-size: 15px; font-family: ui-monospace, monospace;
+  }
+  /* Full-width textarea with the send button absolutely positioned inside
+     its bottom-right corner — same vibe as Slack / iMessage / ChatGPT input. */
+  .chat-textarea-wrap {
+    position: relative;
+    width: 100%;
   }
   #chat-message {
+    width: 100%;
     background: var(--panel-3);
-    border: 1px solid var(--border); border-radius: 6px;
-    color: var(--text); padding: 12px 14px; font: inherit; font-size: 15px;
+    border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text);
+    padding: 14px 60px 14px 16px; /* extra right-padding clears the send button */
+    font: inherit; font-size: 15px;
     line-height: 1.5;
-    resize: vertical; min-height: 96px;
+    resize: vertical; min-height: 110px;
+    box-sizing: border-box;
   }
   #chat-message:focus, #chat-price:focus {
     outline: none; border-color: var(--accent);
   }
   .chat-submit {
-    padding: 0 18px; min-width: 130px;
-    height: auto; min-height: 44px;
+    position: absolute;
+    right: 10px; bottom: 10px;
+    width: 40px; height: 40px;
+    padding: 0;
+    background: var(--accent);
+    color: #0f1115;
+    border: none; border-radius: 50%;
     cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    transition: background 120ms, transform 120ms;
   }
-  .chat-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+  .chat-submit:hover:not(:disabled) {
+    background: #82b8ff;
+    transform: scale(1.05);
+  }
+  .chat-submit:disabled {
+    background: var(--panel-3); color: var(--dim);
+    cursor: not-allowed; box-shadow: none;
+  }
+  .chat-submit-icon { line-height: 1; }
   .chat-input-status {
     margin-top: 10px;
     font-size: 12px; color: var(--dim);
     font-style: italic;
-  }
-  @media (max-width: 700px) {
-    .chat-input-row { grid-template-columns: 1fr; }
-    .chat-price-wrap { width: 100%; }
   }
 
   /* Outcome reveal banner. */
@@ -1329,15 +1346,21 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
           <span>👋 Walk away</span>
         </label>
       </div>
-      <div class="chat-input-row">
-        <div id="chat-price-wrap" class="chat-price-wrap" style="display:none">
-          <span class="chat-price-prefix">$</span>
-          <input type="number" id="chat-price" placeholder="Your price" min="1" max="100000" step="50" />
-        </div>
+      <!-- Price input — only visible when "Make an offer" is selected. Sits
+           above the textarea instead of beside it so the textarea can take
+           full width. -->
+      <div id="chat-price-wrap" class="chat-price-wrap" style="display:none">
+        <span class="chat-price-prefix">$</span>
+        <input type="number" id="chat-price" placeholder="Your price" min="1" max="100000" step="50" />
+      </div>
+      <!-- Full-width textarea with a small send button positioned in the
+           bottom-right corner. The button shows an arrow icon when ready
+           to send and a status label when waiting for the other side. -->
+      <div class="chat-textarea-wrap">
         <textarea id="chat-message" rows="4" maxlength="800"
                   placeholder="Type your message to the other side…"></textarea>
-        <button class="btn-primary chat-submit" id="chat-submit" disabled>
-          <span id="chat-submit-label">Waiting for the other side…</span>
+        <button class="chat-submit" id="chat-submit" disabled aria-label="Send turn">
+          <span id="chat-submit-label" class="chat-submit-icon">➤</span>
         </button>
       </div>
       <div class="chat-input-status" id="chat-input-status">
@@ -2243,7 +2266,7 @@ function fillNegotiationOpponent() {
 function enableChatInput(data) {
   state.humanTurnPending = true;
   $("chat-submit").disabled = false;
-  $("chat-submit-label").textContent = "Submit turn";
+  $("chat-submit").setAttribute("title", "Send turn");
   $("chat-input-status").textContent =
     "It's your turn — pick an action above and write your message. (Turn #" +
     (data?.turnNumber ?? "?") + ")";
@@ -2255,7 +2278,7 @@ function enableChatInput(data) {
 function disableChatInput() {
   state.humanTurnPending = false;
   $("chat-submit").disabled = true;
-  $("chat-submit-label").textContent = "Waiting for the other side…";
+  $("chat-submit").setAttribute("title", "Waiting for the other side…");
   $("chat-input-status").textContent =
     "Wait for the other side to respond. The chat input will activate when it's your turn.";
   $("chat-input-status").style.color = "var(--dim)";
@@ -2305,7 +2328,7 @@ $("chat-submit").addEventListener("click", async () => {
     return;
   }
   $("chat-submit").disabled = true;
-  $("chat-submit-label").textContent = "Sending…";
+  $("chat-submit").setAttribute("title", "Sending…");
   try {
     await api("/api/p/turn", {
       participantId: state.participantId,
@@ -2325,7 +2348,7 @@ $("chat-submit").addEventListener("click", async () => {
     $("chat-input-status").textContent = "Error sending turn: " + err.message;
     $("chat-input-status").style.color = "var(--bad)";
     $("chat-submit").disabled = false;
-    $("chat-submit-label").textContent = "Submit turn";
+    $("chat-submit").setAttribute("title", "Send turn");
   }
 });
 
