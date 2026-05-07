@@ -276,6 +276,16 @@
     border-radius: 12px;
     overflow: hidden;
   }
+  /* Two-column layout: thumbnail strip on the left, hero photo on the right.
+     Mirrors how big classifieds (autotrader, cars.com) lay out their galleries.
+     Stacks vertically on narrow screens (mobile) for readability. */
+  .gallery-wrap {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 0;
+    background: #0a0d14;
+    border-bottom: 1px solid var(--border);
+  }
   .listing .gallery {
     background: #0a0d14;
     /* Bigger viewer + full-aspect-ratio: tall enough to show the 4:3 source
@@ -283,7 +293,6 @@
     height: clamp(420px, 65vh, 760px);
     display: flex; align-items: center; justify-content: center;
     position: relative;
-    border-bottom: 1px solid var(--border);
     overflow: hidden;
   }
   .listing .gallery .gallery-main {
@@ -305,16 +314,19 @@
     padding: 4px 10px; border-radius: 4px; font-size: 12px;
     z-index: 2;
   }
-  /* Thumbnail strip — matches a real classifieds gallery. Narrow + centered
-     so it doesn't fight the new tall hero photo for visual weight. */
+  /* Vertical thumbnail column on the left of the hero. Scrolls inside its own
+     container if there are more thumbnails than the viewer height accommodates. */
   .gallery-strip {
-    display: grid;
-    grid-template-columns: repeat(3, 80px);
+    display: flex;
+    flex-direction: column;
     gap: 6px;
     padding: 8px;
-    justify-content: center;
     background: #0a0d14;
-    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    max-height: clamp(420px, 65vh, 760px);
+    /* Prevent the column from collapsing when content is smaller than max-height. */
+    align-items: stretch;
   }
   .thumb {
     border: 2px solid transparent;
@@ -324,11 +336,32 @@
     overflow: hidden;
     background: transparent;
     aspect-ratio: 16 / 10;
+    width: 100%;
+    flex-shrink: 0;
     transition: border-color 120ms;
   }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .thumb:hover { border-color: var(--dim); }
   .thumb.active { border-color: var(--listing-accent); }
+  /* On narrow screens, drop back to the horizontal strip below the hero. */
+  @media (max-width: 700px) {
+    .gallery-wrap {
+      grid-template-columns: 1fr;
+    }
+    .gallery-strip {
+      flex-direction: row;
+      max-height: none;
+      overflow-x: auto;
+      overflow-y: hidden;
+      border-right: none;
+      border-top: 1px solid var(--border);
+      order: 2; /* thumbnail strip below hero on mobile */
+    }
+    .gallery-strip .thumb {
+      flex: 0 0 84px;
+    }
+    .listing .gallery { order: 1; }
+  }
   @media (max-width: 480px) {
     .listing .gallery { height: 240px; }
   }
@@ -794,38 +827,43 @@
     <h3 id="listing-context">You're considering this listing</h3>
 
     <div class="listing">
-      <div class="gallery">
-        <span class="badge" id="listing-badge">FOR SALE</span>
-        <img id="gallery-main" class="gallery-main"
-             src="img/camry/camry-01-front.jpg"
-             alt="Black 2023 Toyota Camry — front 3/4 view" />
-        <span class="photo-count">📷 8 photos</span>
-      </div>
-      <div class="gallery-strip">
-        <button type="button" class="thumb active" data-src="img/camry/camry-01-front.jpg">
-          <img src="img/camry/camry-01-front.jpg" alt="Front 3/4" />
-        </button>
-        <button type="button" class="thumb" data-src="img/camry/camry-02-front-alt.jpg">
-          <img src="img/camry/camry-02-front-alt.jpg" alt="Front view" />
-        </button>
-        <button type="button" class="thumb" data-src="img/camry/camry-03-side.jpg">
-          <img src="img/camry/camry-03-side.jpg" alt="Side profile" />
-        </button>
-        <button type="button" class="thumb" data-src="img/camry/camry-04-rear.jpg">
-          <img src="img/camry/camry-04-rear.jpg" alt="Rear 3/4" />
-        </button>
-        <button type="button" class="thumb" data-src="img/camry/camry-05-rear-straight.jpg">
-          <img src="img/camry/camry-05-rear-straight.jpg" alt="Rear" />
-        </button>
-        <button type="button" class="thumb" data-src="img/camry/camry-06-cockpit.jpg">
-          <img src="img/camry/camry-06-cockpit.jpg" alt="Cockpit" />
-        </button>
-        <button type="button" class="thumb" data-src="img/camry/camry-07-steering.jpg">
-          <img src="img/camry/camry-07-steering.jpg" alt="Steering wheel" />
-        </button>
-        <button type="button" class="thumb" data-src="img/camry/camry-08-rear-seats.jpg">
-          <img src="img/camry/camry-08-rear-seats.jpg" alt="Rear seats" />
-        </button>
+      <div class="gallery-wrap">
+        <div class="gallery-strip">
+          <button type="button" class="thumb active" data-src="img/camry/camry-01-front.jpg">
+            <img src="img/camry/camry-01-front.jpg" alt="Front 3/4" />
+          </button>
+          <button type="button" class="thumb" data-src="img/camry/camry-02-front-alt.jpg">
+            <img src="img/camry/camry-02-front-alt.jpg" alt="Front view" />
+          </button>
+          <button type="button" class="thumb" data-src="img/camry/camry-03-side.jpg">
+            <img src="img/camry/camry-03-side.jpg" alt="Side profile" />
+          </button>
+          <button type="button" class="thumb" data-src="img/camry/camry-04-rear.jpg">
+            <img src="img/camry/camry-04-rear.jpg" alt="Rear 3/4" />
+          </button>
+          <button type="button" class="thumb" data-src="img/camry/camry-05-rear-straight.jpg">
+            <img src="img/camry/camry-05-rear-straight.jpg" alt="Rear" />
+          </button>
+          <button type="button" class="thumb" data-src="img/camry/camry-06-cockpit.jpg">
+            <img src="img/camry/camry-06-cockpit.jpg" alt="Cockpit" />
+          </button>
+          <button type="button" class="thumb" data-src="img/camry/camry-07-steering.jpg">
+            <img src="img/camry/camry-07-steering.jpg" alt="Steering wheel" />
+          </button>
+          <button type="button" class="thumb" data-src="img/camry/camry-08-rear-seats.jpg">
+            <img src="img/camry/camry-08-rear-seats.jpg" alt="Rear seats" />
+          </button>
+          <button type="button" class="thumb" data-src="img/camry/camry-09-engine.jpg">
+            <img src="img/camry/camry-09-engine.jpg" alt="Engine bay" />
+          </button>
+        </div>
+        <div class="gallery">
+          <span class="badge" id="listing-badge">FOR SALE</span>
+          <img id="gallery-main" class="gallery-main"
+               src="img/camry/camry-01-front.jpg"
+               alt="Black 2023 Toyota Camry — front 3/4 view" />
+          <span class="photo-count">📷 9 photos</span>
+        </div>
       </div>
       <div class="listing-body">
         <h2 class="listing-title">2023 Toyota Camry SE — Black</h2>
