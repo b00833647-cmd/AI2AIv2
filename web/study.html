@@ -457,11 +457,60 @@
   }
   .spec-item .spec-label { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
   .spec-item .spec-value { font-size: 14px; font-weight: 600; margin-top: 2px; }
+  .spec-item .spec-value.spec-value-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
+  }
 
   .listing-section { margin-top: 14px; }
   .listing-section h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--dim); }
   .listing-section p { font-size: 14px; line-height: 1.6; margin: 0 0 6px; }
   .listing-section ul { margin: 4px 0; padding-left: 22px; font-size: 14px; line-height: 1.7; }
+
+  /* Features & specs grouped grid — 2-3 columns of small categorized lists. */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px 22px;
+    margin-top: 6px;
+  }
+  .features-group-label {
+    font-size: 11px; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    font-weight: 600; margin-bottom: 4px;
+  }
+  .features-list { list-style: none; padding-left: 0; margin: 0; font-size: 14px; line-height: 1.6; }
+  .features-list li { position: relative; padding-left: 18px; }
+  .features-list li::before {
+    content: "✓"; position: absolute; left: 0; top: 0;
+    color: var(--good); font-weight: 700;
+  }
+
+  /* Vehicle-history (AutoCheck-style) card. */
+  .history-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-top: 18px;
+  }
+  .history-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 10px;
+  }
+  .history-logo { width: 32px; height: 32px; flex-shrink: 0; }
+  .history-brand { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .history-brand strong { color: var(--text); }
+  .history-list { list-style: none; padding-left: 0; margin: 0; font-size: 14px; line-height: 1.85; }
+  .history-list li { display: flex; align-items: center; gap: 10px; }
+  .history-check {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px;
+    background: rgba(109,208,132,0.15); color: var(--good);
+    border-radius: 50%; font-size: 11px; font-weight: 700;
+    flex-shrink: 0;
+  }
 
   .seller-card {
     margin-top: 18px;
@@ -948,13 +997,97 @@
           <div class="spec-item"><div class="spec-label">Year</div><div class="spec-value">2023</div></div>
           <div class="spec-item"><div class="spec-label">Make</div><div class="spec-value">Toyota</div></div>
           <div class="spec-item"><div class="spec-label">Model</div><div class="spec-value">Camry SE</div></div>
-          <div class="spec-item"><div class="spec-label">Color</div><div class="spec-value">Midnight Black</div></div>
+          <div class="spec-item"><div class="spec-label">Color</div><div class="spec-value">Midnight Black Metallic</div></div>
+          <div class="spec-item"><div class="spec-label">Interior</div><div class="spec-value">Black</div></div>
           <div class="spec-item"><div class="spec-label">Mileage</div><div class="spec-value">32,000 mi</div></div>
-          <div class="spec-item"><div class="spec-label">Transmission</div><div class="spec-value">Automatic</div></div>
+          <div class="spec-item"><div class="spec-label">Engine</div><div class="spec-value">2.5L 4-cyl</div></div>
+          <div class="spec-item"><div class="spec-label">Transmission</div><div class="spec-value">8-Speed Automatic</div></div>
+          <div class="spec-item"><div class="spec-label">Drivetrain</div><div class="spec-value">Front-wheel Drive</div></div>
           <div class="spec-item"><div class="spec-label">Fuel</div><div class="spec-value">Gasoline</div></div>
+          <div class="spec-item"><div class="spec-label">MPG</div><div class="spec-value">28–39</div></div>
           <div class="spec-item"><div class="spec-label">Condition</div><div class="spec-value">Excellent</div></div>
-          <div class="spec-item"><div class="spec-label">Owners</div><div class="spec-value">1 (private)</div></div>
+          <div class="spec-item"><div class="spec-label">Owners</div><div class="spec-value">1</div></div>
           <div class="spec-item"><div class="spec-label">Accidents</div><div class="spec-value">None reported</div></div>
+          <div class="spec-item"><div class="spec-label">VIN</div><div class="spec-value spec-value-mono">3T1C44AZ2FL733911</div></div>
+          <div class="spec-item"><div class="spec-label">Stock #</div><div class="spec-value spec-value-mono">1230</div></div>
+        </div>
+
+        <!-- ─── Features & specs (categorized) ─── -->
+        <div class="listing-section">
+          <h4>Features &amp; specs</h4>
+          <div class="features-grid">
+            <div class="features-group">
+              <div class="features-group-label">Convenience</div>
+              <ul class="features-list">
+                <li>Adaptive Cruise Control</li>
+                <li>Heated Steering Wheel</li>
+                <li>Keyless Entry</li>
+              </ul>
+            </div>
+            <div class="features-group">
+              <div class="features-group-label">Entertainment</div>
+              <ul class="features-list">
+                <li>Android Auto&reg;</li>
+                <li>Apple CarPlay&reg;</li>
+                <li>Bluetooth&reg;</li>
+                <li>Premium Sound System</li>
+                <li>USB Port</li>
+                <li>Wi-Fi Hotspot</li>
+              </ul>
+            </div>
+            <div class="features-group">
+              <div class="features-group-label">Exterior</div>
+              <ul class="features-list">
+                <li>Alloy Wheels</li>
+                <li>Sunroof / Moonroof</li>
+                <li>LED Headlights</li>
+              </ul>
+            </div>
+            <div class="features-group">
+              <div class="features-group-label">Safety</div>
+              <ul class="features-list">
+                <li>Automatic Emergency Braking</li>
+                <li>Backup Camera</li>
+                <li>Blind Spot Monitor</li>
+                <li>Brake Assist</li>
+                <li>Lane Departure Warning</li>
+                <li>Rear Cross Traffic Alert</li>
+                <li>Stability Control</li>
+              </ul>
+            </div>
+            <div class="features-group">
+              <div class="features-group-label">Seating</div>
+              <ul class="features-list">
+                <li>Leather Seats</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── Vehicle history report (AutoCheck by Expertmania) ─── -->
+        <div class="listing-section history-card">
+          <div class="history-header">
+            <!-- Inline SVG logo for "AutoCheck by Expertmania" — fictitious
+                 brand built from a shield + checkmark. Two-color palette
+                 to match the rest of the listing. -->
+            <svg class="history-logo" viewBox="0 0 28 28" aria-hidden="true">
+              <path d="M14 1 L25 5 V13 C25 19.5 20 24.5 14 27 C8 24.5 3 19.5 3 13 V5 Z"
+                    fill="#1a8754" stroke="#0d5c39" stroke-width="0.8"/>
+              <path d="M8 14 L12.5 18 L20 9.5"
+                    stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div>
+              <h4 style="margin: 0">Vehicle history report</h4>
+              <div class="history-brand">AutoCheck<sup>®</sup> by <strong>Expertmania</strong></div>
+            </div>
+          </div>
+          <ul class="history-list">
+            <li><span class="history-check">✓</span> Clean title</li>
+            <li><span class="history-check">✓</span> No accidents or damage reported</li>
+            <li><span class="history-check">✓</span> 1 owner</li>
+            <li><span class="history-check">✓</span> Non-personal use reported</li>
+            <li><span class="history-check">✓</span> No open recalls reported</li>
+          </ul>
         </div>
 
         <div class="listing-section">

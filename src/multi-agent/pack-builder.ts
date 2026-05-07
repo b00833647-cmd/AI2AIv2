@@ -173,9 +173,21 @@ export function buildPack(args: PackBuildArgs): ScenarioPack {
   const slotMin = Math.max(1, Math.floor(Math.min(a.sellerMinimum, a.buyerTarget) * 0.5));
   const slotMax = Math.ceil(Math.max(a.sellerListing, a.buyerMax) * 1.5);
 
+  // Full spec sheet that the participant sees on the listing screen — also
+  // surfaced to the agent so it can reference equipment, history and features
+  // when negotiating ("the leather seats and adaptive cruise alone justify…").
   const carBlurb =
-    `a black Toyota Camry 2023 with ${a.mileage} and no prior accidents, ` +
-    `with a single previous owner.`;
+    `a 2023 Toyota Camry SE in Midnight Black Metallic with black leather interior, ` +
+    `${a.mileage} on the odometer, single previous owner, no prior accidents or damage. ` +
+    `Drivetrain: 2.5L 4-cylinder gasoline engine, 8-speed automatic, FWD, 28–39 mpg. ` +
+    `VIN 3T1C44AZ2FL733911 (stock #1230). ` +
+    `Equipment includes: alloy wheels, sunroof/moonroof, LED headlights, ` +
+    `adaptive cruise control, heated steering wheel, keyless entry, ` +
+    `Apple CarPlay, Android Auto, Bluetooth, premium sound system, Wi-Fi hotspot, USB port, ` +
+    `automatic emergency braking, blind-spot monitor, rear cross-traffic alert, ` +
+    `lane-departure warning, brake assist, backup camera, stability control. ` +
+    `AutoCheck (by Expertmania) report: clean title, no accidents reported, 1 owner, ` +
+    `non-personal use reported, no open recalls.`;
 
   const userIsBuyer = a.userRole === "buyer";
   const opponentSide: Role = userIsBuyer ? "seller" : "buyer";
