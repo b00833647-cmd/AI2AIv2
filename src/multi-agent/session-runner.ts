@@ -33,9 +33,38 @@ export type SessionEvent =
   | { type: "session_start"; sessionId: SessionId; pack: ScenarioPack; orchestratorModel: string }
   | { type: "orchestrator_decision"; decision: OrchestratorDecision; tokensUsed: number }
   | { type: "turn_starting"; participantId: ParticipantId; turnNumber: number }
+  | {
+      type: "human_turn_required";
+      participantId: ParticipantId;
+      turnNumber: number;
+      instruction?: string;
+      /** Compact serialization of what the human needs to see / respond to. */
+      lastOpponentTurn?: Turn;
+    }
   | { type: "participant_turn"; turn: Turn }
   | { type: "fallback_triggered"; reason: string }
   | { type: "session_end"; outcome: SessionOutcome; degraded: boolean; consumed: ConsumedTotals };
+
+/**
+ * Provider that the SessionRunner calls whenever it needs a human-side turn.
+ * Resolves once the human (UI client) has submitted their action via the
+ * server's external endpoint. Returns the same shape an LLM participant
+ * would emit (message + toolCalls).
+ */
+export interface HumanTurnRequest {
+  sessionId: SessionId;
+  participantId: ParticipantId;
+  turnNumber: number;
+  instruction?: string;
+  lastOpponentTurn?: Turn;
+}
+export interface HumanTurnResponse {
+  message: string;
+  toolCalls: ToolCall[];
+  /** Latency from when we started waiting to when the human submitted (ms). */
+  latencyMs: number;
+}
+export type HumanTurnProvider = (req: HumanTurnRequest) => Promise<HumanTurnResponse>;
 
 export interface SessionRunnerOpts {
   pack: ScenarioPack;
@@ -58,6 +87,12 @@ export interface SessionRunnerOpts {
     tokensUsed: number;
     fellBack: boolean;
   }>;
+  /**
+   * Required when any participant in the pack has `human: true`. Called when
+   * the orchestrator routes a turn to a human; the runner pauses and awaits
+   * the returned promise before recording the turn and resuming.
+   */
+  humanTurnProvider?: HumanTurnProvider;
 }
 
 export interface SessionResult {
@@ -88,10 +123,17 @@ export async function runSession(opts: SessionRunnerOpts): Promise<SessionResult
   const pack = opts.pack;
   const verbose = opts.verbose ?? true;
 
-  // Spawn participants once.
+  // Spawn participants once. Skip the LLM-runtime construction for human
+  // participants — their turns are gated on opts.humanTurnProvider.
   const participants = new Map<ParticipantId, ParticipantRuntime>();
   for (const p of pack.participants) {
+    if (p.human) continue;
     participants.set(p.id, new ParticipantRuntime(p));
+  }
+  // Sanity-check: if any participant is human, a humanTurnProvider must be wired.
+  const hasHuman = pack.participants.some((p) => p.human);
+  if (hasHuman && !opts.humanTurnProvider) {
+    throw new Error("Pack has a human participant but no opts.humanTurnProvider was supplied.");
   }
 
   // Spawn orchestrator.
@@ -232,15 +274,29 @@ export async function runSession(opts: SessionRunnerOpts): Promise<SessionResult
           instruction?: string;
           context_override?: string;
         };
-        // Tell listeners the participant is about to be invoked. Lets a UI
-        // show a "typing…" indicator on the right side immediately rather
-        // than waiting for the LLM call to complete.
-        emit({
-          type: "turn_starting",
-          participantId: inp.participant_id,
-          turnNumber: state.consumed.turns + 1,
-        });
-        const turn = await runParticipantTurn(state, inp, participants);
+        const targetParticipant = pack.participants.find((p) => p.id === inp.participant_id);
+        const isHumanTurn = !!targetParticipant?.human;
+        if (isHumanTurn) {
+          // Notify listeners that a human is about to be prompted, with the
+          // last opponent turn so the SPA can re-display context.
+          emit({
+            type: "human_turn_required",
+            participantId: inp.participant_id,
+            turnNumber: state.consumed.turns + 1,
+            instruction: inp.instruction,
+            lastOpponentTurn: state.transcript[state.transcript.length - 1],
+          });
+        } else {
+          // Existing LLM path — emit "typing…" so the UI can animate.
+          emit({
+            type: "turn_starting",
+            participantId: inp.participant_id,
+            turnNumber: state.consumed.turns + 1,
+          });
+        }
+        const turn = isHumanTurn
+          ? await runHumanTurn(state, inp, opts.humanTurnProvider!)
+          : await runParticipantTurn(state, inp, participants);
         state.transcript.push(turn);
         state.consumed.turns += 1;
         state.consumed.tokensTotal += turn.tokens.input + turn.tokens.output;
@@ -319,6 +375,35 @@ async function runParticipantTurn(
     compressedSummary,
   });
   return turn;
+}
+
+async function runHumanTurn(
+  state: OrchestratorState,
+  input: { participant_id: ParticipantId; instruction?: string },
+  provider: HumanTurnProvider,
+): Promise<Turn> {
+  const t0 = Date.now();
+  const last = state.transcript[state.transcript.length - 1];
+  const response = await provider({
+    sessionId: state.sessionId,
+    participantId: input.participant_id,
+    turnNumber: state.consumed.turns + 1,
+    instruction: input.instruction,
+    lastOpponentTurn: last,
+  });
+  return {
+    id: nanoid(),
+    sessionId: state.sessionId,
+    turnNumber: state.consumed.turns + 1,
+    emitter: "human",
+    emitterId: input.participant_id,
+    toolCalls: response.toolCalls,
+    message: response.message,
+    tokens: { input: 0, output: 0 },
+    latencyMs: response.latencyMs ?? Date.now() - t0,
+    model: "human",
+    timestamp: new Date().toISOString(),
+  };
 }
 
 function enqueueBroadcast(state: OrchestratorState, audience: string | string[], message: string): void {

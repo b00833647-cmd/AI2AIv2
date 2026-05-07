@@ -171,6 +171,7 @@
     <div class="controls">
       <input type="text" id="filter" placeholder="filter by id / role / outcome / code…" />
       <select id="filter-role"><option value="">All roles</option><option value="buyer">Buyer</option><option value="seller">Seller</option></select>
+      <select id="filter-mode"><option value="">All modes</option><option value="agent">Agent (delegated)</option><option value="human_buyer">Human buyer (/bhx)</option><option value="human_seller">Human seller (/shx)</option></select>
       <select id="filter-outcome"><option value="">All outcomes</option><option value="agreed">Agreed</option><option value="impasse">Impasse</option><option value="rejected">Rejected</option><option value="aborted">Aborted</option></select>
       <select id="filter-personality"><option value="">All personalities</option><option value="easygoing">Easygoing</option><option value="moderate">Moderate</option><option value="tough">Tough</option></select>
       <select id="filter-status"><option value="">All status</option><option value="finished">Finished</option><option value="in_progress">In progress</option><option value="abandoned">Abandoned</option></select>
@@ -182,12 +183,12 @@
       <table id="participants-table">
         <thead>
           <tr>
-            <th>ID</th><th>Role</th><th>Personality</th><th>Status</th><th>Outcome</th><th>Final $</th>
+            <th>ID</th><th>Role</th><th>Mode</th><th>Personality</th><th>Status</th><th>Outcome</th><th>Final $</th>
             <th>Turns</th><th>Tokens</th><th>Time</th><th>Last screen</th><th>Events</th>
             <th>Flags</th><th>Code</th><th></th>
           </tr>
         </thead>
-        <tbody id="participants-body"><tr><td colspan="14">Loading…</td></tr></tbody>
+        <tbody id="participants-body"><tr><td colspan="15">Loading…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -464,6 +465,7 @@ let allParticipants = [];
 function renderParticipants(rows) { allParticipants = rows; applyFilter(); }
 $("filter").addEventListener("input", applyFilter);
 $("filter-role").addEventListener("change", applyFilter);
+$("filter-mode").addEventListener("change", applyFilter);
 $("filter-outcome").addEventListener("change", applyFilter);
 $("filter-personality").addEventListener("change", applyFilter);
 $("filter-status").addEventListener("change", applyFilter);
@@ -473,23 +475,20 @@ $("filter-hide-test").addEventListener("change", applyFilter);
 function applyFilter() {
   const q = $("filter").value.toLowerCase().trim();
   const role = $("filter-role").value;
+  const mode = $("filter-mode").value;
   const outcome = $("filter-outcome").value;
   const personality = $("filter-personality").value;
   const status = $("filter-status").value;
   const hideFlagged = $("filter-hide-flagged").checked;
   const hideTest = $("filter-hide-test").checked;
 
-  // Need to look up personality from another endpoint — derived from /adx/data/p/<id>?
-  // For speed, we already have outcome_terms_json and most flags. Personality isn't on the row
-  // by default; it's joined-in only in the aggregates endpoint. We work around that by
-  // including the personality in the per-participant detail; for the table filter we leave
-  // personality filtering operating on rows that have a personality attached after detail load.
   const filtered = allParticipants.filter(p => {
     if (q) {
-      const blob = (p.id + " " + (p.role||"") + " " + (p.outcome_type||"") + " " + (p.completion_code||"")).toLowerCase();
+      const blob = (p.id + " " + (p.role||"") + " " + (p.outcome_type||"") + " " + (p.completion_code||"") + " " + (p.experiment_mode||"")).toLowerCase();
       if (!blob.includes(q)) return false;
     }
     if (role && p.role !== role) return false;
+    if (mode && (p.experiment_mode || "agent") !== mode) return false;
     if (outcome && p.outcome_type !== outcome) return false;
     if (personality && p.opponent_personality !== personality) return false;
     if (status && p.status !== status) return false;
@@ -503,7 +502,7 @@ function applyFilter() {
 
 function renderTable(rows) {
   if (rows.length === 0) {
-    $("participants-body").innerHTML = "<tr><td colspan='14' style='text-align:center;color:var(--dim)'>No participants match.</td></tr>";
+    $("participants-body").innerHTML = "<tr><td colspan='15' style='text-align:center;color:var(--dim)'>No participants match.</td></tr>";
     return;
   }
   $("participants-body").innerHTML = rows.map(p => {
@@ -520,10 +519,15 @@ function renderTable(rows) {
     if (p.flag_speeding) flags.push("<span class='badge bad'>speed</span>");
     if (p.flag_short_prompt) flags.push("<span class='badge warn'>short</span>");
     const personality = p.opponent_personality ? `<span class='badge accent'>${p.opponent_personality}</span>` : "—";
+    const mode = p.experiment_mode || "agent";
+    const modeBadge = mode === "agent"
+      ? "<span class='badge dim'>agent</span>"
+      : `<span class='badge accent'>${mode === 'human_buyer' ? '/bhx' : '/shx'}</span>`;
     const replayBtn = p.session_id ? `<button class="btn" onclick="openReplay('${p.session_id}')">replay</button>` : "";
     return `<tr>
       <td><button class="linklike" onclick="openDetail('${p.id}')">${p.id}</button></td>
       <td>${p.role || "—"}</td>
+      <td>${modeBadge}</td>
       <td>${personality}</td>
       <td>${status}</td>
       <td>${outcome}</td>
@@ -841,8 +845,13 @@ function renderDetail(id, d) {
     : "—";
   const browserOs = [p.browser, p.os].filter(Boolean).join(" / ") || "—";
   const mobileBlockedCount = (d.participant_events || []).filter(e => e.event_type === "mobile_blocked").length;
+  const expMode = p.experiment_mode || "agent";
+  const modeLabel = expMode === "agent"
+    ? "agent (delegated, /blx or /slx)"
+    : `<strong>${expMode}</strong> (${expMode === 'human_buyer' ? '/bhx — human typed as buyer' : '/shx — human typed as seller'})`;
   const meta = [
     ["id", p.id], ["role", p.role],
+    ["experiment mode", modeLabel],
     ["device", deviceLabel],
     ["browser / OS", browserOs],
     ...(mobileBlockedCount > 0 ? [["mobile-block fired", `<strong style="color:#ff6b5e">${mobileBlockedCount}× — participant tried mobile</strong>`]] : []),

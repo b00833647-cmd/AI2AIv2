@@ -61,7 +61,9 @@ export interface DecisionSpace {
 export interface Participant {
   id: ParticipantId;
   role: string;
-  llm: LLMConfig;
+  /** When this participant is `human:true`, llm may be omitted — the runner
+   *  awaits an external human submission instead of invoking an LLM. */
+  llm?: LLMConfig;
   systemPromptTemplate: string;
   brief: Record<string, unknown>;
   publicProfile?: Record<string, unknown>;
@@ -69,6 +71,8 @@ export interface Participant {
   outputSchema?: JSONSchema;
   memoryPolicy?: MemoryPolicy;
   contextFilterModule?: string;
+  /** Marks this side as a real human participant. See session-runner.ts. */
+  human?: boolean;
 }
 
 // ─── Protocol hints ────────────────────────────────────────────────────────
@@ -133,7 +137,7 @@ export interface TokenUsage {
   thinking?: number;
 }
 
-export type Emitter = "participant" | "orchestrator";
+export type Emitter = "participant" | "orchestrator" | "human";
 
 export interface Turn {
   id: TurnId;

@@ -141,7 +141,8 @@ function formatScenarioBrief(state: OrchestratorState): string {
   const roster = p.participants
     .map((part) => {
       const profile = part.publicProfile ? ` profile=${JSON.stringify(part.publicProfile)}` : "";
-      return `  - id="${part.id}" role="${part.role}" model="${part.llm.model}"${profile}`;
+      const model = part.human ? "human" : part.llm?.model ?? "?";
+      return `  - id="${part.id}" role="${part.role}" model="${model}"${profile}`;
     })
     .join("\n");
 
@@ -253,8 +254,10 @@ export function validateOrchestratorToolCall(
       // First-speaker directive: when the scenario pins firstSpeaker and no
       // participant has spoken yet, the very first request_turn must target
       // that participant. Engine-enforced; orchestrator gets re-prompted.
+      // Both LLM-participant ('participant') and human ('human') emitters
+      // count as "someone has spoken" — only orchestrator decisions are skipped.
       const firstSpeaker = state.scenarioPack.protocolHints.firstSpeaker;
-      const noTurnsYet = state.transcript.every((t) => t.emitter !== "participant");
+      const noTurnsYet = state.transcript.every((t) => t.emitter !== "participant" && t.emitter !== "human");
       if (firstSpeaker && noTurnsYet && pid !== firstSpeaker) {
         return {
           ok: false,

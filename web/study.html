@@ -8,11 +8,25 @@
   // Pre-paint role detection. Runs synchronously in <head> BEFORE the body
   // parses, so by the time the browser composites the first frame the
   // data-preset-role attribute is already on <html> and the CSS rules below
-  // suppress the role-pick screen for /blx and /slx — no flash.
+  // suppress the role-pick screen for /blx, /slx, /bhx, /shx — no flash.
+  // /bhx and /shx additionally set data-experiment-mode='human' so the SPA
+  // skips screen 5 (personal context) and screen 6 (behavior prompt) and
+  // routes screen 7 to the chat interface instead of the watch interface.
   (function () {
     var p = window.location.pathname;
-    if (/^\/blx(\/|$)/i.test(p)) document.documentElement.setAttribute("data-preset-role", "buyer");
-    else if (/^\/slx(\/|$)/i.test(p)) document.documentElement.setAttribute("data-preset-role", "seller");
+    if (/^\/blx(\/|$)/i.test(p)) {
+      document.documentElement.setAttribute("data-preset-role", "buyer");
+      document.documentElement.setAttribute("data-experiment-mode", "agent");
+    } else if (/^\/slx(\/|$)/i.test(p)) {
+      document.documentElement.setAttribute("data-preset-role", "seller");
+      document.documentElement.setAttribute("data-experiment-mode", "agent");
+    } else if (/^\/bhx(\/|$)/i.test(p)) {
+      document.documentElement.setAttribute("data-preset-role", "buyer");
+      document.documentElement.setAttribute("data-experiment-mode", "human_buyer");
+    } else if (/^\/shx(\/|$)/i.test(p)) {
+      document.documentElement.setAttribute("data-preset-role", "seller");
+      document.documentElement.setAttribute("data-experiment-mode", "human_seller");
+    }
   })();
 </script>
 <style>
@@ -725,6 +739,81 @@
     30%           { opacity: 1;   transform: scale(1.15); }
   }
 
+  /* ─── Chat input (human-mode only) ───────────────────────────────────── */
+  .chat-input-panel {
+    margin-top: 14px;
+    padding: 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .chat-action-row {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .chat-action {
+    cursor: pointer;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    background: var(--panel-3);
+    font-size: 13px;
+    user-select: none;
+    transition: all 120ms;
+  }
+  .chat-action:has(input:checked) {
+    background: rgba(106,169,255,0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .chat-action input { display: none; }
+  .chat-input-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .chat-price-wrap {
+    position: relative;
+    width: 130px;
+  }
+  .chat-price-prefix {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--dim); font-size: 14px;
+  }
+  #chat-price {
+    width: 100%; padding-left: 22px;
+    background: var(--panel-3);
+    border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-size: 14px; font-family: ui-monospace, monospace;
+    height: 100%;
+  }
+  #chat-message {
+    background: var(--panel-3);
+    border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: 12px 14px; font: inherit; font-size: 15px;
+    line-height: 1.5;
+    resize: vertical; min-height: 96px;
+  }
+  #chat-message:focus, #chat-price:focus {
+    outline: none; border-color: var(--accent);
+  }
+  .chat-submit {
+    padding: 0 18px; min-width: 130px;
+    height: auto; min-height: 44px;
+    cursor: pointer;
+  }
+  .chat-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+  .chat-input-status {
+    margin-top: 10px;
+    font-size: 12px; color: var(--dim);
+    font-style: italic;
+  }
+  @media (max-width: 700px) {
+    .chat-input-row { grid-template-columns: 1fr; }
+    .chat-price-wrap { width: 100%; }
+  }
+
   /* Outcome reveal banner. */
   .outcome-banner {
     display: none;
@@ -1195,7 +1284,7 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
 <!-- ─── SCREEN 5 — full-page live negotiation ─── -->
 <section id="screen-7" class="screen">
   <div class="panel">
-    <h2>Watch the negotiation</h2>
+    <h2 id="negotiation-heading">Watch the negotiation</h2>
     <div class="status" id="run-status">Starting…</div>
 
     <!-- Live price ticker (sticks to top while you scroll). -->
@@ -1219,6 +1308,42 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
 
     <!-- Outcome banner (hidden until session_end). -->
     <div id="outcome-banner" class="outcome-banner"></div>
+
+    <!-- ─── Chat input — only shown in human mode (/bhx, /shx) ─── -->
+    <div id="chat-input-panel" class="chat-input-panel" style="display:none">
+      <div class="chat-action-row" id="chat-action-row">
+        <label class="chat-action">
+          <input type="radio" name="chat-action" value="send_message" checked />
+          <span>💬 Send message</span>
+        </label>
+        <label class="chat-action">
+          <input type="radio" name="chat-action" value="propose" />
+          <span>💵 Make an offer</span>
+        </label>
+        <label class="chat-action">
+          <input type="radio" name="chat-action" value="accept" />
+          <span>✅ Accept their last offer</span>
+        </label>
+        <label class="chat-action">
+          <input type="radio" name="chat-action" value="reject" />
+          <span>👋 Walk away</span>
+        </label>
+      </div>
+      <div class="chat-input-row">
+        <div id="chat-price-wrap" class="chat-price-wrap" style="display:none">
+          <span class="chat-price-prefix">$</span>
+          <input type="number" id="chat-price" placeholder="Your price" min="1" max="100000" step="50" />
+        </div>
+        <textarea id="chat-message" rows="4" maxlength="800"
+                  placeholder="Type your message to the other side…"></textarea>
+        <button class="btn-primary chat-submit" id="chat-submit" disabled>
+          <span id="chat-submit-label">Waiting for the other side…</span>
+        </button>
+      </div>
+      <div class="chat-input-status" id="chat-input-status">
+        Wait for the other side to respond. The chat input will activate when it's your turn.
+      </div>
+    </div>
   </div>
 </section>
 
@@ -1387,7 +1512,12 @@ const ROLE_INFO = {
   },
 };
 
-const POST_QUESTIONS = [
+// Two question sets — one for the delegated (agent) experiments, one for
+// the human-mode experiments where the participant negotiates directly.
+// Question keys overlap where they make sense (satisfaction, opponent_fair,
+// trust_ai, would_use_again) so cross-condition analysis is possible; some
+// keys are mode-specific (agent_represented vs negotiation_difficulty).
+const POST_QUESTIONS_AGENT = [
   { key: "satisfaction",      text: "Satisfied with the outcome?" },
   { key: "agent_represented", text: "Your agent represented your preferences well?" },
   { key: "control",           text: "Felt in control of how your agent negotiated?" },
@@ -1395,6 +1525,18 @@ const POST_QUESTIONS = [
   { key: "trust_ai",          text: "Trust in AI to handle real negotiations on your behalf?" },
   { key: "would_use_again",   text: "Would you use a tool like this in real life?" },
 ];
+const POST_QUESTIONS_HUMAN = [
+  { key: "satisfaction",            text: "Satisfied with the outcome?" },
+  { key: "control",                 text: "Felt in control of the negotiation?" },
+  { key: "negotiation_difficulty",  text: "How difficult did you find this negotiation?" },
+  { key: "opponent_fair",           text: "The AI counterpart seemed fair?" },
+  { key: "trust_ai",                text: "Trust in AI as a negotiation counterpart?" },
+  { key: "would_use_again",         text: "Would you rather negotiate yourself, or via an AI agent next time? (1 = strongly prefer self, 7 = strongly prefer AI)" },
+];
+function getPostQuestions() {
+  if (state.mode === "human_buyer" || state.mode === "human_seller") return POST_QUESTIONS_HUMAN;
+  return POST_QUESTIONS_AGENT;
+}
 
 const TOTAL_STEPS = 10;
 
@@ -1403,6 +1545,8 @@ const state = {
   participantId: null,
   step: 1,
   role: null,
+  /** 'agent' | 'human_buyer' | 'human_seller' — set by detectRoleFromPath. */
+  mode: "agent",
   postRatings: {},
   outcome: null,
   turns: [],
@@ -1411,6 +1555,8 @@ const state = {
   lastSellerPrice: null,
   typingNode: null,
   screenStartTs: Date.now(),
+  /** Set when the engine is awaiting a human turn. Null between turns. */
+  humanTurnPending: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -1437,29 +1583,36 @@ async function ensureParticipant() {
   }
 }
 
-// Read the role hint from the URL path. The server routes /blx and /slx
-// directly to study.html, so the SPA can derive the participant's condition
-// without showing the role-pick screen.
+// Read role + experiment mode from the URL path. Four supported routes:
+//   /blx → role=buyer  mode='agent'      (delegated buyer agent)
+//   /slx → role=seller mode='agent'      (delegated seller agent)
+//   /bhx → role=buyer  mode='human_buyer'  (human types directly as buyer)
+//   /shx → role=seller mode='human_seller' (human types directly as seller)
 function detectRoleFromPath() {
   const p = window.location.pathname;
-  if (/^\/blx(\/|$)/i.test(p)) return "buyer";
-  if (/^\/slx(\/|$)/i.test(p)) return "seller";
+  if (/^\/blx(\/|$)/i.test(p)) return { role: "buyer", mode: "agent" };
+  if (/^\/slx(\/|$)/i.test(p)) return { role: "seller", mode: "agent" };
+  if (/^\/bhx(\/|$)/i.test(p)) return { role: "buyer", mode: "human_buyer" };
+  if (/^\/shx(\/|$)/i.test(p)) return { role: "seller", mode: "human_seller" };
   return null;
 }
 
-// Boot sequence: create participant, then if the URL specified a role, set it
-// server-side and jump straight to the consent screen. Otherwise (e.g. someone
-// loaded /study directly) fall back to the legacy role-pick screen.
+// Boot sequence: create participant, set role + mode server-side, then jump
+// straight to consent. For human modes (/bhx, /shx) we'll skip screens 5 and
+// 6 later in the flow — the corresponding "continue" handlers route
+// directly to screen 7 instead of through the prompt screen.
 (async function boot() {
   await ensureParticipant();
-  const presetRole = detectRoleFromPath();
-  if (!presetRole) return; // legacy fallback — leave screen 1 visible
-  state.role = presetRole;
+  const preset = detectRoleFromPath();
+  if (!preset) return; // legacy /study fallback — leave screen 1 visible
+  state.role = preset.role;
+  state.mode = preset.mode;
   try {
-    await api("/api/p/role", { participantId: state.participantId, role: presetRole });
+    await api("/api/p/role", { participantId: state.participantId, role: preset.role });
+    await api("/api/p/mode", { participantId: state.participantId, mode: preset.mode });
     show(2);
   } catch (err) {
-    console.error("[boot] preset role failed:", err);
+    console.error("[boot] preset role/mode failed:", err);
     // Leave screen 1 visible so the participant can recover by clicking.
   }
 })();
@@ -1881,7 +2034,18 @@ document.querySelectorAll(".gallery-strip .thumb").forEach((btn) => {
   });
 })();
 
-$("btn-4-continue").addEventListener("click", () => show(5));
+$("btn-4-continue").addEventListener("click", () => {
+  // In human modes (/bhx, /shx) we skip screens 5 (personal context) and
+  // 6 (behavior prompt) — the human IS the negotiator, no agent to brief.
+  // Jump straight to screen 7 and start the chat.
+  if (state.mode === "human_buyer" || state.mode === "human_seller") {
+    fillNegotiationOpponent();
+    show(7);
+    runHumanNegotiation();
+    return;
+  }
+  show(5);
+});
 
 // ─── SCREEN 5 — your personal context (free text) ──────────────────────
 function fillContext() {
@@ -2013,20 +2177,157 @@ function setRunStatus(text, isError) {
 function handleSse(event, data) {
   switch (event) {
     case "status":         setRunStatus(data.message); break;
-    case "session_start":  setRunStatus("Connected · the agents are negotiating"); break;
+    case "session_start":  setRunStatus(state.mode === "agent" ? "Connected · the agents are negotiating" : "Connected · negotiation in progress"); break;
+    case "experiment_mode": /* server confirms mode; already known client-side */ break;
     case "turn_starting":  showTypingIndicator(data.participantId); break;
-    case "turn":           appendTurn(data); break;
+    case "human_turn_required":
+      // The engine is asking the human to make their move. Enable the input.
+      removeTypingIndicator();
+      enableChatInput(data);
+      setRunStatus("Your turn — type your response below.");
+      break;
+    case "turn":           appendTurn(data); disableChatInput(); break;
     case "session_end":    state.outcome = data.outcome; break;
     case "fallback":       setRunStatus("[round-robin fallback: " + data.reason + "]", true); break;
     case "done":
       state.outcome = data.outcome;
       removeTypingIndicator();
+      disableChatInput();
       setRunStatus("Negotiation finished — see the result below.");
       revealOutcome(data.outcome);
       break;
     case "error":          setRunStatus("Error: " + data.message, true); break;
   }
 }
+
+// ─── Human-mode chat negotiation ──────────────────────────────────────────
+async function runHumanNegotiation() {
+  // Same SSE plumbing as runNegotiation, but with the chat input panel
+  // visible. The server sends 'human_turn_required' events when it needs us
+  // to type, and we POST /api/p/turn back.
+  $("transcript").innerHTML = "";
+  $("outcome-banner").className = "outcome-banner";
+  $("outcome-banner").innerHTML = "";
+  $("ticker-buyer").textContent = "—";
+  $("ticker-seller").textContent = "—";
+  $("ticker-spread").textContent = "—";
+  state.lastBuyerPrice = null;
+  state.lastSellerPrice = null;
+  state.turns = [];
+  state.humanTurnPending = false;
+  $("negotiation-heading").textContent =
+    state.mode === "human_buyer"
+      ? "Negotiate with the seller"
+      : "Negotiate with the buyer";
+  $("chat-input-panel").style.display = "block";
+  disableChatInput();
+  setRunStatus("Negotiation starting…");
+  try {
+    const res = await fetch(apiBase() + "/api/p/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ participantId: state.participantId }),
+    });
+    if (!res.ok || !res.body) throw new Error("server returned " + res.status);
+    await readSse(res.body, handleSse);
+  } catch (err) {
+    setRunStatus("Error: " + err.message, true);
+  }
+}
+
+function fillNegotiationOpponent() {
+  // Stub for future per-mode UI tweaks (e.g. show "Negotiate with seller" copy).
+  // Currently handled inline in runHumanNegotiation. Kept as a hook.
+}
+
+function enableChatInput(data) {
+  state.humanTurnPending = true;
+  $("chat-submit").disabled = false;
+  $("chat-submit-label").textContent = "Submit turn";
+  $("chat-input-status").textContent =
+    "It's your turn — pick an action above and write your message. (Turn #" +
+    (data?.turnNumber ?? "?") + ")";
+  $("chat-input-status").style.color = "var(--accent)";
+  $("chat-message").focus();
+  track("human_turn_input_enabled", { turnNumber: data?.turnNumber });
+}
+
+function disableChatInput() {
+  state.humanTurnPending = false;
+  $("chat-submit").disabled = true;
+  $("chat-submit-label").textContent = "Waiting for the other side…";
+  $("chat-input-status").textContent =
+    "Wait for the other side to respond. The chat input will activate when it's your turn.";
+  $("chat-input-status").style.color = "var(--dim)";
+}
+
+// Show/hide the price input when the action selector changes.
+document.querySelectorAll("input[name='chat-action']").forEach((radio) => {
+  radio.addEventListener("change", () => {
+    const v = document.querySelector("input[name='chat-action']:checked").value;
+    $("chat-price-wrap").style.display = v === "propose" ? "block" : "none";
+    if (v === "accept") {
+      // Pre-fill the price field with the opponent's last offer.
+      const opp = state.role === "buyer" ? state.lastSellerPrice : state.lastBuyerPrice;
+      if (opp) $("chat-price").value = opp;
+    }
+  });
+});
+
+// Submit the human's turn.
+$("chat-submit").addEventListener("click", async () => {
+  if (!state.humanTurnPending) return;
+  const action = document.querySelector("input[name='chat-action']:checked").value;
+  const message = $("chat-message").value.trim();
+  let price = null;
+  if (action === "propose") {
+    const v = Number($("chat-price").value);
+    if (!Number.isFinite(v) || v <= 0) {
+      $("chat-input-status").textContent = "Enter a valid price (e.g. 22000) before submitting your offer.";
+      $("chat-input-status").style.color = "var(--bad)";
+      return;
+    }
+    price = v;
+  } else if (action === "accept") {
+    const opp = state.role === "buyer" ? state.lastSellerPrice : state.lastBuyerPrice;
+    if (!opp) {
+      $("chat-input-status").textContent = "There's no offer from the other side yet to accept.";
+      $("chat-input-status").style.color = "var(--bad)";
+      return;
+    }
+    price = opp;
+  }
+  // Validate min message length (zero is OK only for accept/reject which
+  // are explicit actions; for send_message and propose require some text).
+  if ((action === "send_message" || action === "propose") && message.length < 1) {
+    $("chat-input-status").textContent = "Type a message before submitting.";
+    $("chat-input-status").style.color = "var(--bad)";
+    return;
+  }
+  $("chat-submit").disabled = true;
+  $("chat-submit-label").textContent = "Sending…";
+  try {
+    await api("/api/p/turn", {
+      participantId: state.participantId,
+      action,
+      message: message || (action === "accept" ? "I accept your offer." : action === "reject" ? "I'll have to walk away. Thanks anyway." : ""),
+      price: price !== null ? price : undefined,
+      isFinal: action === "reject",
+    });
+    track("human_turn_submitted", { action, charCount: message.length, hadPrice: price !== null });
+    // Reset input fields. Keep "send_message" as the default action for next turn.
+    $("chat-message").value = "";
+    $("chat-price").value = "";
+    document.querySelector("input[name='chat-action'][value='send_message']").checked = true;
+    $("chat-price-wrap").style.display = "none";
+    // The server will send back a 'turn' event which calls disableChatInput().
+  } catch (err) {
+    $("chat-input-status").textContent = "Error sending turn: " + err.message;
+    $("chat-input-status").style.color = "var(--bad)";
+    $("chat-submit").disabled = false;
+    $("chat-submit-label").textContent = "Submit turn";
+  }
+});
 
 function appendTurn(t) {
   state.turns.push(t);
@@ -2198,7 +2499,8 @@ function renderOutcomeCard() {
     surplus;
 }
 function renderPostSurvey() {
-  $("post-survey").innerHTML = POST_QUESTIONS.map((q) => `
+  const questions = getPostQuestions();
+  $("post-survey").innerHTML = questions.map((q) => `
     <label>${q.text}</label>
     <div class="likert" data-key="${q.key}">
       ${[1,2,3,4,5,6,7].map((n) => `<button type="button" data-v="${n}">${n}</button>`).join("")}
@@ -2214,7 +2516,7 @@ function renderPostSurvey() {
         state.postRatings[key] = newVal;
         row.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
         b.classList.add("active");
-        $("btn-8-continue").disabled = Object.keys(state.postRatings).length < POST_QUESTIONS.length;
+        $("btn-8-continue").disabled = Object.keys(state.postRatings).length < questions.length;
         // Section B — log Likert selection + revision events for analysis.
         track("likert_select", { key: key, value: newVal, revision: isRevision });
       });

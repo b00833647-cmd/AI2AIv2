@@ -80,7 +80,7 @@ function preview(role: Role, opponentPersonality: OpponentPersonality): void {
     const isParticipant =
       (p.id === "buyer" && role === "buyer") || (p.id === "seller" && role === "seller");
     const label = isParticipant ? "PARTICIPANT'S AGENT" : "OPPONENT'S AGENT";
-    sub(`[${label}]   ${p.id.toUpperCase()}   (model: ${p.llm.model})`);
+    sub(`[${label}]   ${p.id.toUpperCase()}   (model: ${p.human ? "human" : p.llm?.model ?? "?"})`);
     console.log(p.systemPromptTemplate);
   }
 }

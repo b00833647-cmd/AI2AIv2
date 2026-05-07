@@ -37,6 +37,12 @@ export class ParticipantRuntime {
   private readonly systemPrompt: string;
 
   constructor(participant: Participant) {
+    if (!participant.llm) {
+      throw new Error(
+        `ParticipantRuntime created for '${participant.id}' but llm is undefined. ` +
+        `Human participants must not be wrapped in ParticipantRuntime.`,
+      );
+    }
     this.participant = participant;
     this.id = participant.id;
     this.role = participant.role;

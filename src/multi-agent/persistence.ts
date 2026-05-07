@@ -200,6 +200,8 @@ const MIGRATIONS: string[] = [
   "ALTER TABLE study_participants ADD COLUMN connection_type TEXT",
   // Test-data marker — researcher-set "this run was QA, exclude from analysis"
   "ALTER TABLE study_participants ADD COLUMN test_data INTEGER NOT NULL DEFAULT 0",
+  // Experiment mode: 'agent' (delegated, default) | 'human_buyer' | 'human_seller'.
+  "ALTER TABLE study_participants ADD COLUMN experiment_mode TEXT NOT NULL DEFAULT 'agent'",
 ];
 
 export class SqlitePersistence implements Persistence {
@@ -235,7 +237,7 @@ export class SqlitePersistence implements Persistence {
           state.sessionId,
           p.id,
           p.role,
-          p.llm.model,
+          p.human ? "human" : p.llm?.model ?? "?",
           JSON.stringify(p.brief),
           p.systemPromptTemplate,
         );
@@ -457,6 +459,7 @@ export class SqlitePersistence implements Persistence {
       excluded: boolean;
       excluded_reason: string;
       test_data: boolean;
+      experiment_mode: string;
     }>,
   ): void {
     const cols: string[] = [];
@@ -490,12 +493,17 @@ export class SqlitePersistence implements Persistence {
     browser: string | null;
     os: string | null;
     user_agent: string | null;
+    experiment_mode: string;
+    excluded: number;
+    excluded_reason: string | null;
+    test_data: number;
   } | undefined {
     return this.db
       .prepare(
         `SELECT id, created_at, finished_at, role, consent, age, gender,
                 experience, ai_familiarity, attention_check_pass, session_id,
-                completion_code, device_type, browser, os, user_agent
+                completion_code, device_type, browser, os, user_agent,
+                experiment_mode, excluded, excluded_reason, test_data
            FROM study_participants WHERE id = ?`,
       )
       .get(id) as
@@ -516,6 +524,10 @@ export class SqlitePersistence implements Persistence {
           browser: string | null;
           os: string | null;
           user_agent: string | null;
+          experiment_mode: string;
+          excluded: number;
+          excluded_reason: string | null;
+          test_data: number;
         }
       | undefined;
   }
@@ -750,6 +762,7 @@ export class SqlitePersistence implements Persistence {
     finished_at: string | null;
     last_activity_at: string;
     status: "finished" | "in_progress" | "abandoned";
+    experiment_mode: string;
     age: number | null;
     attention_check_pass: number | null;
     completion_code: string | null;
@@ -789,6 +802,7 @@ export class SqlitePersistence implements Persistence {
            sp.device_type,
            sp.excluded,
            sp.test_data,
+           sp.experiment_mode,
            s.outcome_type,
            s.outcome_terms_json,
            s.tokens_total,
@@ -843,6 +857,7 @@ export class SqlitePersistence implements Persistence {
       finished_at: string | null;
       last_activity_at: string;
       status: "finished" | "in_progress" | "abandoned";
+      experiment_mode: string;
       age: number | null;
       attention_check_pass: number | null;
       completion_code: string | null;
@@ -1386,13 +1401,15 @@ export class SqlitePersistence implements Persistence {
       }
       const estCostUsd = tokensTotal !== null ? Math.round((tokensTotal / 1_000_000) * 9 * 1000) / 1000 : null;
 
+      const expMode = (part["experiment_mode"] as string) ?? "agent";
       out.push({
         // Identity
         participant_id: p.id,
         external_id: part["external_id"] ?? null,
         role: p.role,
+        experiment_mode: expMode,
         opponent_personality: opponent,
-        condition: p.role && opponent ? `${p.role}_vs_${opponent}` : null,
+        condition: p.role && opponent ? `${expMode}__${p.role}_vs_${opponent}` : null,
         excluded: part["excluded"] ?? 0,
         excluded_reason: part["excluded_reason"] ?? null,
         test_data: part["test_data"] ?? 0,

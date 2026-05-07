@@ -64,6 +64,8 @@ const server = http.createServer(async (req, res) => {
       req.method === "GET" &&
       (url.pathname === "/blx" ||
         url.pathname === "/slx" ||
+        url.pathname === "/bhx" ||
+        url.pathname === "/shx" ||
         url.pathname === "/study" ||
         url.pathname === "/study.html")
     ) {
@@ -141,6 +143,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/p/run") {
       await handleParticipantRun(req, res);
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/p/turn") {
+      await handleParticipantHumanTurn(req, res);
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/p/mode") {
+      await handleParticipantMode(req, res);
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/p/finish") {
@@ -297,6 +307,112 @@ function shutdown(signal: string): void {
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
+// ─── Pending human-turn registry ─────────────────────────────────────────
+//
+// Keyed by participantId (one active session per participant). When the
+// engine asks for a human turn, it stores a resolver here and waits. When
+// the SPA POSTs /api/p/turn with the human's action, we look up the
+// resolver and fulfil it. The engine then records the turn and resumes.
+import type { HumanTurnResponse } from "../multi-agent/session-runner.ts";
+import type { ToolCall as EngineToolCall } from "../multi-agent/types.ts";
+
+interface PendingHumanTurn {
+  participantId: string;
+  startedAt: number;
+  resolve: (r: HumanTurnResponse) => void;
+  reject: (err: Error) => void;
+}
+const pendingHumanTurns = new Map<string, PendingHumanTurn>();
+
+// Soft per-participant throttle: at least 1.5s between accepted human turns.
+// Prevents script-driven spam from breaking the engine's rhythm.
+const lastTurnAcceptedAt = new Map<string, number>();
+const HUMAN_TURN_MIN_INTERVAL_MS = 1500;
+const HUMAN_TURN_MAX_MESSAGE_CHARS = 1500;
+
+async function handleParticipantHumanTurn(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  const body = await readJson<{
+    participantId: string;
+    action: "send_message" | "propose" | "counter" | "accept" | "reject";
+    message: string;
+    price?: number;
+    isFinal?: boolean;
+  }>(req, res);
+  if (body === null) return;
+  if (!require400(res, typeof body.participantId === "string", "participantId required")) return;
+  if (!require400(res, typeof body.message === "string", "message required (may be empty)")) return;
+  if (!require400(
+    res,
+    body.message.length <= HUMAN_TURN_MAX_MESSAGE_CHARS,
+    `message must be ≤ ${HUMAN_TURN_MAX_MESSAGE_CHARS} characters`,
+  )) return;
+  const validActions = ["send_message", "propose", "counter", "accept", "reject"];
+  if (!require400(res, validActions.includes(body.action), `action must be one of ${validActions.join(", ")}`)) return;
+
+  // Throttle: reject submissions that come faster than the minimum interval.
+  const last = lastTurnAcceptedAt.get(body.participantId) ?? 0;
+  if (Date.now() - last < HUMAN_TURN_MIN_INTERVAL_MS) {
+    sendJson(res, 429, {
+      error: "too_fast",
+      message: `Please slow down — turns are accepted at most every ${HUMAN_TURN_MIN_INTERVAL_MS}ms.`,
+    });
+    return;
+  }
+
+  const pending = pendingHumanTurns.get(body.participantId);
+  if (!pending) {
+    sendJson(res, 409, {
+      error: "no_pending_turn",
+      message:
+        "No human turn is currently being awaited for this participant. The engine may not have requested your turn yet, or your turn already submitted.",
+    });
+    return;
+  }
+  pendingHumanTurns.delete(body.participantId);
+  lastTurnAcceptedAt.set(body.participantId, Date.now());
+
+  // Build the toolCalls payload to look identical to what an LLM would emit.
+  const toolCalls: EngineToolCall[] = [];
+  if (body.action === "send_message") {
+    toolCalls.push({
+      name: "send_message",
+      input: { message: body.message, intent: "other" },
+    });
+  } else {
+    // proposal / counter / accept / reject
+    if (body.action !== "accept" && body.action !== "reject") {
+      if (typeof body.price !== "number" || !Number.isFinite(body.price) || body.price <= 0) {
+        sendJson(res, 400, { error: "price required for propose/counter" });
+        // Re-register the pending turn so the human can retry.
+        pendingHumanTurns.set(body.participantId, pending);
+        return;
+      }
+    }
+    toolCalls.push({
+      name: "submit_proposal",
+      input: {
+        action: body.action,
+        issues: [
+          {
+            name: "price",
+            value: typeof body.price === "number" ? body.price : 0,
+            justification: body.message || "(no justification provided)",
+          },
+        ],
+        message: body.message || "(no message)",
+        is_final: body.isFinal === true,
+      },
+    });
+  }
+
+  pending.resolve({
+    message: body.message,
+    toolCalls,
+    latencyMs: Date.now() - pending.startedAt,
+  });
+  sendJson(res, 200, { ok: true });
+}
+
 // ─── Per-IP rate limit (in-memory) ───────────────────────────────────────
 //
 // `recentStarts` maps a hashed IP → timestamp of last /api/p/start. When
@@ -325,6 +441,9 @@ function hashIp(ip: string): string {
 setInterval(() => {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   for (const [k, ts] of recentStarts) if (ts < cutoff) recentStarts.delete(k);
+  // Same cutoff for the human-turn throttle — these entries are tiny but
+  // there's no reason to keep them after a day of inactivity.
+  for (const [k, ts] of lastTurnAcceptedAt) if (ts < cutoff) lastTurnAcceptedAt.delete(k);
 }, 60 * 60 * 1000).unref();
 
 // ─── Cost cap helper ─────────────────────────────────────────────────────
@@ -715,6 +834,21 @@ async function handleParticipantRole(req: http.IncomingMessage, res: http.Server
   sendJson(res, 200, { ok: true });
 }
 
+interface ModeBody {
+  participantId: string;
+  /** 'agent' | 'human_buyer' | 'human_seller' */
+  mode: string;
+}
+async function handleParticipantMode(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  const body = await readJson<ModeBody>(req, res);
+  if (body === null) return;
+  if (!require400(res, typeof body.participantId === "string", "participantId required")) return;
+  const allowed = ["agent", "human_buyer", "human_seller"];
+  if (!require400(res, allowed.includes(body.mode), "mode must be agent | human_buyer | human_seller")) return;
+  withDb((db) => db.updateStudyParticipant(body.participantId, { experiment_mode: body.mode }));
+  sendJson(res, 200, { ok: true });
+}
+
 interface ContextBody {
   participantId: string;
   contextText: string;
@@ -832,21 +966,41 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
     sendJson(res, 400, { error: "set role first" });
     return;
   }
-  const promptRow = withDb((db) => db.getLatestBehaviorPrompt(body.participantId));
-  if (!promptRow) {
-    sendJson(res, 400, { error: "no behavior prompt submitted yet" });
-    return;
-  }
   const role = participant.role as Role;
+  // experiment_mode tells us whether this is the original delegated flow
+  // (mode='agent') or the new direct-chat flow (mode='human_buyer'/'human_seller').
+  // When the SPA hits /bhx or /shx it POSTs /api/p/mode before /api/p/run,
+  // so this column will be set before we get here.
+  const mode = (participant as { experiment_mode?: string }).experiment_mode || "agent";
+  const isHumanMode = mode === "human_buyer" || mode === "human_seller";
+  const humanRole: Role | undefined = mode === "human_buyer"
+    ? "buyer"
+    : mode === "human_seller"
+      ? "seller"
+      : undefined;
 
-  // Fetch the participant's saved personal-context text (from screen 5).
-  const personalContext = withDb((db) => db.getParticipantContextText(body.participantId));
+  // For agent mode, we require a behavior prompt before running. Human mode
+  // skips this — there's no AI on the participant's side to brief.
+  let promptRow: ReturnType<SqlitePersistence["getLatestBehaviorPrompt"]> | undefined;
+  if (!isHumanMode) {
+    promptRow = withDb((db) => db.getLatestBehaviorPrompt(body.participantId));
+    if (!promptRow) {
+      sendJson(res, 400, { error: "no behavior prompt submitted yet" });
+      return;
+    }
+  }
+
+  // Personal context: in agent mode we keep it (screen 5); in human mode the
+  // researcher chose to drop screen 5 entirely so this stays empty.
+  const personalContext = isHumanMode
+    ? ""
+    : withDb((db) => db.getParticipantContextText(body.participantId));
 
   const intake: IntakeAnswers = {
     ...STUDY_STIMULUS,
     userRole: role,
     userPersonalContext: personalContext,
-    userBehaviorPrompt: promptRow.prompt_text,
+    userBehaviorPrompt: promptRow ? promptRow.prompt_text : "",
   };
 
   // Pick the opponent's personality once per session — uniform over the three
@@ -865,6 +1019,7 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
     answers: intake,
     opponentPersonality,
     scenarioId: SCENARIO_ID,
+    humanRole,
   });
   const outPath = path.resolve(`scenarios/${SCENARIO_ID}/pack.json`);
   await mkdir(path.dirname(outPath), { recursive: true });
@@ -883,6 +1038,13 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
   let aborted = false;
   req.on("close", () => {
     aborted = true;
+    // If the human was mid-turn when they disconnected, reject the pending
+    // promise so the engine can declare a timeout outcome rather than hanging.
+    const pending = pendingHumanTurns.get(body.participantId);
+    if (pending) {
+      pendingHumanTurns.delete(body.participantId);
+      try { pending.reject(new Error("SSE client disconnected mid-turn")); } catch { /* ignore */ }
+    }
   });
 
   send("status", { message: "Negotiation starting…" });
@@ -890,6 +1052,7 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
     role: role === "buyer" ? "seller" : "buyer",
     personality: opponentPersonality,
   });
+  send("experiment_mode", { mode });
 
   const persistence = openPersistence();
   try {
@@ -905,11 +1068,19 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
           send("session_start", { sessionId: event.sessionId, orchestratorModel: event.orchestratorModel });
         } else if (event.type === "turn_starting") {
           send("turn_starting", { participantId: event.participantId, turnNumber: event.turnNumber });
+        } else if (event.type === "human_turn_required") {
+          // Forward to the SPA so it can enable the chat input.
+          send("human_turn_required", {
+            participantId: event.participantId,
+            turnNumber: event.turnNumber,
+            instruction: event.instruction ?? null,
+          });
         } else if (event.type === "participant_turn") {
           const t = event.turn;
           send("turn", {
             turnNumber: t.turnNumber,
             emitterId: t.emitterId,
+            emitter: t.emitter,
             message: t.message ?? null,
             toolCalls: t.toolCalls,
           });
@@ -923,6 +1094,38 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
           send("fallback", { reason: event.reason });
         }
       },
+      // Human-turn provider: when the engine requests a human turn, register
+      // the resolver in pendingHumanTurns and wait. The SPA will POST
+      // /api/p/turn which finds the pending entry and resolves it.
+      humanTurnProvider: !isHumanMode
+        ? undefined
+        : ({ turnNumber, instruction, lastOpponentTurn }) => {
+            return new Promise<HumanTurnResponse>((resolve, reject) => {
+              // Drop any stale pending turn for this participant first.
+              const stale = pendingHumanTurns.get(body.participantId);
+              if (stale) {
+                stale.reject(new Error("Superseded by a new turn request"));
+                pendingHumanTurns.delete(body.participantId);
+              }
+              pendingHumanTurns.set(body.participantId, {
+                participantId: body.participantId,
+                startedAt: Date.now(),
+                resolve,
+                reject,
+              });
+              // If the SSE client disconnects while we're waiting, fail
+              // the turn so the engine can declare an outcome (timeout).
+              if (aborted) {
+                pendingHumanTurns.delete(body.participantId);
+                reject(new Error("Client aborted before submitting turn"));
+              }
+              // Touch turnNumber + instruction so they're not flagged unused
+              // (they're already forwarded to the SPA via the SSE event above).
+              void turnNumber;
+              void instruction;
+              void lastOpponentTurn;
+            });
+          },
       orchestratorLLM: pack.orchestrator ?? {
         provider: "anthropic",
         model: "claude-sonnet-4-6",
