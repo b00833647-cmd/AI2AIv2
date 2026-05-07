@@ -523,7 +523,13 @@ const STUDY_STIMULUS = {
   mileage: "32,000 mi",
   customizations:
     "All-weather floor mats added; new Michelin tires installed 2 months ago; dealer-serviced.",
+  // Market price is now a range, not a point estimate. The mid-point keeps
+  // working as `marketPrice` for any code that needs a single number; the
+  // low/high bounds are surfaced to participants and agents so anchoring
+  // and concession pacing have wider room.
   marketPrice: 24000,
+  marketPriceLow: 23000,
+  marketPriceHigh: 25000,
   sellerListing: 25500,
   sellerMinimum: 22500,
   buyerTarget: 22000,

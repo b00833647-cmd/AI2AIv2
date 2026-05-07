@@ -300,6 +300,38 @@
        background fills any letterbox area on the sides. */
     width: 100%; height: 100%; object-fit: contain;
     transition: opacity 250ms;
+    cursor: zoom-in;
+  }
+  /* Fullscreen lightbox triggered by clicking the hero image. */
+  .lightbox {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.92);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 9998;
+    cursor: zoom-out;
+    padding: 24px;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox img {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    border-radius: 4px;
+  }
+  .lightbox-close {
+    position: absolute; top: 16px; right: 16px;
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.1); color: #fff;
+    border: none; border-radius: 50%;
+    font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lightbox-close:hover { background: rgba(255,255,255,0.2); }
+  .lightbox-counter {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    color: rgba(255,255,255,0.7); font-size: 13px;
+    background: rgba(0,0,0,0.5); padding: 4px 12px; border-radius: 99px;
   }
   .listing .gallery .badge {
     position: absolute; top: 14px; left: 14px;
@@ -315,18 +347,47 @@
     z-index: 2;
   }
   /* Vertical thumbnail column on the left of the hero. Scrolls inside its own
-     container if there are more thumbnails than the viewer height accommodates. */
+     container if there are more thumbnails than the viewer height accommodates.
+     The container is positioned so we can overlay up/down scroll arrows. */
+  .gallery-col {
+    position: relative;
+    background: #0a0d14;
+    border-right: 1px solid var(--border);
+  }
   .gallery-strip {
     display: flex;
     flex-direction: column;
     gap: 6px;
     padding: 8px;
-    background: #0a0d14;
-    border-right: 1px solid var(--border);
     overflow-y: auto;
     max-height: clamp(420px, 65vh, 760px);
     /* Prevent the column from collapsing when content is smaller than max-height. */
     align-items: stretch;
+    /* Hide the native scrollbar — we provide custom arrows. */
+    scrollbar-width: none;
+  }
+  .gallery-strip::-webkit-scrollbar { display: none; }
+  /* Semi-transparent up/down scroll arrows that appear when there's content
+     above/below the visible window. Click to smooth-scroll one viewport. */
+  .gallery-arrow {
+    position: absolute; left: 8px; right: 8px;
+    height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(rgba(10,13,20,0.9), rgba(10,13,20,0.0));
+    color: var(--text);
+    cursor: pointer;
+    border: none;
+    font-size: 14px;
+    z-index: 3;
+    opacity: 0; pointer-events: none;
+    transition: opacity 180ms;
+  }
+  .gallery-arrow.visible { opacity: 0.85; pointer-events: auto; }
+  .gallery-arrow:hover { opacity: 1; }
+  .gallery-arrow.up { top: 0; border-radius: 4px 4px 0 0; }
+  .gallery-arrow.down {
+    bottom: 0; border-radius: 0 0 4px 4px;
+    background: linear-gradient(rgba(10,13,20,0.0), rgba(10,13,20,0.9));
   }
   .thumb {
     border: 2px solid transparent;
@@ -828,7 +889,10 @@
 
     <div class="listing">
       <div class="gallery-wrap">
-        <div class="gallery-strip">
+        <div class="gallery-col">
+        <button type="button" class="gallery-arrow up" id="gallery-up" aria-label="Scroll up">▲</button>
+        <button type="button" class="gallery-arrow down" id="gallery-down" aria-label="Scroll down">▼</button>
+        <div class="gallery-strip" id="gallery-strip">
           <button type="button" class="thumb active" data-src="img/camry/camry-01-front.jpg">
             <img src="img/camry/camry-01-front.jpg" alt="Front 3/4" />
           </button>
@@ -860,12 +924,13 @@
             <img src="img/camry/camry-10-trunk.jpg" alt="Trunk" />
           </button>
         </div>
+        </div><!-- /gallery-col -->
         <div class="gallery">
           <span class="badge" id="listing-badge">FOR SALE</span>
           <img id="gallery-main" class="gallery-main"
                src="img/camry/camry-01-front.jpg"
                alt="Black 2023 Toyota Camry — front 3/4 view" />
-          <span class="photo-count">📷 10 photos</span>
+          <span class="photo-count">📷 10 photos · click to zoom</span>
         </div>
       </div>
       <div class="listing-body">
@@ -875,7 +940,7 @@
         <div class="listing-price-row">
           <div class="listing-price" id="listing-price">$25,500</div>
           <div class="listing-price-note" id="listing-price-note">
-            Asking price · Average market price for this configuration: ~$24,000
+            Asking price · Market range for this configuration: $23,000–$25,000
           </div>
         </div>
 
@@ -1124,6 +1189,16 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
 
 </main>
 
+<!-- ─── Lightbox / zoom overlay for the listing hero photo ───────────────
+     Triggered by clicking the .gallery-main image. Shows the same image at
+     full viewport size on a darkened backdrop. Click anywhere or hit Esc to
+     close. Mirrors how cars.com / autotrader expand their photos. -->
+<div id="lightbox" class="lightbox" role="dialog" aria-label="Photo zoom">
+  <button class="lightbox-close" id="lightbox-close" aria-label="Close zoom">×</button>
+  <img id="lightbox-img" src="" alt="" />
+  <div class="lightbox-counter" id="lightbox-counter"></div>
+</div>
+
 <!-- ─── Mobile-device blocking overlay ───────────────────────────────────
      Shown after consent if the participant is on a phone or tablet. The
      consent form explicitly says "PC or laptop only", so this enforces the
@@ -1162,7 +1237,7 @@ const ROLE_INFO = {
   buyer: {
     listingContext: "You're considering this listing",
     badge: "FOR SALE",
-    priceLabel: "Asking price · Average market price for this configuration: ~$24,000",
+    priceLabel: "Asking price · Market range for this configuration: $23,000–$25,000",
     situation: "You can spend up to <strong>$24,500</strong> (your hard walk-away). " +
                "Your ideal target is <strong>$22,000</strong>. " +
                "You're a cash-funded buyer — no financing delays.",
@@ -1171,7 +1246,7 @@ const ROLE_INFO = {
   seller: {
     listingContext: "This is your listing",
     badge: "YOUR LISTING",
-    priceLabel: "Your asking price · Average market price for this configuration: ~$24,000",
+    priceLabel: "Your asking price · Market range for this configuration: $23,000–$25,000",
     situation: "You listed it at <strong>$25,500</strong>. " +
                "You won't go below <strong>$22,500</strong> (your hard walk-away). " +
                "You'd like a clean sale within 4 weeks before relocating.",
@@ -1600,6 +1675,78 @@ document.querySelectorAll(".gallery-strip .thumb").forEach((btn) => {
     track("listing_thumbnail_view", { src: src });
   });
 });
+
+// ─── Thumbnail-column scroll arrows ────────────────────────────────────
+// Show/hide based on scroll position; click to scroll one viewport-height.
+(function () {
+  const strip = $("gallery-strip");
+  const upBtn = $("gallery-up");
+  const downBtn = $("gallery-down");
+  if (!strip || !upBtn || !downBtn) return;
+  const updateArrows = () => {
+    const atTop = strip.scrollTop <= 2;
+    const atBottom = strip.scrollTop + strip.clientHeight >= strip.scrollHeight - 2;
+    const overflow = strip.scrollHeight > strip.clientHeight + 2;
+    upBtn.classList.toggle("visible", overflow && !atTop);
+    downBtn.classList.toggle("visible", overflow && !atBottom);
+  };
+  upBtn.addEventListener("click", () => {
+    strip.scrollBy({ top: -strip.clientHeight * 0.85, behavior: "smooth" });
+    track("listing_gallery_scroll", { direction: "up" });
+  });
+  downBtn.addEventListener("click", () => {
+    strip.scrollBy({ top: strip.clientHeight * 0.85, behavior: "smooth" });
+    track("listing_gallery_scroll", { direction: "down" });
+  });
+  strip.addEventListener("scroll", updateArrows, { passive: true });
+  // Recompute on listing entry (image loads can change scrollHeight) and resize.
+  window.addEventListener("resize", updateArrows);
+  // Initial state — and recheck after a tick because image natural sizes
+  // settle asynchronously.
+  updateArrows();
+  setTimeout(updateArrows, 200);
+})();
+
+// ─── Click-to-zoom lightbox on the main hero image ─────────────────────
+(function () {
+  const main = $("gallery-main");
+  const box = $("lightbox");
+  const lbImg = $("lightbox-img");
+  const lbClose = $("lightbox-close");
+  const lbCounter = $("lightbox-counter");
+  if (!main || !box) return;
+  const open = () => {
+    // Use the main image's current src — already the user-selected photo.
+    lbImg.src = main.src;
+    lbImg.alt = main.alt;
+    // "Photo N of M" counter.
+    const thumbs = [...document.querySelectorAll(".gallery-strip .thumb")];
+    const idx = thumbs.findIndex((t) => t.getAttribute("data-src") === new URL(main.src, location.href).pathname.replace(/^\//, ""));
+    // Fallback: best-effort by filename match if pathname comparison fails.
+    let i = idx;
+    if (i < 0) {
+      const file = main.src.split("/").pop();
+      i = thumbs.findIndex((t) => (t.getAttribute("data-src") || "").endsWith(file));
+    }
+    if (i >= 0) lbCounter.textContent = `${i + 1} of ${thumbs.length}`;
+    else lbCounter.textContent = "";
+    box.classList.add("open");
+    track("listing_zoom_open", { src: main.src });
+  };
+  const close = () => {
+    box.classList.remove("open");
+    track("listing_zoom_close", {});
+  };
+  main.addEventListener("click", open);
+  lbClose.addEventListener("click", close);
+  box.addEventListener("click", (e) => {
+    // Click on the backdrop (anywhere outside the close button) closes.
+    if (e.target === box || e.target === lbImg) close();
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && box.classList.contains("open")) close();
+  });
+})();
 
 $("btn-4-continue").addEventListener("click", () => show(5));
 

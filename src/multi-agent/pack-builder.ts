@@ -30,7 +30,12 @@ export function pickOpponentPersonality(rng: () => number = Math.random): Oppone
 export interface IntakeAnswers {
   mileage: string;
   customizations: string;
+  /** Mid-point market value — kept for backward compat. */
   marketPrice: number;
+  /** Lower bound of plausible market range (e.g. private-party low). */
+  marketPriceLow?: number;
+  /** Upper bound of plausible market range (e.g. dealer/clean retail high). */
+  marketPriceHigh?: number;
   sellerListing: number;
   sellerMinimum: number;
   buyerTarget: number;
@@ -175,11 +180,17 @@ export function buildPack(args: PackBuildArgs): ScenarioPack {
   const userIsBuyer = a.userRole === "buyer";
   const opponentSide: Role = userIsBuyer ? "seller" : "buyer";
 
+  // Market range with sensible defaults (mid ± ~4%) when not explicitly given.
+  const marketPriceLow = a.marketPriceLow ?? Math.round(a.marketPrice * 0.96);
+  const marketPriceHigh = a.marketPriceHigh ?? Math.round(a.marketPrice * 1.04);
+
   const buyerSystemPrompt = userIsBuyer
     ? buildParticipantBuyerSystemPrompt({
         carBlurb,
         customizations: a.customizations,
         marketPrice: a.marketPrice,
+        marketPriceLow,
+        marketPriceHigh,
         targetPrice: a.buyerTarget,
         maxBudget: a.buyerMax,
         personalContext: a.userPersonalContext,
@@ -191,6 +202,8 @@ export function buildPack(args: PackBuildArgs): ScenarioPack {
           carBlurb,
           customizations: a.customizations,
           marketPrice: a.marketPrice,
+          marketPriceLow,
+          marketPriceHigh,
           targetPrice: a.buyerTarget,
           maxBudget: a.buyerMax,
           principalText: v.principal,
@@ -203,6 +216,8 @@ export function buildPack(args: PackBuildArgs): ScenarioPack {
         carBlurb,
         customizations: a.customizations,
         marketPrice: a.marketPrice,
+        marketPriceLow,
+        marketPriceHigh,
         listingPrice: a.sellerListing,
         minimumAcceptablePrice: a.sellerMinimum,
         personalContext: a.userPersonalContext,
@@ -214,6 +229,8 @@ export function buildPack(args: PackBuildArgs): ScenarioPack {
           carBlurb,
           customizations: a.customizations,
           marketPrice: a.marketPrice,
+          marketPriceLow,
+          marketPriceHigh,
           listingPrice: a.sellerListing,
           minimumAcceptablePrice: a.sellerMinimum,
           principalText: v.principal,
@@ -345,6 +362,8 @@ interface ParticipantBuildArgs {
   carBlurb: string;
   customizations: string;
   marketPrice: number;
+  marketPriceLow: number;
+  marketPriceHigh: number;
   personalContext: string;
   behaviorPrompt: string;
 }
@@ -358,7 +377,7 @@ function buildParticipantBuyerSystemPrompt(
 
 The car is ${args.carBlurb}
 Customizations / recent repairs (per the seller): ${args.customizations}
-Average market price: $${args.marketPrice.toLocaleString()}.
+Market price for this configuration is a RANGE, not a single number: roughly $${args.marketPriceLow.toLocaleString()}–$${args.marketPriceHigh.toLocaleString()} (with $${args.marketPrice.toLocaleString()} being the mid-point). Treat the range as the bargaining zone — anchoring outside of it (especially below the low end as a buyer or above the high end as a seller) needs strong justification.
 
 Your buyer's target purchase price: $${args.targetPrice.toLocaleString()}
 Your buyer's WALK-AWAY maximum (do NOT exceed under any circumstances): $${args.maxBudget.toLocaleString()}
@@ -397,7 +416,7 @@ function buildParticipantSellerSystemPrompt(
 
 The car is ${args.carBlurb}
 Customizations / recent repairs: ${args.customizations}
-Average market price: $${args.marketPrice.toLocaleString()}.
+Market price for this configuration is a RANGE, not a single number: roughly $${args.marketPriceLow.toLocaleString()}–$${args.marketPriceHigh.toLocaleString()} (with $${args.marketPrice.toLocaleString()} being the mid-point). Treat the range as the bargaining zone — anchoring outside of it (especially below the low end as a buyer or above the high end as a seller) needs strong justification.
 
 Your seller's listing price: $${args.listingPrice.toLocaleString()}
 Your seller's WALK-AWAY minimum (do NOT accept anything below this): $${args.minimumAcceptablePrice.toLocaleString()}
@@ -439,6 +458,8 @@ interface OpponentBuildArgs {
   carBlurb: string;
   customizations: string;
   marketPrice: number;
+  marketPriceLow: number;
+  marketPriceHigh: number;
   /** Synthetic backstory of the human the opponent agent represents. */
   principalText: string;
   /** Tactical guidance from the synthetic principal to the agent. */
@@ -452,7 +473,7 @@ function buildOpponentBuyerSystemPrompt(
 
 The car is ${args.carBlurb}
 Customizations / recent repairs (per the seller): ${args.customizations}
-Average market price: $${args.marketPrice.toLocaleString()}.
+Market price for this configuration is a RANGE, not a single number: roughly $${args.marketPriceLow.toLocaleString()}–$${args.marketPriceHigh.toLocaleString()} (with $${args.marketPrice.toLocaleString()} being the mid-point). Treat the range as the bargaining zone — anchoring outside of it (especially below the low end as a buyer or above the high end as a seller) needs strong justification.
 
 Your buyer's target purchase price: $${args.targetPrice.toLocaleString()}
 Your buyer's WALK-AWAY maximum (do NOT exceed under any circumstances): $${args.maxBudget.toLocaleString()}
@@ -488,7 +509,7 @@ function buildOpponentSellerSystemPrompt(
 
 The car is ${args.carBlurb}
 Customizations / recent repairs: ${args.customizations}
-Average market price: $${args.marketPrice.toLocaleString()}.
+Market price for this configuration is a RANGE, not a single number: roughly $${args.marketPriceLow.toLocaleString()}–$${args.marketPriceHigh.toLocaleString()} (with $${args.marketPrice.toLocaleString()} being the mid-point). Treat the range as the bargaining zone — anchoring outside of it (especially below the low end as a buyer or above the high end as a seller) needs strong justification.
 
 Your seller's listing price: $${args.listingPrice.toLocaleString()}
 Your seller's WALK-AWAY minimum (do NOT accept anything below this): $${args.minimumAcceptablePrice.toLocaleString()}
