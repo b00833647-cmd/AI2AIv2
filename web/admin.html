@@ -664,26 +664,28 @@ function drawHistogram(svg, rows, keyName, prefix, step) {
 
 function renderSurveyMeans(rows) {
   if (!rows || rows.length === 0) { $("chart-survey").innerHTML = "<span style='color:var(--dim)'>No data</span>"; return; }
-  const LABELS = {
-    satisfaction: "Satisfaction with outcome",
-    agent_represented: "Agent represented preferences well",
-    control: "Felt in control",
-    opponent_fair: "Opponent seemed fair",
-    trust_ai: "Trust in AI for real negotiation",
-    would_use_again: "Would use again",
-  };
+  // Bucket aggregated rows by survey-key.
   const byKey = {};
   for (const r of rows) {
     if (!byKey[r.key]) byKey[r.key] = {};
     byKey[r.key][r.role || "all"] = { mean: r.mean, n: r.n };
   }
-  const html = Object.keys(LABELS).map((k) => {
+  // Walk the canonical SURVEY_ORDER first; render any remaining keys
+  // (unknown ones) at the bottom so the chart never silently drops a
+  // construct just because the label map is stale.
+  const keysInData = Object.keys(byKey);
+  const ordered = [
+    ...SURVEY_ORDER.filter((k) => keysInData.includes(k)),
+    ...keysInData.filter((k) => !SURVEY_ORDER.includes(k)).sort(),
+  ];
+  const cell = (x) => x ? `<span style="font-family:ui-monospace,monospace">${x.mean.toFixed(2)}</span> <span style="color:var(--dim);font-size:11px">(n=${x.n})</span>` : "—";
+  const html = ordered.map((k) => {
     const buyer = byKey[k]?.buyer;
     const seller = byKey[k]?.seller;
     const all = byKey[k]?.all;
-    const cell = (x) => x ? `<span style="font-family:ui-monospace,monospace">${x.mean.toFixed(2)}</span> <span style="color:var(--dim);font-size:11px">(n=${x.n})</span>` : "—";
+    const label = SURVEY_LABELS[k] || k;
     return `<div style="display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
-      <div>${LABELS[k]}</div>
+      <div>${escapeHtml(label)}</div>
       <div>buyer: ${cell(buyer)}</div>
       <div>seller: ${cell(seller)}</div>
       <div>all: ${cell(all)}</div>
@@ -808,15 +810,102 @@ function renderCostByPersonality(rows) {
 }
 
 // ─── Per-participant detail (overlay) ───────────────────────────────────
+//
+// Friendly labels for the post-survey question keys. The participant SPA
+// stores responses by these keys (see web/study.html POST_QUESTIONS_*),
+// the persistence layer exposes them as participant_responses rows, and
+// the admin uses this map to render them with human-readable labels.
+// Unknown keys fall back to the raw key string in the per-participant
+// detail view, so adding a key here is purely cosmetic.
 const SURVEY_LABELS = {
+  // Overall
   satisfaction: "Satisfied with the outcome?",
   agent_represented: "Your agent represented your preferences well?",
   control: "Felt in control of how your agent negotiated?",
-  opponent_fair: "The opponent's agent seemed fair?",
-  trust_ai: "Trust in AI to handle real negotiations on your behalf?",
-  would_use_again: "Would you use a tool like this in real life?",
+  opponent_fair: "The opponent's/AI counterpart seemed fair?",
+  trust_ai: "Trust in AI for real negotiations?",
+  would_use_again: "Would use again / prefer AI next time",
+  negotiation_difficulty: "How difficult did you find this negotiation?",
   free_text: "Any comments on the study?",
+  // Competence — own / opponent
+  competence_own_capable: "Your agent — capable",
+  competence_own_competent: "Your agent — competent",
+  competence_own_skilled: "Your agent — skilled",
+  competence_opp_capable: "Opponent — capable",
+  competence_opp_competent: "Opponent — competent",
+  competence_opp_skilled: "Opponent — skilled",
+  // Warmth — own / opponent
+  warmth_own_warm: "Your agent — warm",
+  warmth_own_friendly: "Your agent — friendly",
+  warmth_own_sincere: "Your agent — sincere",
+  warmth_opp_warm: "Opponent — warm",
+  warmth_opp_friendly: "Opponent — friendly",
+  warmth_opp_sincere: "Opponent — sincere",
+  // Anthropomorphism / mind perception — own / opponent
+  anthro_own_humanlike: "Your agent — felt human-like",
+  anthro_own_intentions: "Your agent — own thoughts and intentions",
+  anthro_own_reactions: "Your agent — genuine reactions",
+  anthro_opp_humanlike: "Opponent — felt human-like",
+  anthro_opp_intentions: "Opponent — own thoughts and intentions",
+  anthro_opp_reactions: "Opponent — genuine reactions",
+  // Agent representativeness (agent modes only)
+  arep_followed: "Your agent followed your instructions",
+  arep_as_me: "Your agent did what you would have done",
+  arep_loyalty: "Your agent advocated for your interests",
+  // Outcome fairness
+  outfair_self: "Final result was fair to me",
+  outfair_other: "Final result was fair to the other side",
+  outfair_share: "Got a fair share of the value",
+  // Procedural fairness
+  procfair_conducted: "Negotiation was conducted fairly",
+  procfair_respect: "Treated with respect",
+  procfair_voice: "Had a fair chance to make my case",
+  // Counterpart trust
+  ctrust_trusted: "Trusted the other side",
+  ctrust_honest: "Other side was honest",
+  ctrust_goodfaith: "Other side acted in good faith",
+  // Pressure
+  press_pushed: "Felt pushed into things I didn't want",
+  press_pressured: "Negotiation felt pressured",
+  press_tactics: "Other side used pressure tactics",
+  // Emotion
+  emot_pleasant: "Negotiation was pleasant",
+  emot_anxious: "Felt anxious or stressed",
+  // Effort / engagement
+  effort_invested: "Invested significant effort",
+  engage_engaged: "Was fully engaged",
+  // Future intention
+  future_again: "Would use AI for a real negotiation",
+  future_recommend: "Would recommend AI-assisted negotiation",
+  future_real: "Comfortable letting AI negotiate something important",
+  // Counterpart attribution (human modes)
+  attribution_humanlike: "How human-like did the other side feel? (1=AI, 7=person)",
+  // Algorithm aversion baseline
+  alg_pref: "Generally trust AI more than humans for negotiating",
 };
+
+// Stable display order in the per-participant detail panel — matches the
+// participant SPA's section order so the admin reads naturally.
+const SURVEY_ORDER = [
+  "satisfaction","agent_represented","control","opponent_fair","trust_ai","would_use_again","negotiation_difficulty",
+  "competence_own_capable","competence_own_competent","competence_own_skilled",
+  "warmth_own_warm","warmth_own_friendly","warmth_own_sincere",
+  "anthro_own_humanlike","anthro_own_intentions","anthro_own_reactions",
+  "arep_followed","arep_as_me","arep_loyalty",
+  "competence_opp_capable","competence_opp_competent","competence_opp_skilled",
+  "warmth_opp_warm","warmth_opp_friendly","warmth_opp_sincere",
+  "anthro_opp_humanlike","anthro_opp_intentions","anthro_opp_reactions",
+  "outfair_self","outfair_other","outfair_share",
+  "procfair_conducted","procfair_respect","procfair_voice",
+  "ctrust_trusted","ctrust_honest","ctrust_goodfaith",
+  "press_pushed","press_pressured","press_tactics",
+  "emot_pleasant","emot_anxious",
+  "effort_invested","engage_engaged",
+  "future_again","future_recommend","future_real",
+  "attribution_humanlike",
+  "alg_pref",
+  "free_text",
+];
 
 async function openDetail(id) {
   closeReplay();
@@ -928,9 +1017,8 @@ function renderDetail(id, d) {
   const survey = (d.participant_responses || []).filter(r => r.screen === "post_survey" && !r.key.startsWith("_"));
   if (survey.length > 0) {
     html += `<div class="panel"><h2>Post-survey</h2><table><tbody>`;
-    const order = ["satisfaction","agent_represented","control","opponent_fair","trust_ai","would_use_again","free_text"];
     const sorted = [...survey].sort((a, b) => {
-      const ai = order.indexOf(a.key), bi = order.indexOf(b.key);
+      const ai = SURVEY_ORDER.indexOf(a.key), bi = SURVEY_ORDER.indexOf(b.key);
       return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
     });
     for (const r of sorted) {

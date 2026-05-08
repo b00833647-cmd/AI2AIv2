@@ -204,6 +204,25 @@
     display: inline-block; margin-bottom: 12px;
   }
 
+  /* Section dividers in the post-survey — visual grouping only, the
+     underlying data model is still a flat key→Likert map. */
+  .survey-section {
+    margin: 28px 0 4px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .survey-section:first-child { margin-top: 6px; padding-top: 0; border-top: none; }
+  .survey-section-title {
+    margin: 0 0 4px;
+    color: var(--accent);
+    font-size: 13px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .survey-section-sub {
+    margin: 0 0 6px;
+    font-size: 13px; color: var(--dim);
+  }
+
   .likert {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -1588,24 +1607,161 @@ const ROLE_INFO = {
 
 // Two question sets — one for the delegated (agent) experiments, one for
 // the human-mode experiments where the participant negotiates directly.
-// Question keys overlap where they make sense (satisfaction, opponent_fair,
-// trust_ai, would_use_again) so cross-condition analysis is possible; some
-// keys are mode-specific (agent_represented vs negotiation_difficulty).
+//
+// Structure:
+//   - Items with `kind: "header"` render as a section heading (no Likert).
+//   - All other items are 7-point Likert ("not at all" → "very" by default;
+//     a `lowLabel` / `highLabel` per item overrides the endpoint labels).
+//   - Multi-item constructs use _own / _opp suffixes when they apply to two
+//     targets (the participant's AI agent vs. the opponent's AI agent).
+//   - In agent modes (/blx, /slx), warmth/competence/anthropomorphism are
+//     rated for BOTH agents (own + opponent). In human modes (/bhx, /shx),
+//     they are rated only for the AI counterpart on the other side.
+//
+// Constructs (Fiske SCM warmth+competence + 7 strongly-recommended scales +
+// 4 short single-target scales). Each construct uses 3 items where possible
+// (lets researchers compute Cronbach's α and aggregate scale scores).
+//
+// Existing single-item keys (satisfaction, control, opponent_fair, trust_ai,
+// would_use_again, agent_represented, negotiation_difficulty) are retained
+// for continuity with already-collected data. The new multi-item scales
+// run alongside them and provide the deeper measurement.
 const POST_QUESTIONS_AGENT = [
+  // ─── Overall reactions (existing single-item summaries) ────────────────
+  { kind: "header", title: "Overall", subtitle: "Your overall reactions to this negotiation." },
   { key: "satisfaction",      text: "Satisfied with the outcome?" },
   { key: "agent_represented", text: "Your agent represented your preferences well?" },
   { key: "control",           text: "Felt in control of how your agent negotiated?" },
   { key: "opponent_fair",     text: "The opponent's agent seemed fair?" },
   { key: "trust_ai",          text: "Trust in AI to handle real negotiations on your behalf?" },
   { key: "would_use_again",   text: "Would you use a tool like this in real life?" },
+
+  // ─── Your AI agent — Competence + Warmth + Anthropomorphism + Representativeness ───
+  { kind: "header", title: "About your AI agent", subtitle: "The AI agent that negotiated on your behalf." },
+  { key: "competence_own_capable",   text: "My AI agent was capable." },
+  { key: "competence_own_competent", text: "My AI agent was competent." },
+  { key: "competence_own_skilled",   text: "My AI agent was skilled." },
+  { key: "warmth_own_warm",      text: "My AI agent was warm." },
+  { key: "warmth_own_friendly",  text: "My AI agent was friendly." },
+  { key: "warmth_own_sincere",   text: "My AI agent was sincere." },
+  { key: "anthro_own_humanlike",  text: "My AI agent felt human-like." },
+  { key: "anthro_own_intentions", text: "My AI agent seemed to have its own thoughts and intentions." },
+  { key: "anthro_own_reactions",  text: "My AI agent showed genuine reactions during the conversation." },
+  { key: "arep_followed", text: "My AI agent followed my instructions." },
+  { key: "arep_as_me",    text: "My AI agent did what I would have done myself." },
+  { key: "arep_loyalty",  text: "My AI agent advocated for my interests." },
+
+  // ─── Opponent AI agent — Competence + Warmth + Anthropomorphism ───
+  { kind: "header", title: "About the opponent's AI agent", subtitle: "The AI agent on the other side of the negotiation." },
+  { key: "competence_opp_capable",   text: "The opponent's AI agent was capable." },
+  { key: "competence_opp_competent", text: "The opponent's AI agent was competent." },
+  { key: "competence_opp_skilled",   text: "The opponent's AI agent was skilled." },
+  { key: "warmth_opp_warm",      text: "The opponent's AI agent was warm." },
+  { key: "warmth_opp_friendly",  text: "The opponent's AI agent was friendly." },
+  { key: "warmth_opp_sincere",   text: "The opponent's AI agent was sincere." },
+  { key: "anthro_opp_humanlike",  text: "The opponent's AI agent felt human-like." },
+  { key: "anthro_opp_intentions", text: "The opponent's AI agent seemed to have its own thoughts and intentions." },
+  { key: "anthro_opp_reactions",  text: "The opponent's AI agent showed genuine reactions during the conversation." },
+
+  // ─── The deal — Outcome fairness ───
+  { kind: "header", title: "The deal" },
+  { key: "outfair_self",  text: "The final result was fair to me." },
+  { key: "outfair_other", text: "The final result was fair to the other side." },
+  { key: "outfair_share", text: "I got a fair share of the value in the deal." },
+
+  // ─── The negotiation process — Procedural fairness + Counterpart trust + Pressure ───
+  { kind: "header", title: "The negotiation process" },
+  { key: "procfair_conducted", text: "The negotiation was conducted fairly." },
+  { key: "procfair_respect",   text: "I was treated with respect during the negotiation." },
+  { key: "procfair_voice",     text: "My side had a fair chance to make its case." },
+  { key: "ctrust_trusted",   text: "I trusted the other side during the negotiation." },
+  { key: "ctrust_honest",    text: "The other side seemed honest with us." },
+  { key: "ctrust_goodfaith", text: "The other side acted in good faith." },
+  { key: "press_pushed",    text: "I felt pushed into things I didn't want." },
+  { key: "press_pressured", text: "The negotiation felt pressured overall." },
+  { key: "press_tactics",   text: "The other side used pressure tactics." },
+
+  // ─── Your experience — Emotion + Effort/engagement ───
+  { kind: "header", title: "Your experience" },
+  { key: "emot_pleasant",   text: "The negotiation was pleasant." },
+  { key: "emot_anxious",    text: "The negotiation made me feel anxious or stressed." },
+  { key: "effort_invested", text: "I invested significant effort in this negotiation." },
+  { key: "engage_engaged",  text: "I was fully engaged throughout the negotiation." },
+
+  // ─── Looking ahead — Future intention ───
+  { kind: "header", title: "Looking ahead" },
+  { key: "future_again",     text: "I would use an AI agent for a real negotiation in the future." },
+  { key: "future_recommend", text: "I would recommend AI-assisted negotiation to a friend." },
+  { key: "future_real",      text: "I'd be comfortable letting an AI negotiate something important on my behalf." },
+
+  // ─── Background — Algorithm aversion baseline ───
+  { kind: "header", title: "Background" },
+  { key: "alg_pref", text: "Generally, I trust AI more than humans for tasks like negotiating.",
+    lowLabel: "strongly disagree", highLabel: "strongly agree" },
 ];
 const POST_QUESTIONS_HUMAN = [
+  // ─── Overall reactions (existing single-item summaries) ────────────────
+  { kind: "header", title: "Overall", subtitle: "Your overall reactions to this negotiation." },
   { key: "satisfaction",            text: "Satisfied with the outcome?" },
   { key: "control",                 text: "Felt in control of the negotiation?" },
   { key: "negotiation_difficulty",  text: "How difficult did you find this negotiation?" },
   { key: "opponent_fair",           text: "The AI counterpart seemed fair?" },
   { key: "trust_ai",                text: "Trust in AI as a negotiation counterpart?" },
-  { key: "would_use_again",         text: "Would you rather negotiate yourself, or via an AI agent next time? (1 = strongly prefer self, 7 = strongly prefer AI)" },
+  { key: "would_use_again",         text: "Would you rather negotiate yourself, or via an AI agent next time?",
+    lowLabel: "strongly prefer self", highLabel: "strongly prefer AI" },
+
+  // ─── AI counterpart — Competence + Warmth + Anthropomorphism ───
+  { kind: "header", title: "About the AI counterpart", subtitle: "The AI agent you negotiated against." },
+  { key: "competence_opp_capable",   text: "The AI counterpart was capable." },
+  { key: "competence_opp_competent", text: "The AI counterpart was competent." },
+  { key: "competence_opp_skilled",   text: "The AI counterpart was skilled." },
+  { key: "warmth_opp_warm",      text: "The AI counterpart was warm." },
+  { key: "warmth_opp_friendly",  text: "The AI counterpart was friendly." },
+  { key: "warmth_opp_sincere",   text: "The AI counterpart was sincere." },
+  { key: "anthro_opp_humanlike",  text: "The AI counterpart felt human-like." },
+  { key: "anthro_opp_intentions", text: "The AI counterpart seemed to have its own thoughts and intentions." },
+  { key: "anthro_opp_reactions",  text: "The AI counterpart showed genuine reactions to what I said." },
+
+  // ─── The deal — Outcome fairness ───
+  { kind: "header", title: "The deal" },
+  { key: "outfair_self",  text: "The final result was fair to me." },
+  { key: "outfair_other", text: "The final result was fair to the other side." },
+  { key: "outfair_share", text: "I got a fair share of the value in the deal." },
+
+  // ─── The negotiation process — Procedural fairness + Counterpart trust + Pressure ───
+  { kind: "header", title: "The negotiation process" },
+  { key: "procfair_conducted", text: "The negotiation was conducted fairly." },
+  { key: "procfair_respect",   text: "I was treated with respect during the negotiation." },
+  { key: "procfair_voice",     text: "I had a fair chance to make my case." },
+  { key: "ctrust_trusted",   text: "I trusted the other side during the negotiation." },
+  { key: "ctrust_honest",    text: "The other side was honest with me." },
+  { key: "ctrust_goodfaith", text: "The other side acted in good faith." },
+  { key: "press_pushed",    text: "I felt pushed into things I didn't want." },
+  { key: "press_pressured", text: "The negotiation felt pressured overall." },
+  { key: "press_tactics",   text: "The other side used pressure tactics." },
+
+  // ─── Your experience — Emotion + Effort/engagement ───
+  { kind: "header", title: "Your experience" },
+  { key: "emot_pleasant",   text: "The negotiation was pleasant." },
+  { key: "emot_anxious",    text: "The negotiation made me feel anxious or stressed." },
+  { key: "effort_invested", text: "I invested significant effort in this negotiation." },
+  { key: "engage_engaged",  text: "I was fully engaged throughout the negotiation." },
+
+  // ─── Looking ahead — Future intention ───
+  { kind: "header", title: "Looking ahead" },
+  { key: "future_again",     text: "I would use an AI agent for a real negotiation in the future." },
+  { key: "future_recommend", text: "I would recommend AI-assisted negotiation to a friend." },
+  { key: "future_real",      text: "I'd be comfortable letting an AI negotiate something important on my behalf." },
+
+  // ─── Counterpart attribution (only meaningful in human modes) ───
+  { kind: "header", title: "Counterpart attribution" },
+  { key: "attribution_humanlike", text: "How human-like did the other side feel during the conversation?",
+    lowLabel: "clearly an AI", highLabel: "indistinguishable from a real person" },
+
+  // ─── Background — Algorithm aversion baseline ───
+  { kind: "header", title: "Background" },
+  { key: "alg_pref", text: "Generally, I trust AI more than humans for tasks like negotiating.",
+    lowLabel: "strongly disagree", highLabel: "strongly agree" },
 ];
 function getPostQuestions() {
   if (state.mode === "human_buyer" || state.mode === "human_seller") return POST_QUESTIONS_HUMAN;
@@ -2574,13 +2730,27 @@ function renderOutcomeCard() {
 }
 function renderPostSurvey() {
   const questions = getPostQuestions();
-  $("post-survey").innerHTML = questions.map((q) => `
-    <label>${q.text}</label>
-    <div class="likert" data-key="${q.key}">
-      ${[1,2,3,4,5,6,7].map((n) => `<button type="button" data-v="${n}">${n}</button>`).join("")}
-    </div>
-    <div class="likert-labels"><span>not at all</span><span>very</span></div>
-  `).join("");
+  // Headers don't carry a value — only Likert items count toward the
+  // completion gate that enables the Continue button.
+  const scaleQuestions = questions.filter((q) => q.kind !== "header");
+  $("post-survey").innerHTML = questions.map((q) => {
+    if (q.kind === "header") {
+      const sub = q.subtitle ? `<p class="survey-section-sub">${escapeHtml(q.subtitle)}</p>` : "";
+      return `<div class="survey-section">
+        <h3 class="survey-section-title">${escapeHtml(q.title)}</h3>
+        ${sub}
+      </div>`;
+    }
+    const lo = q.lowLabel || "not at all";
+    const hi = q.highLabel || "very";
+    return `
+      <label>${escapeHtml(q.text)}</label>
+      <div class="likert" data-key="${q.key}">
+        ${[1,2,3,4,5,6,7].map((n) => `<button type="button" data-v="${n}">${n}</button>`).join("")}
+      </div>
+      <div class="likert-labels"><span>${escapeHtml(lo)}</span><span>${escapeHtml(hi)}</span></div>
+    `;
+  }).join("");
   $("post-survey").querySelectorAll(".likert").forEach((row) => {
     const key = row.dataset.key;
     row.querySelectorAll("button").forEach((b) => {
@@ -2590,7 +2760,7 @@ function renderPostSurvey() {
         state.postRatings[key] = newVal;
         row.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
         b.classList.add("active");
-        $("btn-8-continue").disabled = Object.keys(state.postRatings).length < questions.length;
+        $("btn-8-continue").disabled = Object.keys(state.postRatings).length < scaleQuestions.length;
         // Section B — log Likert selection + revision events for analysis.
         track("likert_select", { key: key, value: newVal, revision: isRevision });
       });
