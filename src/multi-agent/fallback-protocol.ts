@@ -16,10 +16,12 @@ export function pickNextRoundRobin(state: OrchestratorState): ParticipantId {
   if (ids.length === 0) throw new Error("Round-robin fallback: no participants");
 
   // Find the most recent participant turn; next is the one after them.
+  // Both LLM ("participant") and human ("human") emitters count as the
+  // most-recent speaker for round-robin rotation purposes.
   for (let i = state.transcript.length - 1; i >= 0; i--) {
     const t = state.transcript[i];
     if (t === undefined) continue;
-    if (t.emitter !== "participant") continue;
+    if (t.emitter !== "participant" && t.emitter !== "human") continue;
     const idx = ids.indexOf(String(t.emitterId));
     if (idx >= 0) {
       const nextIdx = (idx + 1) % ids.length;

@@ -55,7 +55,14 @@ function filterTurnsForParticipant(transcript: Turn[], _participantId: Participa
   // v0: every participant sees the public transcript. Per-participant
   // contextFilters are loaded by id but not yet executed (would require
   // dynamic module loading from the scenario directory).
-  return transcript.filter((t) => t.emitter === "participant");
+  //
+  // IMPORTANT: include both "participant" (LLM-driven) and "human" emitters.
+  // In the human-vs-AI experiments (/bhx, /shx) the participant on one side is
+  // a real person and their turns are stored with emitter="human". If we
+  // filter those out, the AI counterpart sees an empty transcript and will
+  // open as if it were the first to speak — which is why the seller used to
+  // jump straight to a sales pitch even after the human had already greeted.
+  return transcript.filter((t) => t.emitter === "participant" || t.emitter === "human");
 }
 
 function renderTranscript(
