@@ -183,6 +183,10 @@ const server = http.createServer(async (req, res) => {
       await handleAdminData(req, res);
       return;
     }
+    if (req.method === "GET" && (url.pathname === "/adx/diagnostics" || url.pathname === "/admin/diagnostics")) {
+      await handleAdminDiagnostics(req, res);
+      return;
+    }
     if (req.method === "GET" && url.pathname.startsWith("/admin/p/")) {
       const pid = url.pathname.slice("/admin/p/".length);
       await handleAdminParticipantDetail(req, res, pid);
@@ -250,11 +254,29 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// ─── API-key diagnostics ───────────────────────────────────────────────
+//
+// Stored at module scope so they're queryable at runtime via
+// /adx/diagnostics (admin-auth gated) and /health (anonymized).
+// Compares FULL key values to detect duplicate-paste mistakes — last-4
+// alone could collide on rare matches, but identical full strings is
+// definitive: same key → same Anthropic workspace.
+interface KeyDiagnostics {
+  mode: "3-key" | "1-key" | "mixed";
+  distinctKeyCount: number;     // how many UNIQUE key values are in use across the 3 roles
+  buyer:        { source: "specific" | "shared"; fingerprint: string };
+  seller:       { source: "specific" | "shared"; fingerprint: string };
+  orchestrator: { source: "specific" | "shared"; fingerprint: string };
+  duplicateKeys: boolean;        // true if any two roles use the same key
+}
+let __keyDiag: KeyDiagnostics | null = null;
+function getKeyDiagnostics(): KeyDiagnostics | null { return __keyDiag; }
+
 // Boot-time env validation. Exits if no Anthropic key is reachable; warns
 // (but proceeds) if optional protections aren't configured. In multi-key
-// mode, also reports which key each role resolved to (last-4 fingerprint
-// only — never logs the full secret) so misconfigurations are visible
-// at a glance.
+// mode, also reports which key each role resolved to (first-8 + last-4
+// fingerprint only — never logs the full secret) so misconfigurations
+// are visible at a glance.
 function validateBootEnv(): void {
   const shared = process.env["ANTHROPIC_API_KEY"];
   const buyerKey  = process.env["BUYER_ANTHROPIC_API_KEY"];
@@ -270,37 +292,89 @@ function validateBootEnv(): void {
 
   // Resolve what each role will actually use at runtime, mirroring
   // resolveApiKey() in llm.ts. Then report the configuration clearly.
+  // Fingerprint = first 8 chars + last 4 chars, separated by an ellipsis.
+  // Two keys with identical fingerprints are almost certainly the same key
+  // (the real check below uses full-string equality for definitive proof).
   const fp = (k: string | undefined): string => {
     if (!k) return "(none)";
-    const tail = k.slice(-4);
-    return `…${tail}`;
+    if (k.length < 16) return "(short)";
+    return `${k.slice(0, 8)}…${k.slice(-4)}`;
   };
-  const sourceFor = (specific: string | undefined): "specific" | "shared" | "missing" => {
-    if (specific && specific.length > 0) return "specific";
-    if (shared && shared.length > 0) return "shared";
-    return "missing";
+  const sourceFor = (specific: string | undefined): "specific" | "shared" => {
+    return (specific && specific.length > 0) ? "specific" : "shared";
   };
+  const resolveFor = (specific: string | undefined): string => {
+    return (specific && specific.length > 0) ? specific : (shared || "");
+  };
+  const buyerResolved  = resolveFor(buyerKey);
+  const sellerResolved = resolveFor(sellerKey);
+  const orchResolved   = resolveFor(orchKey);
   const buyerSrc  = sourceFor(buyerKey);
   const sellerSrc = sourceFor(sellerKey);
   const orchSrc   = sourceFor(orchKey);
   const allSpecific = buyerSrc === "specific" && sellerSrc === "specific" && orchSrc === "specific";
   const allShared   = buyerSrc === "shared"   && sellerSrc === "shared"   && orchSrc === "shared";
 
+  // Definitive uniqueness — compare FULL key strings, not just fingerprints.
+  const distinctKeys = new Set([buyerResolved, sellerResolved, orchResolved].filter(Boolean));
+  const distinctKeyCount = distinctKeys.size;
+  const duplicateKeys = distinctKeyCount < 3;
+
+  __keyDiag = {
+    mode: allSpecific ? "3-key" : allShared ? "1-key" : "mixed",
+    distinctKeyCount,
+    buyer:        { source: buyerSrc,  fingerprint: fp(buyerResolved) },
+    seller:       { source: sellerSrc, fingerprint: fp(sellerResolved) },
+    orchestrator: { source: orchSrc,   fingerprint: fp(orchResolved) },
+    duplicateKeys,
+  };
+
   if (allSpecific) {
-    console.log("[boot] API keys: 3-key mode (per-role isolation)");
-    console.log(`[boot]   buyer        → BUYER_ANTHROPIC_API_KEY        ${fp(buyerKey)}`);
-    console.log(`[boot]   seller       → SELLER_ANTHROPIC_API_KEY       ${fp(sellerKey)}`);
-    console.log(`[boot]   orchestrator → ORCHESTRATOR_ANTHROPIC_API_KEY ${fp(orchKey)}`);
-    // Sanity: warn if the same key is reused for multiple roles — that
-    // defeats the point of separate workspaces.
-    const fps = [fp(buyerKey), fp(sellerKey), fp(orchKey)];
-    if (new Set(fps).size < 3) {
-      console.warn("[boot] ⚠ Two or more per-role keys appear identical (same last-4 fingerprint).");
-      console.warn("[boot]   For real workspace isolation, each role should have a key from its own Anthropic workspace.");
+    if (!duplicateKeys) {
+      console.log("[boot] ✓ API keys: 3-key mode — all 3 keys are DISTINCT");
+      console.log(`[boot]   buyer        → BUYER_ANTHROPIC_API_KEY        ${fp(buyerKey)}`);
+      console.log(`[boot]   seller       → SELLER_ANTHROPIC_API_KEY       ${fp(sellerKey)}`);
+      console.log(`[boot]   orchestrator → ORCHESTRATOR_ANTHROPIC_API_KEY ${fp(orchKey)}`);
+      console.log("[boot]   Each role's traffic will be attributed to its own Anthropic workspace.");
+    } else {
+      // Hard-stop visual: bracketed banner, error level, explicit fix steps.
+      console.error("");
+      console.error("[boot] ╔════════════════════════════════════════════════════════════════════╗");
+      console.error("[boot] ║                                                                    ║");
+      console.error("[boot] ║   ✗ API KEY MISCONFIGURATION — WORKSPACE ISOLATION IS NOT ACTIVE   ║");
+      console.error("[boot] ║                                                                    ║");
+      console.error("[boot] ╚════════════════════════════════════════════════════════════════════╝");
+      console.error("");
+      console.error("[boot] All three per-role env vars are SET, but only");
+      console.error(`[boot]   ${distinctKeyCount} distinct key value(s) are present across them.`);
+      console.error("[boot] ");
+      console.error(`[boot]   buyer        → BUYER_ANTHROPIC_API_KEY        ${fp(buyerKey)}`);
+      console.error(`[boot]   seller       → SELLER_ANTHROPIC_API_KEY       ${fp(sellerKey)}`);
+      console.error(`[boot]   orchestrator → ORCHESTRATOR_ANTHROPIC_API_KEY ${fp(orchKey)}`);
+      console.error("[boot] ");
+      console.error("[boot] All API traffic will hit the SAME Anthropic workspace, defeating the");
+      console.error("[boot] point of the 3-workspace setup. Your Anthropic console will show");
+      console.error("[boot] all usage attributed to a single workspace.");
+      console.error("[boot] ");
+      console.error("[boot] To fix:");
+      console.error("[boot]   1. console.anthropic.com → top-left workspace switcher → 'Create workspace'");
+      console.error("[boot]   2. Create THREE workspaces: 'AI2AI–Buyer', 'AI2AI–Seller', 'AI2AI–Orchestrator'");
+      console.error("[boot]   3. In EACH workspace, generate a NEW API key (Settings → API Keys)");
+      console.error("[boot]      — keys are unique per-workspace, so 3 different workspaces = 3 different keys");
+      console.error("[boot]   4. In Railway → Variables, paste each NEW key into its matching env var:");
+      console.error("[boot]        BUYER_ANTHROPIC_API_KEY        = key from AI2AI–Buyer workspace");
+      console.error("[boot]        SELLER_ANTHROPIC_API_KEY       = key from AI2AI–Seller workspace");
+      console.error("[boot]        ORCHESTRATOR_ANTHROPIC_API_KEY = key from AI2AI–Orchestrator workspace");
+      console.error("[boot]   5. Redeploy. The boot log should then say 'all 3 keys are DISTINCT'.");
+      console.error("[boot] ");
+      console.error("[boot] Server is starting anyway with these duplicate keys (so the platform stays");
+      console.error("[boot] functional), but you do NOT have rate-limit or spending isolation right now.");
+      console.error("");
     }
   } else if (allShared) {
     console.log("[boot] API keys: 1-key shared mode");
     console.log(`[boot]   ANTHROPIC_API_KEY ${fp(shared)} (used by buyer / seller / orchestrator)`);
+    console.log("[boot]   To upgrade to per-role isolation, set the three BUYER_/SELLER_/ORCHESTRATOR_ vars.");
   } else {
     // Mixed setup — some per-role keys present, others falling back to shared.
     // Common during a partial migration to 3-key mode. Warn but don't fail.
@@ -1538,6 +1612,28 @@ async function handleAdminParticipantDetail(
   }
   sendJson(res, 200, data);
 }
+
+// ─── Diagnostics endpoint ──────────────────────────────────────────────
+//
+// Returns the runtime API-key configuration so the researcher can verify
+// (without checking Railway logs) that all 3 per-role keys are distinct
+// and per-workspace isolation is actually active. Admin-auth gated.
+// Never returns the actual key values — only fingerprints (first-8 + last-4).
+async function handleAdminDiagnostics(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+  const diag = getKeyDiagnostics();
+  sendJson(res, 200, {
+    apiKeys: diag,
+    bootedAt: __bootedAt,
+    nodeVersion: process.version,
+    pid: process.pid,
+    uptimeSec: Math.floor(process.uptime()),
+  });
+}
+const __bootedAt = new Date().toISOString();
 
 // ─── Admin extension handlers ────────────────────────────────────────────
 
