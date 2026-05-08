@@ -3176,11 +3176,27 @@ async function runNegotiation() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ participantId: state.participantId }),
     });
-    if (!res.ok || !res.body) throw new Error("server returned " + res.status);
+    if (!res.ok || !res.body) throw await buildRunError(res);
     await readSse(res.body, handleSse);
   } catch (err) {
     showSessionError("connection_lost", err);
   }
+}
+
+// Build a descriptive Error from a non-OK fetch response. Reads the JSON
+// body so the user sees WHY the server rejected the run (e.g. "set role
+// first" / "no behavior prompt submitted yet" / "budget_exceeded") rather
+// than the bare "server returned 400". Defensive: tries JSON, falls back
+// to text, then gives up cleanly with just the status code.
+async function buildRunError(res) {
+  let detail = "";
+  try {
+    const body = await res.json();
+    detail = body.error || body.message || JSON.stringify(body);
+  } catch {
+    try { detail = await res.text(); } catch { /* give up */ }
+  }
+  return new Error(`server returned ${res.status}${detail ? " — " + detail : ""}`);
 }
 
 // ─── Session-error overlay (replaces the cryptic "Error: …" status) ────
@@ -3344,7 +3360,7 @@ async function runHumanNegotiation() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ participantId: state.participantId }),
     });
-    if (!res.ok || !res.body) throw new Error("server returned " + res.status);
+    if (!res.ok || !res.body) throw await buildRunError(res);
     await readSse(res.body, handleSse);
   } catch (err) {
     showSessionError("connection_lost", err);
