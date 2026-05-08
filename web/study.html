@@ -831,6 +831,57 @@
     font-style: italic;
   }
 
+  /* ─── Human-mode chat layout ──────────────────────────────────────────
+     In /bhx and /shx, lock the negotiation screen to the viewport height
+     so the chat input bar stays pinned at the bottom and only the
+     transcript scrolls within its own box. Activates only when:
+       (a) the page is in a human experiment mode (data-experiment-mode
+           starts with "human_"), AND
+       (b) screen-7 (the live negotiation) is the active screen.
+     Outside those conditions, layout falls back to the default page-flow
+     scroll used by /blx, /slx, and the rest of the SPA. */
+  html[data-experiment-mode^="human_"] body:has(#screen-7.active) {
+    overflow: hidden;
+  }
+  html[data-experiment-mode^="human_"] body:has(#screen-7.active) main {
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-bottom: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  html[data-experiment-mode^="human_"] body:has(#screen-7.active) #screen-7 {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  html[data-experiment-mode^="human_"] body:has(#screen-7.active) #screen-7 > .panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+  }
+  /* Only the transcript scrolls. */
+  html[data-experiment-mode^="human_"] body:has(#screen-7.active) #screen-7 > .panel > #transcript {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 6px;          /* keep scrollbar off the bubbles */
+    scrollbar-gutter: stable;
+  }
+  /* Pin the input bar at the bottom of the panel. */
+  html[data-experiment-mode^="human_"] body:has(#screen-7.active) #screen-7 > .panel > #chat-input-panel {
+    flex-shrink: 0;
+    margin-top: 12px;
+  }
+  /* Outcome banner (when shown, after end) sits between transcript and
+     input — keep it at its natural size, don't let it grow. */
+  html[data-experiment-mode^="human_"] body:has(#screen-7.active) #screen-7 > .panel > #outcome-banner {
+    flex-shrink: 0;
+  }
+
   /* Outcome reveal banner. */
   .outcome-banner {
     display: none;
