@@ -5,13 +5,79 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>AI2AI · Admin</title>
 <style>
+  /* ─── Design tokens ────────────────────────────────────────────────────
+     Mirrors web/study.html so both surfaces share a single visual language.
+     Edit one, copy the change to the other. */
   :root {
-    --bg: #0f1115; --panel: #161922; --panel-2: #1d2230; --panel-3: #232838;
-    --text: #e7eaf0; --dim: #9aa1ae; --accent: #6aa9ff;
-    --good: #6dd084; --warn: #e5a558; --bad: #e76f6f;
-    --buyer: #6dd084; --seller: #e5a558;
-    --border: #2a2f3d;
+    /* Surfaces */
+    --bg:           #0f1115;
+    --bg-elev:      #12161e;
+    --panel:        #161922;
+    --panel-2:      #1d2230;
+    --panel-3:      #232838;
+    /* Borders */
+    --border:       #2a2f3d;
+    --border-strong:#3a4156;
+    --border-soft:  #20242f;
+    /* Text */
+    --text:         #e7eaf0;
+    --text-2:       #c4cad7;
+    --dim:          #9aa1ae;
+    --muted:        #6c7385;
+    /* Brand & semantics */
+    --accent:       #6aa9ff;
+    --accent-fade:  rgba(106,169,255,0.15);
+    --accent-hover: #82b8ff;
+    --buyer:        #6dd084;
+    --seller:       #e5a558;
+    --good:         #6dd084;
+    --warn:         #e5a558;
+    --bad:          #e76f6f;
+    --info:         #6aa9ff;
+    /* Spacing scale */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-7: 32px;
+    --space-8: 40px;
+    /* Type scale */
+    --text-xs:  11px;
+    --text-sm:  12px;
+    --text-md:  13px;
+    --text-base:14px;
+    --text-lg:  15px;
+    --text-xl:  16px;
+    --text-2xl: 18px;
+    --text-3xl: 22px;
+    --text-4xl: 28px;
+    /* Radii */
+    --radius-sm:   4px;
+    --radius:      6px;
+    --radius-md:   8px;
+    --radius-lg:   10px;
+    --radius-xl:   14px;
+    --radius-full: 9999px;
+    /* Elevation */
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.30);
+    --shadow:    0 2px 8px rgba(0,0,0,0.30);
+    --shadow-md: 0 6px 20px rgba(0,0,0,0.40);
+    --shadow-lg: 0 14px 38px rgba(0,0,0,0.55);
+    /* Motion */
+    --ease:           cubic-bezier(0.2, 0.9, 0.3, 1.05);
+    --duration-fast:  120ms;
+    --duration:       200ms;
+    --duration-slow:  320ms;
+    /* Focus */
+    --focus-ring:     0 0 0 3px rgba(106,169,255,0.35);
   }
+  @media (prefers-reduced-motion: reduce) {
+    :root { --duration-fast: 0ms; --duration: 0ms; --duration-slow: 0ms; }
+  }
+  :focus { outline: none; }
+  :focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius); }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
          font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -25,19 +91,102 @@
   }
   header.topbar .links a:hover, header.topbar .links button:hover { color: var(--accent); }
 
-  /* Tab navigation */
+  /* Tab navigation — three semantic groups (Operations / Analysis / Data)
+     visually separated by inline group labels so the 5 flat tabs feel
+     intentional rather than ad-hoc. */
   nav.tabs {
-    background: var(--panel); border-bottom: 1px solid var(--border);
-    padding: 0 24px; display: flex; gap: 4px;
+    background: rgba(15, 17, 21, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 var(--space-6); display: flex; gap: 0;
     position: sticky; top: 0; z-index: 10;
+    align-items: stretch; flex-wrap: wrap;
+  }
+  nav.tabs .tab-group {
+    display: flex; align-items: stretch;
+    border-right: 1px solid var(--border);
+    padding-right: var(--space-2);
+    margin-right: var(--space-2);
+  }
+  nav.tabs .tab-group:last-child { border-right: none; }
+  nav.tabs .tab-group-label {
+    align-self: center;
+    font-size: var(--text-xs);
+    text-transform: uppercase; letter-spacing: 0.10em;
+    color: var(--muted);
+    padding: 0 var(--space-2) 0 var(--space-1);
+    user-select: none;
   }
   nav.tabs button {
     background: none; border: none; color: var(--dim); cursor: pointer;
-    padding: 12px 16px; font: inherit; font-size: 13px; font-weight: 500;
+    padding: var(--space-3) var(--space-4); font: inherit; font-size: var(--text-md); font-weight: var(--weight-medium, 500);
     border-bottom: 2px solid transparent;
+    transition: color var(--duration-fast), border-color var(--duration-fast);
   }
   nav.tabs button:hover { color: var(--text); }
   nav.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ─── Reusable atoms ─────────────────────────────────────────────────── */
+  .empty-state {
+    padding: var(--space-7) var(--space-5);
+    text-align: center;
+    color: var(--dim);
+  }
+  .empty-state-icon { font-size: 36px; margin-bottom: var(--space-3); opacity: 0.6; }
+  .empty-state-title { font-size: var(--text-xl); color: var(--text); margin: 0 0 var(--space-2); }
+  .empty-state-hint { font-size: var(--text-base); }
+  .skel {
+    background: linear-gradient(90deg, var(--panel-2) 0%, var(--panel-3) 50%, var(--panel-2) 100%);
+    background-size: 200% 100%;
+    animation: skel-shimmer 1.4s linear infinite;
+    border-radius: var(--radius);
+  }
+  .skel-line { height: 12px; margin: var(--space-2) 0; }
+  .skel-line.lg { height: 18px; }
+  .skel-line.sm { height: 9px; }
+  @keyframes skel-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .error-banner {
+    display: flex; gap: var(--space-3); align-items: flex-start;
+    padding: var(--space-3) var(--space-4);
+    background: rgba(231, 111, 111, 0.08);
+    border: 1px solid rgba(231, 111, 111, 0.35);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font-size: var(--text-base);
+    margin: var(--space-3) 0;
+  }
+  .error-banner::before {
+    content: "!"; flex: 0 0 auto;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--bad); color: #150b0b;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: var(--weight-bold, 700); font-size: var(--text-base);
+  }
+
+  /* Sortable table headers — chevron toggles between ▲ / ▼ / "—" (unsorted). */
+  table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: var(--space-5);
+  }
+  table th.sortable::after {
+    content: "↕";
+    position: absolute;
+    right: var(--space-2);
+    top: 50%; transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 10px;
+    transition: color var(--duration-fast);
+  }
+  table th.sortable:hover { color: var(--text); }
+  table th.sortable:hover::after { color: var(--text); }
+  table th.sortable.sort-asc::after  { content: "▲"; color: var(--accent); }
+  table th.sortable.sort-desc::after { content: "▼"; color: var(--accent); }
 
   main { max-width: 1600px; margin: 0 auto; padding: 24px; }
   .panel { background: var(--panel); border: 1px solid var(--border);
@@ -144,12 +293,24 @@
   </div>
 </header>
 
-<nav class="tabs">
-  <button class="tab-btn active" data-tab="overview">Overview</button>
-  <button class="tab-btn" data-tab="analytics">Analytics</button>
-  <button class="tab-btn" data-tab="quality">Quality</button>
-  <button class="tab-btn" data-tab="cost">Cost</button>
-  <button class="tab-btn" data-tab="exports">Exports</button>
+<!-- Tabs grouped semantically: live operations, analytical views, raw data.
+     Visual grouping only — the underlying tab routing logic still keys on
+     data-tab, so analyses elsewhere remain unaffected. -->
+<nav class="tabs" aria-label="Admin sections">
+  <div class="tab-group">
+    <span class="tab-group-label">Operations</span>
+    <button class="tab-btn active" data-tab="overview">Overview</button>
+    <button class="tab-btn" data-tab="quality">Quality</button>
+  </div>
+  <div class="tab-group">
+    <span class="tab-group-label">Analysis</span>
+    <button class="tab-btn" data-tab="analytics">Analytics</button>
+    <button class="tab-btn" data-tab="cost">Cost</button>
+  </div>
+  <div class="tab-group">
+    <span class="tab-group-label">Data</span>
+    <button class="tab-btn" data-tab="exports">Exports</button>
+  </div>
 </nav>
 
 <main>
@@ -183,12 +344,31 @@
       <table id="participants-table">
         <thead>
           <tr>
-            <th>ID</th><th>Role</th><th>Mode</th><th>Personality</th><th>Status</th><th>Outcome</th><th>Final $</th>
-            <th>Turns</th><th>Tokens</th><th>Time</th><th>Last screen</th><th>Events</th>
-            <th>Flags</th><th>Code</th><th></th>
+            <th class="sortable" data-sort-key="id">ID</th>
+            <th class="sortable" data-sort-key="role">Role</th>
+            <th class="sortable" data-sort-key="mode">Mode</th>
+            <th class="sortable" data-sort-key="personality">Personality</th>
+            <th class="sortable" data-sort-key="status">Status</th>
+            <th class="sortable" data-sort-key="outcome">Outcome</th>
+            <th class="sortable" data-sort-key="finalPrice">Final $</th>
+            <th class="sortable" data-sort-key="turns">Turns</th>
+            <th class="sortable" data-sort-key="tokens">Tokens</th>
+            <th class="sortable" data-sort-key="totalTime">Time</th>
+            <th class="sortable" data-sort-key="lastScreen">Last screen</th>
+            <th class="sortable" data-sort-key="eventsCount">Events</th>
+            <th>Flags</th>
+            <th class="sortable" data-sort-key="completionCode">Code</th>
+            <th></th>
           </tr>
         </thead>
-        <tbody id="participants-body"><tr><td colspan="15">Loading…</td></tr></tbody>
+        <tbody id="participants-body">
+          <tr><td colspan="15">
+            <div class="skel skel-line lg" style="margin: 12px 0"></div>
+            <div class="skel skel-line"></div>
+            <div class="skel skel-line"></div>
+            <div class="skel skel-line"></div>
+          </td></tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -462,6 +642,7 @@ function renderFunnel(rows) {
 
 // ─── Overview: participants table with filters ─────────────────────────
 let allParticipants = [];
+let participantSort = { key: null, dir: "desc" };
 function renderParticipants(rows) { allParticipants = rows; applyFilter(); }
 $("filter").addEventListener("input", applyFilter);
 $("filter-role").addEventListener("change", applyFilter);
@@ -471,6 +652,46 @@ $("filter-personality").addEventListener("change", applyFilter);
 $("filter-status").addEventListener("change", applyFilter);
 $("filter-hide-flagged").addEventListener("change", applyFilter);
 $("filter-hide-test").addEventListener("change", applyFilter);
+
+// Sortable column headers — click toggles asc/desc; clicking a different
+// column resets to desc. Sort key is read from data-sort-key on each <th>
+// and resolved against the canonical participant row via a small mapping.
+document.querySelectorAll('#participants-table th.sortable').forEach((th) => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sortKey;
+    if (participantSort.key === key) {
+      participantSort.dir = participantSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      participantSort = { key, dir: 'desc' };
+    }
+    document.querySelectorAll('#participants-table th.sortable')
+      .forEach((x) => x.classList.remove('sort-asc', 'sort-desc'));
+    th.classList.add(participantSort.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+    applyFilter();
+  });
+});
+
+// Map abstract sort keys to comparable values from the row.
+function participantSortValue(p, key) {
+  switch (key) {
+    case 'id': return p.id || '';
+    case 'role': return p.role || '';
+    case 'mode': return p.experiment_mode || 'agent';
+    case 'personality': return p.opponent_personality || '';
+    case 'status': return p.status || '';
+    case 'outcome': return p.outcome_type || '';
+    case 'finalPrice': {
+      try { const t = JSON.parse(p.outcome_terms_json || '{}'); return Number(t.price) || 0; } catch { return 0; }
+    }
+    case 'turns': return Number(p.turns_consumed) || 0;
+    case 'tokens': return Number(p.tokens_total) || 0;
+    case 'totalTime': return Number(p.total_time_sec) || 0;
+    case 'lastScreen': return Number(p.last_screen) || 0;
+    case 'eventsCount': return Number(p.events_count) || 0;
+    case 'completionCode': return p.completion_code || '';
+    default: return '';
+  }
+}
 
 function applyFilter() {
   const q = $("filter").value.toLowerCase().trim();
@@ -497,12 +718,29 @@ function applyFilter() {
     return true;
   });
   $("filter-count").textContent = filtered.length + " of " + allParticipants.length + " shown";
+  // Apply current sort (if any) before rendering.
+  if (participantSort.key) {
+    const dir = participantSort.dir === 'asc' ? 1 : -1;
+    filtered.sort((a, b) => {
+      const va = participantSortValue(a, participantSort.key);
+      const vb = participantSortValue(b, participantSort.key);
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+      return String(va).localeCompare(String(vb)) * dir;
+    });
+  }
   renderTable(filtered);
 }
 
 function renderTable(rows) {
   if (rows.length === 0) {
-    $("participants-body").innerHTML = "<tr><td colspan='15' style='text-align:center;color:var(--dim)'>No participants match.</td></tr>";
+    $("participants-body").innerHTML = `
+      <tr><td colspan="15" style="padding:0">
+        <div class="empty-state">
+          <div class="empty-state-icon" aria-hidden="true">👥</div>
+          <div class="empty-state-title">No participants match these filters</div>
+          <div class="empty-state-hint">Try clearing the search box or relaxing one of the filter dropdowns.</div>
+        </div>
+      </td></tr>`;
     return;
   }
   $("participants-body").innerHTML = rows.map(p => {

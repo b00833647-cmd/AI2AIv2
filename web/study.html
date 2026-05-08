@@ -30,26 +30,255 @@
   })();
 </script>
 <style>
+  /* ─── Design tokens ────────────────────────────────────────────────────
+     Single source of truth for the participant SPA. Every screen pulls
+     from these variables — change a value here and it ripples everywhere.
+     Sister tokens exist in web/admin.html so the two surfaces stay in sync. */
   :root {
-    --bg: #0f1115;
-    --panel: #161922;
-    --panel-2: #1d2230;
-    --panel-3: #232838;
-    --text: #e7eaf0;
-    --dim: #9aa1ae;
-    --accent: #6aa9ff;
-    --accent-fade: #6aa9ff22;
-    --buyer: #57c4a3;
-    --seller: #e89e57;
-    --good: #6dd084;
-    --warn: #e5a558;
-    --bad: #e76f6f;
-    --border: #2a2f3d;
-    --listing-bg: #11151c;
+    /* Surfaces (dark theme) */
+    --bg:           #0f1115;
+    --bg-elev:      #12161e;       /* sticky shell, lifted backgrounds */
+    --panel:        #161922;       /* default card */
+    --panel-2:      #1d2230;       /* nested card / form-row */
+    --panel-3:      #232838;       /* deepest inset (form fields, chips) */
+    --listing-bg:   #11151c;
+    /* Borders & dividers */
+    --border:       #2a2f3d;
+    --border-strong:#3a4156;
+    --border-soft:  #20242f;
+    /* Text */
+    --text:         #e7eaf0;
+    --text-2:       #c4cad7;       /* secondary body */
+    --dim:          #9aa1ae;       /* metadata / labels */
+    --muted:        #6c7385;       /* placeholders / disabled */
+    /* Brand & semantics */
+    --accent:       #6aa9ff;
+    --accent-fade:  rgba(106,169,255,0.15);
+    --accent-hover: #82b8ff;
+    --buyer:        #57c4a3;
+    --seller:       #e89e57;
+    --good:         #6dd084;
+    --warn:         #e5a558;
+    --bad:          #e76f6f;
+    --info:         #6aa9ff;
     --listing-accent: #f5b042;
+    /* Spacing scale (4px base) */
+    --space-1:  4px;
+    --space-2:  8px;
+    --space-3:  12px;
+    --space-4:  16px;
+    --space-5:  20px;
+    --space-6:  24px;
+    --space-7:  32px;
+    --space-8:  40px;
+    --space-9:  56px;
+    --space-10: 72px;
+    /* Type scale */
+    --text-xs:  11px;
+    --text-sm:  12px;
+    --text-md:  13px;
+    --text-base:14px;
+    --text-lg:  15px;
+    --text-xl:  16px;
+    --text-2xl: 18px;
+    --text-3xl: 22px;
+    --text-4xl: 28px;
+    --text-5xl: 36px;
+    --text-6xl: 56px;
+    /* Weights / leading */
+    --weight-regular: 400;
+    --weight-medium:  500;
+    --weight-semi:    600;
+    --weight-bold:    700;
+    --weight-black:   800;
+    --leading-tight:   1.2;
+    --leading-snug:    1.35;
+    --leading-normal:  1.55;
+    /* Radii */
+    --radius-sm:   4px;
+    --radius:      6px;
+    --radius-md:   8px;
+    --radius-lg:   10px;
+    --radius-xl:   14px;
+    --radius-2xl:  18px;
+    --radius-full: 9999px;
+    /* Elevation */
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.30);
+    --shadow:    0 2px 8px rgba(0,0,0,0.30);
+    --shadow-md: 0 6px 20px rgba(0,0,0,0.40);
+    --shadow-lg: 0 14px 38px rgba(0,0,0,0.55);
+    --shadow-xl: 0 22px 56px rgba(0,0,0,0.65);
+    /* Motion */
+    --ease:           cubic-bezier(0.2, 0.9, 0.3, 1.05);
+    --ease-out:       cubic-bezier(0.2, 0.7, 0.3, 1.0);
+    --duration-fast:  120ms;
+    --duration:       200ms;
+    --duration-slow:  320ms;
+    --duration-reveal:700ms;
+    /* Layout */
+    /* The shell is now just a thin progress bar — the brand/badge/step row
+       is hidden via .app-shell-inner { display: none }. shell-h kept at 0
+       so viewport calculations only need to subtract the progress bar height. */
+    --shell-h:        0px;
+    --progress-h:     4px;
+    --shell-pad-y:    clamp(16px, 2.5vw, 32px);
+    --shell-pad-x:    clamp(14px, 2.5vw, 32px);
+    --max-content:    min(1600px, 96vw);
+    /* Focus */
+    --focus-ring:     0 0 0 3px rgba(106,169,255,0.35);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --duration-fast: 0ms;
+      --duration:      0ms;
+      --duration-slow: 0ms;
+      --duration-reveal: 0ms;
+    }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
+
+  /* ─── Global focus ring ────────────────────────────────────────────────
+     Visible only on keyboard focus (`:focus-visible`). Mouse users keep
+     the existing un-ringed look. */
+  :focus { outline: none; }
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: var(--radius);
+  }
+
+  /* ─── App shell ────────────────────────────────────────────────────────
+     Reduced to just a thin progress bar — the title/badge/step row is
+     hidden by request to keep the participant view minimal. The progress
+     bar still updates as show() advances through screens. */
+  .app-shell {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    background: transparent;
+    border-bottom: none;
+  }
+  /* Header row (brand mark, mode badge, step counter) — hidden. The CSS
+     rules below for .app-brand / .app-mode-badge / .app-step are kept so
+     the shell can be re-enabled later by removing this single override. */
+  .app-shell-inner { display: none; }
+  .app-brand {
+    display: flex; align-items: center; gap: var(--space-2);
+    color: var(--text);
+    font-weight: var(--weight-semi);
+    font-size: var(--text-base);
+    letter-spacing: 0.02em;
+  }
+  .app-brand-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px;
+    border-radius: var(--radius);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--buyer) 100%);
+    color: #0a0f1a;
+    font-weight: var(--weight-black); font-size: var(--text-md);
+  }
+  .app-brand-name { display: none; }
+  @media (min-width: 640px) { .app-brand-name { display: inline; } }
+  .app-mode-badge {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    font-size: var(--text-sm);
+    color: var(--dim);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+    max-width: 60vw;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .app-mode-badge[data-role="buyer"]  { color: var(--buyer);  border-color: rgba(87,196,163,0.3); }
+  .app-mode-badge[data-role="seller"] { color: var(--seller); border-color: rgba(232,158,87,0.3); }
+  .app-shell-spacer { flex: 1 1 auto; }
+  .app-step {
+    color: var(--dim);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .app-step strong { color: var(--text); font-weight: var(--weight-semi); }
+  .app-progress {
+    height: var(--progress-h);
+    background: var(--bg-elev);
+    overflow: hidden;
+  }
+  .app-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent) 0%, var(--buyer) 100%);
+    transition: width var(--duration-slow) var(--ease);
+    box-shadow: 0 0 6px rgba(106,169,255,0.4);
+  }
+  /* On the role-pick demo entry screen the shell shouldn't show progress */
+  body[data-shell-hidden] .app-shell { display: none; }
+
+  /* ─── Screen fade transitions ─────────────────────────────────────────
+     Each .screen.active fades in. Reduced-motion users get instant cuts
+     (motion vars collapse to 0ms). */
+  .screen.active {
+    animation: screenIn var(--duration-slow) var(--ease) both;
+  }
+  @keyframes screenIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Reusable atoms ──────────────────────────────────────────────────
+     These are app-wide components composed into screens. */
+
+  /* Error banner — replaces ad-hoc inline error spans */
+  .error-banner {
+    display: flex; gap: var(--space-3); align-items: flex-start;
+    padding: var(--space-3) var(--space-4);
+    background: rgba(231, 111, 111, 0.08);
+    border: 1px solid rgba(231, 111, 111, 0.35);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font-size: var(--text-base);
+    margin-top: var(--space-3);
+  }
+  .error-banner::before {
+    content: "!"; flex: 0 0 auto;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--bad); color: #150b0b;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: var(--weight-bold); font-size: var(--text-base);
+  }
+
+  /* Loading skeleton blocks */
+  .skel {
+    background: linear-gradient(90deg, var(--panel-2) 0%, var(--panel-3) 50%, var(--panel-2) 100%);
+    background-size: 200% 100%;
+    animation: skel-shimmer 1.4s linear infinite;
+    border-radius: var(--radius);
+  }
+  .skel-line { height: 12px; margin: var(--space-2) 0; }
+  .skel-line.lg { height: 18px; }
+  .skel-line.sm { height: 9px; }
+  @keyframes skel-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Empty state */
+  .empty-state {
+    padding: var(--space-7) var(--space-5);
+    text-align: center;
+    color: var(--dim);
+  }
+  .empty-state-title {
+    font-size: var(--text-xl);
+    color: var(--text);
+    margin: 0 0 var(--space-2);
+  }
+  .empty-state-hint { font-size: var(--text-base); }
+  .empty-state-icon { font-size: 36px; margin-bottom: var(--space-3); opacity: 0.6; }
   body {
     background: var(--bg);
     color: var(--text);
@@ -73,28 +302,41 @@
      Non-dismissible full-viewport overlay. */
   body.mobile-blocked .screen { display: none !important; }
   body.mobile-blocked main { display: none; }
+  /* Mobile block — keeps the platform's dark/blue aesthetic. Replaces the
+     previous red-alert card with an on-brand explanatory panel. */
   .mobile-block-overlay {
     position: fixed; inset: 0;
-    background: rgba(15, 17, 21, 0.96);
+    background: radial-gradient(1200px 600px at 50% -10%, rgba(106,169,255,0.10), transparent 60%),
+                rgba(15, 17, 21, 0.97);
     display: flex; align-items: center; justify-content: center;
-    z-index: 9999; padding: 20px;
+    z-index: 9999; padding: var(--space-5);
+    backdrop-filter: blur(6px);
   }
   .mobile-block-card {
     background: var(--panel);
-    border: 2px solid #c0392b;
-    padding: 28px 26px;
+    border: 1px solid var(--border);
+    padding: var(--space-7) var(--space-6);
     max-width: 480px; width: 100%;
-    border-radius: 12px;
+    border-radius: var(--radius-xl);
     text-align: left;
-    box-shadow: 0 18px 46px rgba(0,0,0,0.6);
+    box-shadow: var(--shadow-xl);
+  }
+  .mobile-block-card .mobile-block-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 48px; height: 48px;
+    border-radius: var(--radius-md);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--buyer) 100%);
+    color: #0a0f1a; font-weight: var(--weight-black); font-size: var(--text-xl);
+    margin-bottom: var(--space-4);
   }
   .mobile-block-card h2 {
-    color: #ff6b5e; margin: 0 0 14px;
-    font-size: 22px; line-height: 1.25;
+    color: var(--text); margin: 0 0 var(--space-3);
+    font-size: var(--text-3xl); line-height: var(--leading-snug);
   }
   .mobile-block-card p {
-    font-size: 15px; line-height: 1.55;
-    margin: 0 0 12px;
+    font-size: var(--text-lg); line-height: var(--leading-normal);
+    color: var(--text-2);
+    margin: 0 0 var(--space-3);
   }
   .mobile-block-card a { color: var(--accent); }
   /* Pre-paint hide of the role-pick screen on /blx and /slx — paired with
@@ -203,6 +445,19 @@
     font-size: 28px; line-height: 1;
     display: inline-block; margin-bottom: 12px;
   }
+
+  /* Required-field marker + per-field inline error message — used on the
+     demographics screen (screen-9). The error stays empty until validation
+     surfaces a problem; it expands inline below the offending field. */
+  .required-mark { color: var(--bad); font-weight: var(--weight-bold); margin-left: 2px; }
+  .field-error {
+    color: var(--bad);
+    font-size: var(--text-sm);
+    margin-top: 4px;
+    min-height: 0;
+    display: none;
+  }
+  .field-error.show { display: block; }
 
   /* Section dividers in the post-survey — visual grouping only, the
      underlying data model is still a flat key→Likert map. */
@@ -619,6 +874,61 @@
 
   /* ─── Live negotiation screen — Tier 1 enhancements ─── */
 
+  /* Stage header — title left, live state pill right. */
+  .stage-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+  .stage-header h2 { margin: 0; font-size: var(--text-2xl); }
+  .stage-status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .stage-status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    box-shadow: 0 0 0 0 rgba(255,255,255,0);
+    flex: 0 0 auto;
+  }
+  /* Live (running) — green dot with a soft pulse. */
+  .stage-status-pill[data-state="running"] {
+    color: var(--good);
+    border-color: rgba(109,208,132,0.35);
+  }
+  .stage-status-pill[data-state="running"] .stage-status-dot {
+    background: var(--good);
+    animation: stagePulse 1.6s ease-in-out infinite;
+  }
+  /* Done states — quiet, no pulse. */
+  .stage-status-pill[data-state="agreed"]   { color: var(--good); border-color: rgba(109,208,132,0.35); }
+  .stage-status-pill[data-state="agreed"]   .stage-status-dot { background: var(--good); }
+  .stage-status-pill[data-state="impasse"],
+  .stage-status-pill[data-state="timeout"]  { color: var(--warn); border-color: rgba(229,165,88,0.35); }
+  .stage-status-pill[data-state="impasse"]  .stage-status-dot,
+  .stage-status-pill[data-state="timeout"]  .stage-status-dot { background: var(--warn); }
+  .stage-status-pill[data-state="rejected"],
+  .stage-status-pill[data-state="aborted"]  { color: var(--bad); border-color: rgba(231,111,111,0.35); }
+  .stage-status-pill[data-state="rejected"] .stage-status-dot,
+  .stage-status-pill[data-state="aborted"]  .stage-status-dot { background: var(--bad); }
+  /* Error state — red, no pulse. */
+  .stage-status-pill[data-state="error"]    { color: var(--bad); border-color: rgba(231,111,111,0.35); }
+  .stage-status-pill[data-state="error"]    .stage-status-dot { background: var(--bad); }
+  @keyframes stagePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(109,208,132,0.5); }
+    50%      { box-shadow: 0 0 0 6px rgba(109,208,132,0); }
+  }
+
   /* Sticky price ticker at the top of the screen. */
   .price-ticker {
     position: sticky;
@@ -653,6 +963,20 @@
   .ticker-cell.buyer  .ticker-value.live { color: var(--buyer); }
   .ticker-cell.seller .ticker-value.live { color: var(--seller); }
   .ticker-cell.spread .ticker-value { font-size: 18px; color: var(--accent); }
+  /* Spread gauge — two coloured bars that meet in the middle as the
+     buyer's offer rises and the seller's ask falls. Width set by JS. */
+  .ticker-gauge {
+    margin-top: 8px;
+    height: 6px;
+    width: 100%;
+    background: var(--panel-3);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    display: flex;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .ticker-gauge-buyer  { background: var(--buyer);  width: 0%; transition: width var(--duration-slow) var(--ease); }
+  .ticker-gauge-seller { background: var(--seller); width: 0%; transition: width var(--duration-slow) var(--ease); margin-left: auto; }
   .ticker-value.flash { animation: flashUpdate 700ms ease-out; }
   @keyframes flashUpdate {
     0%   { transform: scale(1); }
@@ -700,7 +1024,16 @@
   }
   .bubble.buyer  { border-bottom-left-radius: 4px;  border-left:  3px solid var(--buyer); }
   .bubble.seller { border-bottom-right-radius: 4px; border-right: 3px solid var(--seller); }
-  .bubble-meta { font-size: 11px; color: var(--dim); margin-bottom: 4px; text-transform: lowercase; }
+  .bubble-meta {
+    font-size: 11px; color: var(--dim);
+    margin-bottom: 4px; text-transform: lowercase;
+    display: flex; gap: 8px; align-items: baseline;
+  }
+  .bubble-time {
+    font-size: 10px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    text-transform: none;
+  }
   .bubble-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
   .bubble-text strong { color: var(--text); font-weight: 600; }
   .bubble-text em { font-style: italic; }
@@ -756,6 +1089,75 @@
   @keyframes typingPulse {
     0%, 60%, 100% { opacity: 0.3; transform: scale(0.85); }
     30%           { opacity: 1;   transform: scale(1.15); }
+  }
+
+  /* ─── Floating "jump to latest" button ───────────────────────────────
+     Hidden by default; the JS in screen-7 toggles `.visible` whenever
+     the user scrolls up away from the transcript bottom. */
+  .scroll-latest {
+    position: sticky;
+    bottom: var(--space-4);
+    margin-left: auto;
+    margin-right: var(--space-4);
+    padding: 8px 14px 8px 12px;
+    background: var(--accent);
+    color: #0a0f1a;
+    border: none;
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-md);
+    cursor: pointer;
+    font-size: var(--text-sm); font-weight: var(--weight-semi);
+    display: none;
+    align-items: center; gap: 6px;
+    transform: translateY(8px);
+    opacity: 0;
+    transition: opacity var(--duration) var(--ease), transform var(--duration) var(--ease);
+    z-index: 5;
+  }
+  .scroll-latest.visible {
+    display: inline-flex;
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .scroll-latest:hover { background: var(--accent-hover); }
+
+  /* Intent chip — sits above the textarea and live-updates as the user
+     types. Color/icon shifts per detected intent (message / counter /
+     accept / reject) so participants always know what's about to land. */
+  .chat-intent {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    color: var(--dim);
+    margin-bottom: var(--space-2);
+    transition: color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast);
+    user-select: none;
+  }
+  .chat-intent-icon { font-size: var(--text-base); line-height: 1; }
+  .chat-intent-label { font-weight: var(--weight-medium, 500); }
+  .chat-intent[data-action="message"] {
+    color: var(--dim);
+    border-color: var(--border);
+  }
+  .chat-intent[data-action="counter"] {
+    color: var(--accent);
+    border-color: rgba(106,169,255,0.45);
+    background: rgba(106,169,255,0.10);
+  }
+  .chat-intent[data-action="accept"] {
+    color: var(--good);
+    border-color: rgba(109,208,132,0.45);
+    background: rgba(109,208,132,0.10);
+  }
+  .chat-intent[data-action="reject"] {
+    color: var(--bad);
+    border-color: rgba(231,111,111,0.45);
+    background: rgba(231,111,111,0.10);
   }
 
   /* ─── Chat input (human-mode only) ───────────────────────────────────── */
@@ -850,55 +1252,184 @@
     font-style: italic;
   }
 
-  /* ─── Human-mode chat layout ──────────────────────────────────────────
-     In /bhx and /shx, lock the negotiation screen to the viewport height
-     so the chat input bar stays pinned at the bottom and only the
-     transcript scrolls within its own box. Activates only when:
-       (a) the page is in a human experiment mode (data-experiment-mode
-           starts with "human_"), AND
-       (b) screen-7 (the live negotiation) is the active screen.
-     Outside those conditions, layout falls back to the default page-flow
-     scroll used by /blx, /slx, and the rest of the SPA. */
-  html[data-experiment-mode^="human_"] body:has(#screen-7.active) {
+  /* ─── Negotiation stage layout (screen-7, all routes) ─────────────────
+     The live negotiation always fills the viewport below the app shell.
+     The transcript scrolls inside its own bounded box; the ticker and
+     outcome banner stay anchored at the top and bottom of the stage.
+     Same shape for /blx, /slx, /bhx, /shx — the chat-input-panel only
+     renders in human modes, so it just no-ops in agent modes.
+
+     This gives the screen a stable aspect ratio: as turns arrive, the page
+     never scrolls, the panel never reflows, and the outcome banner morphs
+     into place at the bottom instead of appearing below the fold. */
+  body:has(#screen-7.active) {
     overflow: hidden;
   }
-  html[data-experiment-mode^="human_"] body:has(#screen-7.active) main {
-    height: 100dvh;
-    max-height: 100dvh;
-    padding-bottom: 0;
+  body:has(#screen-7.active) main {
+    height: calc(100dvh - var(--progress-h));
+    max-height: calc(100dvh - var(--progress-h));
+    /* Generous bottom + top padding so the deck floats with breathing room
+       above and below — visibly shorter than the viewport. */
+    padding-bottom: var(--space-7);
+    padding-top: var(--space-4);
     display: flex;
     flex-direction: column;
   }
-  html[data-experiment-mode^="human_"] body:has(#screen-7.active) #screen-7 {
+  body:has(#screen-7.active) #screen-7 {
+    /* Locked deck: fills the available vertical space from just under the
+       progress bar to the bottom of the viewport. flex:1 (with min-height:0
+       to allow internal overflow) gives the deck a fixed, content-independent
+       size — turns can accumulate without making the deck "grow"; the
+       transcript scrolls inside its own bounded box instead. */
     flex: 1 1 auto;
     min-height: 0;
+    height: 100%;
     display: flex;
     flex-direction: column;
+    /* Width: fill the main container the same as every other screen
+       (consent, listing, prompts) — main caps at 1600px on wide displays
+       and pads to 96vw otherwise. */
+    width: 100%;
   }
-  html[data-experiment-mode^="human_"] body:has(#screen-7.active) #screen-7 > .panel {
+  body:has(#screen-7.active) #screen-7 > .panel {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
     margin-bottom: 0;
+    padding: var(--space-5);
   }
-  /* Only the transcript scrolls. */
-  html[data-experiment-mode^="human_"] body:has(#screen-7.active) #screen-7 > .panel > #transcript {
+  /* Only the transcript scrolls inside the stage. */
+  body:has(#screen-7.active) #screen-7 > .panel > #transcript {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
     padding-right: 6px;          /* keep scrollbar off the bubbles */
     scrollbar-gutter: stable;
+    /* Faint inner stage feel — slightly recessed background so the
+       transcript reads as the focal area, not just unbordered flow. */
+    background: linear-gradient(180deg, rgba(0,0,0,0.10) 0%, transparent 30%);
+    border-radius: var(--radius-md);
   }
-  /* Pin the input bar at the bottom of the panel. */
-  html[data-experiment-mode^="human_"] body:has(#screen-7.active) #screen-7 > .panel > #chat-input-panel {
+  /* Chat input pinned to the bottom (human modes only — display:none in agent). */
+  body:has(#screen-7.active) #screen-7 > .panel > #chat-input-panel {
     flex-shrink: 0;
-    margin-top: 12px;
+    margin-top: var(--space-3);
   }
-  /* Outcome banner (when shown, after end) sits between transcript and
-     input — keep it at its natural size, don't let it grow. */
-  html[data-experiment-mode^="human_"] body:has(#screen-7.active) #screen-7 > .panel > #outcome-banner {
+  /* Outcome banner sits between transcript and input zone — stays at its
+     natural height, never grows. After the negotiation ends, the transcript
+     shrinks just enough to make room without the page scrolling. */
+  body:has(#screen-7.active) #screen-7 > .panel > #outcome-banner {
     flex-shrink: 0;
+  }
+  /* Bubble stability — caps reading width and pins a minimum height so a
+     "ok" reply doesn't visibly squish a 4-paragraph reasoning bubble next
+     to it. Variable maxima per viewport prevent overlong reading lines. */
+  body:has(#screen-7.active) .bubble {
+    max-width: 560px;
+    min-height: 44px;
+  }
+  @media (max-width: 760px) {
+    body:has(#screen-7.active) .bubble { max-width: 78%; }
+  }
+
+  /* ─── Questionnaire deck (screen-8) ───────────────────────────────────
+     Same fixed-deck pattern as screen-7. Two-column layout where each
+     column scrolls independently within the viewport:
+       - Left column: outcome card (top, fixed) + transcript replay (scrolls)
+       - Right column: H2 (top) + survey questions (scrolls) + free-text and
+         submit button (bottom, fixed footer-style)
+     Page never grows. Continue button always visible. */
+  body:has(#screen-8.active) {
+    overflow: hidden;
+  }
+  body:has(#screen-8.active) main {
+    height: calc(100dvh - var(--progress-h));
+    max-height: calc(100dvh - var(--progress-h));
+    /* Match the negotiation deck's breathing room — same vertical
+       proportions across the two fixed-deck screens. */
+    padding-bottom: var(--space-7);
+    padding-top: var(--space-4);
+    display: flex;
+    flex-direction: column;
+  }
+  body:has(#screen-8.active) #screen-8 {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    /* Width matches the negotiation screen + every other screen — fills
+       main, which caps at 1600px and pads to 96vw on narrower viewports. */
+    width: 100%;
+  }
+  body:has(#screen-8.active) #screen-8 > .split {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: stretch;
+    gap: var(--space-4);
+  }
+  body:has(#screen-8.active) #screen-8 > .split > div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-height: 0;
+  }
+  /* LEFT column — outcome card stays at the top, transcript replay below
+     fills remaining space and scrolls inside its own panel. */
+  body:has(#screen-8.active) #screen-8 > .split > div:first-child > .panel:first-child {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  body:has(#screen-8.active) #screen-8 > .split > div:first-child > .panel.scrollable {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    max-height: none;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+  /* RIGHT column — sticky panel becomes a flex column with internal scroll
+     on the survey content, fixed footer for free-text + submit. */
+  body:has(#screen-8.active) #screen-8 > .split > div:last-child > .panel.sticky {
+    position: static;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  body:has(#screen-8.active) #screen-8 > .split > div:last-child > .panel.sticky > h2 {
+    flex: 0 0 auto;
+  }
+  /* Wrapper around #post-survey + free-text — internal scroll. */
+  body:has(#screen-8.active) #screen-8 > .split > div:last-child > .panel.sticky > .survey-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 6px;
+    scrollbar-gutter: stable;
+  }
+  body:has(#screen-8.active) #screen-8 > .split > div:last-child > .panel.sticky > #btn-8-continue {
+    flex: 0 0 auto;
+    margin-top: var(--space-3);
+  }
+  /* Mobile fallback: stack columns and let the page scroll normally. */
+  @media (max-width: 900px) {
+    body:has(#screen-8.active) {
+      overflow: auto;
+    }
+    body:has(#screen-8.active) main {
+      height: auto;
+      max-height: none;
+    }
+    body:has(#screen-8.active) #screen-8 > .split {
+      display: flex;
+      flex-direction: column;
+    }
+    body:has(#screen-8.active) #screen-8 > .split > div:last-child > .panel.sticky > .survey-scroll {
+      overflow: visible;
+    }
   }
 
   /* Outcome reveal banner. */
@@ -972,6 +1503,34 @@
     font-family: ui-monospace, monospace; font-size: 16px; font-weight: 700;
     color: var(--accent); user-select: all;
   }
+  /* Code + copy-button group on the completion screen. */
+  .completion-code-row {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font: inherit;
+    font-size: var(--text-base);
+    cursor: pointer;
+    transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
+  }
+  .copy-btn:hover { background: var(--panel-3); border-color: var(--accent); color: var(--accent); }
+  .copy-btn.copied {
+    background: rgba(109,208,132,0.15);
+    border-color: var(--good);
+    color: var(--good);
+  }
+  .copy-btn-icon { font-size: var(--text-base); line-height: 1; }
+  .copy-btn-label { font-weight: var(--weight-semi); }
 
   .thanks-hero {
     text-align: center; padding: 60px 20px 30px;
@@ -986,6 +1545,26 @@
 </style>
 </head>
 <body>
+
+<!-- ─── App shell ────────────────────────────────────────────────────────
+     Sticky header carrying the brand, an experiment-mode badge that names
+     the participant's role + counterpart type, and a step indicator with
+     progress bar. Shell text is updated by the `applyShell()` JS helper
+     whenever show() advances to a new screen. -->
+<header class="app-shell" id="app-shell">
+  <div class="app-shell-inner">
+    <div class="app-brand" aria-label="AI2AI study platform">
+      <span class="app-brand-mark" aria-hidden="true">A</span>
+      <span class="app-brand-name">AI2AI Study</span>
+    </div>
+    <span class="app-mode-badge" id="app-mode-badge" aria-live="polite"></span>
+    <span class="app-shell-spacer"></span>
+    <span class="app-step" id="app-step" aria-live="polite"></span>
+  </div>
+  <div class="app-progress" aria-hidden="true">
+    <div class="app-progress-bar" id="app-progress-bar"></div>
+  </div>
+</header>
 
 <main>
 
@@ -1084,7 +1663,7 @@
     <p id="instructions-intro">You are shopping for a used car on an online marketplace.
     You've narrowed your search to a <strong>2023 Toyota Camry</strong>.</p>
 
-    <p>The platform you're using has a new feature: <strong>you can fully delegate the
+    <p id="instructions-platform">The platform you're using has a new feature: <strong>you can fully delegate the
     negotiation to an AI agent</strong> that acts on your behalf. The seller is using the
     same feature — their AI agent will respond on their behalf. So the entire negotiation
     will happen agent-to-agent. Neither side types messages directly.</p>
@@ -1092,10 +1671,10 @@
     <hr class="sep" />
 
     <h3>What's coming next</h3>
-    <ol style="font-size: 14px; line-height: 1.8; padding-left: 22px; margin: 4px 0 14px;">
+    <ol id="instructions-steps" style="font-size: 14px; line-height: 1.8; padding-left: 22px; margin: 4px 0 14px;">
       <li><strong>Listing.</strong> You'll see the full listing for the car.</li>
       <li><strong>Your context.</strong> You'll describe your situation — what's
-        going on with you as <span id="instructions-role-side">a buyer</span>.</li>
+        going on with you as a buyer.</li>
       <li><strong>Instructions for your AI.</strong> You'll write a prompt telling
         your AI agent how to negotiate.</li>
       <li><strong>Watch.</strong> You'll watch the two AI agents negotiate live.</li>
@@ -1306,8 +1885,8 @@
         <div class="your-info-card" id="your-info-card">
           <strong>Your situation:</strong>
           <span id="your-situation">
-            You can spend up to <strong>$24,500</strong> (your hard walk-away).
-            Your ideal target is <strong>$22,000</strong>.
+            You can spend up to <strong>$23,500</strong> (your hard walk-away).
+            Your ideal target is <strong>$21,500</strong>.
             You're a cash-funded buyer — no financing delays.
           </span>
         </div>
@@ -1355,7 +1934,7 @@ Honestly I just graduated and moved to Reston, Virginia for my first real job, s
     <label for="prompt">Instructions for your AI agent</label>
     <textarea id="prompt" rows="14" placeholder="Example — write yours however you want, this is just to give you the idea:
 
-I want you to start low — open at around $21,000 to anchor the negotiation. From there, only concede slowly, and never give back more than the seller does in any single round. Stay polite the whole time, but firm: think neighbor-to-neighbor, not boss-to-employee, and don't get chatty or apologetic. If the seller pushes back hard, mention that I'm cash-funded and can close this week — that's real leverage. You can also hint that I have other Camrys I'm watching nearby, but don't lie about specifics. My absolute ceiling is $24,500 — not one dollar more, even if I love the car. If the seller won't come down below that, just thank them politely and walk away."></textarea>
+I want you to start low — open at around $20,500 to anchor the negotiation. From there, only concede slowly, and never give back more than the seller does in any single round. Stay polite the whole time, but firm: think neighbor-to-neighbor, not boss-to-employee, and don't get chatty or apologetic. If the seller pushes back hard, mention that I'm cash-funded and can close this week — that's real leverage. You can also hint that I have other Camrys I'm watching nearby, but don't lie about specifics. My absolute ceiling is $23,500 — not one dollar more, even if I love the car. If the seller won't come down below that, just thank them politely and walk away."></textarea>
 
     <button class="btn-primary" id="btn-prompt">Submit instructions</button>
 
@@ -1371,8 +1950,17 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
 <!-- ─── SCREEN 5 — full-page live negotiation ─── -->
 <section id="screen-7" class="screen">
   <div class="panel">
-    <h2 id="negotiation-heading">Watch the negotiation</h2>
-    <div class="status" id="run-status">Starting…</div>
+    <!-- Stage header: title on the left, live status pill on the right.
+         The pill is updated by setRunStatus() as the engine progresses, so the
+         participant always sees a clear "this is currently doing X" indicator. -->
+    <div class="stage-header">
+      <h2 id="negotiation-heading">Watch the negotiation</h2>
+      <div class="stage-status-pill" id="stage-status" data-state="starting">
+        <span class="stage-status-dot" aria-hidden="true"></span>
+        <span class="stage-status-text">Starting…</span>
+      </div>
+    </div>
+    <div class="status" id="run-status" style="display:none">Starting…</div>
 
     <!-- Live price ticker (sticks to top while you scroll). -->
     <div class="price-ticker">
@@ -1383,6 +1971,12 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
       <div class="ticker-cell spread">
         <div class="ticker-label">Spread</div>
         <div class="ticker-value" id="ticker-spread">—</div>
+        <!-- Visual gauge: thin bar that converges as the spread closes. Set
+             via JS in updatePriceTicker() — width animates from offers to ask. -->
+        <div class="ticker-gauge" aria-hidden="true">
+          <div class="ticker-gauge-buyer" id="gauge-buyer"></div>
+          <div class="ticker-gauge-seller" id="gauge-seller"></div>
+        </div>
       </div>
       <div class="ticker-cell seller">
         <div class="ticker-label">Seller ask</div>
@@ -1391,44 +1985,34 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
     </div>
 
     <!-- Two-sided chat: buyer bubbles on the left, seller on the right. -->
-    <div id="transcript" class="chat-container"></div>
+    <div id="transcript" class="chat-container" aria-live="polite"></div>
+
+    <!-- Floating "jump to latest" button. Becomes visible when the user
+         scrolls up away from the bottom of the transcript. JS-toggled. -->
+    <button type="button" id="scroll-latest" class="scroll-latest" aria-label="Jump to latest message">
+      <span aria-hidden="true">↓</span>
+      <span class="scroll-latest-label">Latest</span>
+    </button>
 
     <!-- Outcome banner (hidden until session_end). -->
     <div id="outcome-banner" class="outcome-banner"></div>
 
-    <!-- ─── Chat input — only shown in human mode (/bhx, /shx) ─── -->
+    <!-- ─── Chat input — only shown in human mode (/bhx, /shx) ───
+         Just a textarea + send button. The "intent chip" above the box
+         updates live as the participant types: a `$` amount makes it a
+         counter, "deal" / "I'll take it" makes it an accept, "walk away"
+         makes it a reject. Plain prose is sent as a message. The chip
+         shows what will be submitted so there are no surprises. -->
     <div id="chat-input-panel" class="chat-input-panel" style="display:none">
-      <div class="chat-action-row" id="chat-action-row">
-        <label class="chat-action">
-          <input type="radio" name="chat-action" value="send_message" checked />
-          <span>💬 Send message</span>
-        </label>
-        <label class="chat-action">
-          <input type="radio" name="chat-action" value="propose" />
-          <span>💵 Make an offer</span>
-        </label>
-        <label class="chat-action">
-          <input type="radio" name="chat-action" value="accept" />
-          <span>✅ Accept their last offer</span>
-        </label>
-        <label class="chat-action">
-          <input type="radio" name="chat-action" value="reject" />
-          <span>👋 Walk away</span>
-        </label>
-      </div>
-      <!-- Price input — only visible when "Make an offer" is selected. Sits
-           above the textarea instead of beside it so the textarea can take
-           full width. -->
-      <div id="chat-price-wrap" class="chat-price-wrap" style="display:none">
-        <span class="chat-price-prefix">$</span>
-        <input type="number" id="chat-price" placeholder="Your price" min="1" max="100000" step="50" />
+      <div class="chat-intent" id="chat-intent" data-action="message" aria-live="polite">
+        <span class="chat-intent-icon" id="chat-intent-icon">💬</span>
+        <span class="chat-intent-label" id="chat-intent-label">Will send as a message</span>
       </div>
       <!-- Full-width textarea with a small send button positioned in the
-           bottom-right corner. The button shows an arrow icon when ready
-           to send and a status label when waiting for the other side. -->
+           bottom-right corner. -->
       <div class="chat-textarea-wrap">
         <textarea id="chat-message" rows="4" maxlength="800"
-                  placeholder="Type your message to the other side…"></textarea>
+                  placeholder="Type your message. Include a $ amount to make a counter (e.g. &quot;I can do $22,500&quot;). Say &quot;deal&quot; to accept their last offer. Say &quot;walk away&quot; to end the negotiation."></textarea>
         <button class="chat-submit" id="chat-submit" disabled aria-label="Send turn">
           <span id="chat-submit-label" class="chat-submit-icon">➤</span>
         </button>
@@ -1452,16 +2036,25 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
         <p class="muted" style="font-size: 12px; margin-bottom: 12px;">
           Re-read any turn while you answer the questions on the right.
         </p>
-        <div id="transcript-replay"></div>
+        <!-- Adding `chat-container` here applies the same `gap: 12px`
+             between bubbles that the live transcript uses, so replayed
+             turns don't collide flush against each other. -->
+        <div id="transcript-replay" class="chat-container"></div>
       </div>
     </div>
     <div>
       <div class="panel sticky">
         <h2>How did it go?</h2>
-        <div id="post-survey"></div>
+        <!-- Survey questions + free-text live inside a scroll wrapper so
+             the Continue button stays pinned at the bottom of the panel
+             in the fixed-deck layout. The wrapper degrades to normal
+             flow on narrow viewports (see screen-8 mobile fallback). -->
+        <div class="survey-scroll">
+          <div id="post-survey"></div>
 
-        <label for="free-text">Any comments on the study? (optional)</label>
-        <textarea id="free-text" rows="3"></textarea>
+          <label for="free-text">Any comments on the study? (optional)</label>
+          <textarea id="free-text" rows="3"></textarea>
+        </div>
 
         <button class="btn-primary" id="btn-8-continue" disabled>Continue</button>
       </div>
@@ -1475,37 +2068,43 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
     <h2>A few things about you</h2>
     <p class="muted">These help us understand who participated. None of this is shared with anyone outside the research team.</p>
 
+    <p class="muted" style="font-size: 13px; margin-top: -6px;">All fields below are required.</p>
+
     <div class="row">
       <div>
-        <label for="age">Age</label>
-        <input type="number" id="age" min="13" max="120" />
+        <label for="age">Age <span class="required-mark" aria-hidden="true">*</span></label>
+        <input type="number" id="age" min="18" max="99" required />
+        <div class="field-error" id="age-error"></div>
       </div>
       <div>
-        <label for="gender">Gender</label>
-        <select id="gender">
+        <label for="gender">Gender <span class="required-mark" aria-hidden="true">*</span></label>
+        <select id="gender" required>
           <option value="">— select —</option>
           <option>Female</option><option>Male</option>
           <option>Non-binary</option><option>Prefer not to say</option>
         </select>
+        <div class="field-error" id="gender-error"></div>
       </div>
     </div>
 
-    <label>Prior negotiation experience</label>
-    <div class="radio-grid">
+    <label>Prior negotiation experience <span class="required-mark" aria-hidden="true">*</span></label>
+    <div class="radio-grid" id="experience-group">
       <label class="choice"><input type="radio" name="experience" value="none" /> None</label>
       <label class="choice"><input type="radio" name="experience" value="little" /> A little</label>
       <label class="choice"><input type="radio" name="experience" value="moderate" /> Moderate</label>
       <label class="choice"><input type="radio" name="experience" value="lot" /> A lot</label>
     </div>
+    <div class="field-error" id="experience-error"></div>
 
-    <label>Familiarity with AI tools (ChatGPT, Claude, etc.)?</label>
-    <div class="radio-grid">
+    <label>Familiarity with AI tools (ChatGPT, Claude, etc.)? <span class="required-mark" aria-hidden="true">*</span></label>
+    <div class="radio-grid" id="ai-familiarity-group">
       <label class="choice"><input type="radio" name="ai_familiarity" value="none" /> Not at all</label>
       <label class="choice"><input type="radio" name="ai_familiarity" value="some" /> Some</label>
       <label class="choice"><input type="radio" name="ai_familiarity" value="very" /> Very</label>
     </div>
+    <div class="field-error" id="ai-familiarity-error"></div>
 
-    <button class="btn-primary" id="btn-9-finish">Submit &amp; finish</button>
+    <button class="btn-primary" id="btn-9-finish" disabled>Submit &amp; finish</button>
 
     <div class="spinner-overlay" id="finish-spinner">
       <div class="spinner"></div>
@@ -1533,7 +2132,14 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
 
     <div style="text-align: center;">
       <p class="muted" style="margin-bottom: 8px;">Your completion code (save this for your records):</p>
-      <span class="completion-code" id="completion-code">—</span>
+      <div class="completion-code-row">
+        <span class="completion-code" id="completion-code">—</span>
+        <button type="button" class="copy-btn" id="copy-completion-code" aria-label="Copy completion code">
+          <span class="copy-btn-icon" aria-hidden="true">📋</span>
+          <span class="copy-btn-label">Copy</span>
+        </button>
+      </div>
+      <p class="muted" id="copy-feedback" style="font-size: 12px; margin-top: 8px; min-height: 18px;"></p>
     </div>
   </div>
 </section>
@@ -1556,6 +2162,7 @@ I want you to start low — open at around $21,000 to anchor the negotiation. Fr
      rule. Non-dismissible — the only way out is to close the tab. -->
 <div id="mobile-block" class="mobile-block-overlay" style="display: none" role="dialog" aria-modal="true" aria-labelledby="mobile-block-title">
   <div class="mobile-block-card">
+    <span class="mobile-block-mark" aria-hidden="true">A</span>
     <h2 id="mobile-block-title">Mobile device detected</h2>
     <p>You are using a mobile phone or tablet. The consent form you just agreed
        to clearly states that this study must be completed on a
@@ -1589,8 +2196,8 @@ const ROLE_INFO = {
     listingContext: "You're considering this listing",
     badge: "FOR SALE",
     priceLabel: "Asking price · Market range for this configuration: $23,000–$25,000",
-    situation: "You can spend up to <strong>$24,500</strong> (your hard walk-away). " +
-               "Your ideal target is <strong>$22,000</strong>. " +
+    situation: "You can spend up to <strong>$23,500</strong> (your hard walk-away). " +
+               "Your ideal target is <strong>$21,500</strong>. " +
                "You're a cash-funded buyer — no financing delays.",
     promptRoleBanner: "buyer",
   },
@@ -1792,8 +2399,20 @@ const state = {
 const $ = (id) => document.getElementById(id);
 
 // ─── Boot — create participant on first load with full browser metadata. ──
+//
+// In-tab continuity: the participantId is cached in sessionStorage so an
+// accidental tab refresh during the experiment doesn't enrol a fresh
+// participant on every reload (which would orphan the half-finished session
+// on the server). Cross-tab continuity is intentionally out of scope —
+// closing the tab ends the session.
+const PID_KEY = "ai2ai_pid_v1";
 async function ensureParticipant() {
   if (state.participantId) return;
+  // Same-tab refresh: reuse the participantId we already enrolled.
+  try {
+    const cached = sessionStorage.getItem(PID_KEY);
+    if (cached) { state.participantId = cached; track("screen_enter", { step: state.step }); return; }
+  } catch (e) { /* sessionStorage may be disabled */ }
   try {
     const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     const r = await api("/api/p/start", {
@@ -1806,6 +2425,7 @@ async function ensureParticipant() {
       connectionType: conn ? conn.effectiveType : null,
     });
     state.participantId = r.participantId;
+    try { sessionStorage.setItem(PID_KEY, r.participantId); } catch (e) {}
     track("screen_enter", { step: state.step });
   } catch (err) {
     alert("Couldn't start the study: " + err.message + "\nIs the server running on " + apiBase() + "?");
@@ -1837,10 +2457,25 @@ function detectRoleFromPath() {
   if (!preset) return; // legacy /study fallback — leave screen 1 visible
   state.role = preset.role;
   state.mode = preset.mode;
+  // If we're resuming an in-flight session (same tab, same participantId),
+  // restore the saved state and skip ahead to the screen the participant
+  // was on when they reloaded. Cap resume at screen 7 — the live-negotiation
+  // run can't be resumed mid-stream, so a refresh past that lands the
+  // participant back on the listing/prompt for a clean restart.
+  const resume = loadResume();
+  let targetStep = 2;
+  if (resume && resume.participantId === state.participantId && resume.role === preset.role) {
+    if (resume.personalContext) state.personalContext = resume.personalContext;
+    if (resume.behaviorPrompt) state.behaviorPrompt = resume.behaviorPrompt;
+    if (resume.postRatings) state.postRatings = resume.postRatings;
+    if (typeof resume.step === "number" && resume.step >= 2 && resume.step <= 6) {
+      targetStep = resume.step;
+    }
+  }
   try {
     await api("/api/p/role", { participantId: state.participantId, role: preset.role });
     await api("/api/p/mode", { participantId: state.participantId, mode: preset.mode });
-    show(2);
+    show(targetStep);
   } catch (err) {
     console.error("[boot] preset role/mode failed:", err);
     // Leave screen 1 visible so the participant can recover by clicking.
@@ -1857,12 +2492,116 @@ function show(step) {
   state.screenStartTs = Date.now();
   document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
   $("screen-" + step).classList.add("active");
-  // Progress indicator was removed from the header; keep the screen-enter
-  // telemetry event so the funnel chart in /admin still works.
+  // Refresh the persistent app-shell (mode badge + step indicator + progress
+  // bar) so it always reflects the current screen.
+  applyShell(step);
+  // Snapshot the participant's progress so an accidental tab close /
+  // refresh can resume from the right screen instead of starting over.
+  // On the completion screen (10) we drop the snapshot — the session is
+  // done and we don't want a stale resume to confuse a follow-up visit.
+  if (step === 10) clearResume(); else saveResume();
   window.scrollTo({ top: 0 });
   track("screen_enter", { step: step });
 }
 function timeOnScreen() { return Date.now() - state.screenStartTs; }
+
+// ─── App-shell wiring ────────────────────────────────────────────────────
+//
+// The shell is a sticky header rendered once at <body> top. show() calls
+// applyShell() on every screen advance to refresh the role/mode badge and
+// the step counter + progress bar. The badge varies across the four
+// experimental routes: agent modes get "your AI vs theirs", human modes
+// get "negotiating directly with AI". Visible-step math collapses
+// out steps that were skipped for the current route.
+
+function computeVisibleSteps() {
+  const presetRole = document.documentElement.hasAttribute("data-preset-role");
+  const isHumanMode = state.mode === "human_buyer" || state.mode === "human_seller";
+  let steps = [1,2,3,4,5,6,7,8,9,10];
+  if (presetRole) steps = steps.filter((s) => s !== 1);    // role-pick skipped
+  if (isHumanMode) steps = steps.filter((s) => s !== 5 && s !== 6); // no agent prompt
+  return steps;
+}
+
+function applyShell(step) {
+  const badge = $("app-mode-badge");
+  const stepEl = $("app-step");
+  const bar = $("app-progress-bar");
+  if (!badge || !stepEl || !bar) return;
+  // Mode badge — concise sentence reminding the participant what they're doing.
+  const role = state.role;
+  const mode = state.mode;
+  if (role && (step >= 2)) {
+    const roleName = role === "buyer" ? "BUYER" : "SELLER";
+    let text;
+    if (mode === "human_buyer" || mode === "human_seller") {
+      text = `You are the ${roleName} · negotiating directly with the AI counterpart`;
+    } else {
+      const opp = role === "buyer" ? "seller" : "buyer";
+      text = `You are the ${roleName} · your AI agent vs the ${opp}'s AI agent`;
+    }
+    badge.dataset.role = role;
+    badge.textContent = text;
+    badge.style.display = "";
+  } else {
+    badge.removeAttribute("data-role");
+    badge.textContent = "";
+    badge.style.display = "none";
+  }
+  // Step counter + progress bar use the route-specific visible-steps array
+  // so participants on human modes don't see "Step 4 of 10" with screens 5/6
+  // missing — they see "Step 4 of 8".
+  const steps = computeVisibleSteps();
+  const idx = steps.indexOf(step);
+  if (idx >= 0) {
+    stepEl.innerHTML = `Step <strong>${idx + 1}</strong> of <strong>${steps.length}</strong>`;
+    bar.style.width = `${Math.max(2, ((idx + 1) / steps.length) * 100)}%`;
+  } else {
+    stepEl.textContent = "";
+    bar.style.width = "0%";
+  }
+}
+
+// ─── Save & resume ──────────────────────────────────────────────────────
+//
+// Snapshot of state to localStorage on every screen change so a participant
+// can close the tab / lose connection / refresh and resume where they left
+// off instead of starting the experiment over. Only restored when the
+// participantId matches the saved one — different sessions don't bleed.
+const RESUME_KEY = "ai2ai_resume_v1";
+function saveResume() {
+  try {
+    if (!state.participantId) return;
+    const snap = {
+      participantId: state.participantId,
+      step: state.step,
+      role: state.role,
+      mode: state.mode,
+      personalContext: state.personalContext || "",
+      behaviorPrompt: state.behaviorPrompt || "",
+      postRatings: state.postRatings || {},
+      ts: Date.now(),
+    };
+    localStorage.setItem(RESUME_KEY, JSON.stringify(snap));
+  } catch (e) { /* localStorage may be disabled — ignore */ }
+}
+function loadResume() {
+  try {
+    const raw = localStorage.getItem(RESUME_KEY);
+    if (!raw) return null;
+    const snap = JSON.parse(raw);
+    // Drop snapshots older than 8h — sessions older than that are expired
+    // server-side anyway; better to start fresh.
+    if (!snap || (Date.now() - (snap.ts || 0)) > 8 * 3600_000) {
+      localStorage.removeItem(RESUME_KEY);
+      return null;
+    }
+    return snap;
+  } catch (e) { return null; }
+}
+function clearResume() {
+  try { localStorage.removeItem(RESUME_KEY); } catch (e) {}
+}
 
 // ─── Behavioral telemetry library ──────────────────────────────────────
 //
@@ -2139,24 +2878,56 @@ $("btn-2-continue").addEventListener("click", async () => {
 });
 
 // ─── SCREEN 3 — instructions / scenario framing ────────────────────────
+//
+// Four copy variants — one per (role × mode) combination:
+//   - agent buyer  (/blx) : "you delegate to an AI; seller delegates too"  (5 steps)
+//   - agent seller (/slx) : "you delegate to an AI; buyer delegates too"   (5 steps)
+//   - human buyer  (/bhx) : "you negotiate directly; seller's side is AI"  (3 steps)
+//   - human seller (/shx) : "you negotiate directly; buyer's side is AI"   (3 steps)
+//
+// The agent variants describe agent-to-agent delegation and the participant
+// will go through context + behavior-prompt screens before watching.
+// The human variants describe direct chat with the AI counterpart and skip
+// straight to the negotiation after the listing.
 function fillInstructions() {
-  const r = ROLE_INFO[state.role];
-  if (state.role === "buyer") {
-    $("instructions-heading").textContent = "The scenario";
-    $("instructions-intro").innerHTML =
-      "You are shopping for a used car on an online marketplace. " +
-      "You've narrowed your search to a <strong>2023 Toyota Camry</strong>.";
-    $("instructions-role-side").textContent = "a buyer";
-  } else {
-    $("instructions-heading").textContent = "The scenario";
-    $("instructions-intro").innerHTML =
-      "You are selling your used car on an online marketplace. " +
+  const isHumanMode = state.mode === "human_buyer" || state.mode === "human_seller";
+  const oppRole = state.role === "buyer" ? "seller" : "buyer";
+  $("instructions-heading").textContent = "The scenario";
+
+  // Intro paragraph — "you are shopping" (buyer) or "you are selling" (seller).
+  $("instructions-intro").innerHTML = state.role === "buyer"
+    ? "You are shopping for a used car on an online marketplace. " +
+      "You've narrowed your search to a <strong>2023 Toyota Camry</strong>."
+    : "You are selling your used car on an online marketplace. " +
       "You're listing a <strong>2023 Toyota Camry</strong>.";
-    $("instructions-role-side").textContent = "a seller";
+
+  if (isHumanMode) {
+    // Human mode — direct chat with the AI counterpart.
+    $("instructions-platform").innerHTML =
+      `The ${oppRole} is using a new platform feature: their negotiation is fully ` +
+      `<strong>delegated to an AI agent</strong> acting on their behalf. ` +
+      `You'll <strong>negotiate directly with that AI</strong> — typing your messages, ` +
+      `offers, and decisions in a chat. The AI will respond on the ${oppRole}'s behalf.`;
+    $("instructions-steps").innerHTML = `
+      <li><strong>Listing.</strong> You'll see the full listing for the car.</li>
+      <li><strong>Negotiate.</strong> You'll chat directly with the ${oppRole}'s AI agent — make offers, ask questions, and decide whether to close.</li>
+      <li><strong>Wrap-up.</strong> A few questions, basic demographics, then a thank-you screen with your completion code.</li>
+    `;
+  } else {
+    // Agent mode — both sides delegate to AI agents (the original flow).
+    $("instructions-platform").innerHTML =
+      `The platform you're using has a new feature: <strong>you can fully delegate the ` +
+      `negotiation to an AI agent</strong> that acts on your behalf. The ${oppRole} is using the ` +
+      `same feature — their AI agent will respond on their behalf. So the entire negotiation ` +
+      `will happen agent-to-agent. Neither side types messages directly.`;
+    $("instructions-steps").innerHTML = `
+      <li><strong>Listing.</strong> You'll see the full listing for the car.</li>
+      <li><strong>Your context.</strong> You'll describe your situation — what's going on with you as a ${state.role}.</li>
+      <li><strong>Instructions for your AI.</strong> You'll write a prompt telling your AI agent how to negotiate.</li>
+      <li><strong>Watch.</strong> You'll watch the two AI agents negotiate live.</li>
+      <li><strong>Wrap-up.</strong> A few questions, basic demographics, then a thank-you screen with your completion code.</li>
+    `;
   }
-  // Also pre-fill the "your situation" hint on the listing screen via the
-  // ROLE_INFO map (used by fillListing() one screen later).
-  void r;
 }
 $("btn-3-continue").addEventListener("click", () => {
   fillListing();
@@ -2386,6 +3157,18 @@ async function runNegotiation() {
   state.lastSellerPrice = null;
   state.typingNode = null;
   state.turns = [];
+  // Reset gauge ends — both sides start at 0, will animate as offers arrive.
+  if ($("gauge-buyer"))  $("gauge-buyer").style.width  = "0%";
+  if ($("gauge-seller")) $("gauge-seller").style.width = "0%";
+  // Listing market range — anchors for the gauge. Static for now (matches the
+  // server's pack defaults); could be pulled from /api/p/intake later.
+  state.priceLow  = 21000;
+  state.priceHigh = 27000;
+  // Wire the scroll-to-latest button + IntersectionObserver. This is idempotent
+  // — calling it on each run replaces any stale observer from a previous run.
+  installScrollLatchObserver();
+  // Reset the live-state pill to its initial "starting" state.
+  if ($("stage-status")) $("stage-status").dataset.state = "starting";
   setRunStatus("Negotiation starting…");
   try {
     const res = await fetch(apiBase() + "/api/p/run", {
@@ -2401,8 +3184,41 @@ async function runNegotiation() {
 }
 function setRunStatus(text, isError) {
   const el = $("run-status");
-  el.textContent = text;
-  el.classList.toggle("error", !!isError);
+  if (el) {
+    el.textContent = text;
+    el.classList.toggle("error", !!isError);
+  }
+  // Mirror to the new stage-status pill. The pill picks its state class from
+  // the longer status text; a few keywords drive colour/animation. Error
+  // calls force red. Other transitions key off the outcome event.
+  const pill = $("stage-status");
+  if (!pill) return;
+  const txt = pill.querySelector(".stage-status-text");
+  if (txt) txt.textContent = text;
+  if (isError) { pill.dataset.state = "error"; return; }
+  // "Connected · …" is the running state. After session ends, updateStageStateFromOutcome()
+  // overrides this to the outcome-specific colour.
+  if (/connected/i.test(text) || /your turn/i.test(text)) pill.dataset.state = "running";
+  else if (/finished/i.test(text)) { /* leave outcome handler to override */ }
+  else pill.dataset.state = "starting";
+}
+
+// Called from the "done" SSE handler so the pill colour matches the outcome.
+function updateStageStateFromOutcome(outcome) {
+  const pill = $("stage-status");
+  if (!pill) return;
+  const t = (outcome && outcome.type) ? outcome.type.toLowerCase() : "";
+  pill.dataset.state = t || "agreed";
+  const txt = pill.querySelector(".stage-status-text");
+  if (txt) txt.textContent = (outcome && outcome.type ? outcome.type : "Done").toUpperCase();
+}
+
+// Track turn count for the "Live · Turn N" sub-state in the pill.
+function setStageTurnLabel(n) {
+  const pill = $("stage-status");
+  if (!pill || pill.dataset.state !== "running") return;
+  const txt = pill.querySelector(".stage-status-text");
+  if (txt) txt.textContent = "Live · Turn " + n;
 }
 function handleSse(event, data) {
   switch (event) {
@@ -2416,7 +3232,8 @@ function handleSse(event, data) {
       enableChatInput(data);
       setRunStatus("Your turn — type your response below.");
       break;
-    case "turn":           appendTurn(data); disableChatInput(); break;
+    case "turn":           appendTurn(data); disableChatInput(); setStageTurnLabel(data.turnNumber); break;
+    case "offer_update":   applyOfferUpdate(data); break;
     case "session_end":    state.outcome = data.outcome; break;
     case "fallback":       setRunStatus("[round-robin fallback: " + data.reason + "]", true); break;
     case "done":
@@ -2424,6 +3241,7 @@ function handleSse(event, data) {
       removeTypingIndicator();
       disableChatInput();
       setRunStatus("Negotiation finished — see the result below.");
+      updateStageStateFromOutcome(data.outcome);
       revealOutcome(data.outcome);
       break;
     case "error":          setRunStatus("Error: " + data.message, true); break;
@@ -2450,6 +3268,13 @@ async function runHumanNegotiation() {
       ? "Negotiate with the seller"
       : "Negotiate with the buyer";
   $("chat-input-panel").style.display = "block";
+  // Match the agent-run reset path so the gauge/pill states start clean.
+  if ($("gauge-buyer"))  $("gauge-buyer").style.width  = "0%";
+  if ($("gauge-seller")) $("gauge-seller").style.width = "0%";
+  if ($("stage-status")) $("stage-status").dataset.state = "starting";
+  state.priceLow  = state.priceLow  || 21000;
+  state.priceHigh = state.priceHigh || 27000;
+  installScrollLatchObserver();
   disableChatInput();
   setRunStatus("Negotiation starting…");
   try {
@@ -2475,10 +3300,11 @@ function enableChatInput(data) {
   $("chat-submit").disabled = false;
   $("chat-submit").setAttribute("title", "Send turn");
   $("chat-input-status").textContent =
-    "It's your turn — pick an action above and write your message. (Turn #" +
+    "It's your turn — type your message below. (Turn #" +
     (data?.turnNumber ?? "?") + ")";
   $("chat-input-status").style.color = "var(--accent)";
   $("chat-message").focus();
+  refreshChatIntent();
   track("human_turn_input_enabled", { turnNumber: data?.turnNumber });
 }
 
@@ -2491,48 +3317,119 @@ function disableChatInput() {
   $("chat-input-status").style.color = "var(--dim)";
 }
 
-// Show/hide the price input when the action selector changes.
-document.querySelectorAll("input[name='chat-action']").forEach((radio) => {
-  radio.addEventListener("change", () => {
-    const v = document.querySelector("input[name='chat-action']:checked").value;
-    $("chat-price-wrap").style.display = v === "propose" ? "block" : "none";
-    if (v === "accept") {
-      // Pre-fill the price field with the opponent's last offer.
-      const opp = state.role === "buyer" ? state.lastSellerPrice : state.lastBuyerPrice;
-      if (opp) $("chat-price").value = opp;
-    }
-  });
-});
+// ─── Intent detection (human chat turn) ─────────────────────────────────
+//
+// The participant types a single textarea and the system infers what kind
+// of move they're making. Detection rules, in priority order:
+//
+//   1. Reject keywords ("walk away", "I'm out", "no deal", "not interested")
+//      → submit_proposal action="reject", is_final=true
+//   2. A `$`-prefixed dollar amount in plausible range ($1,000-$100,000)
+//      → submit_proposal action="counter", price = last $-amount mentioned
+//   3. Accept keywords ("deal", "accept", "I'll take it", "let's do it",
+//      "sold", "alright")
+//      → submit_proposal action="accept", price = opponent's last offer
+//   4. Otherwise
+//      → send_message
+//
+// The detected intent is shown live in the chip above the textarea so the
+// participant always sees what's about to happen and can rephrase if it's
+// wrong. Rejection takes priority over accept because someone could write
+// "no deal, walk away" and we should treat that as a reject.
 
-// Submit the human's turn.
+const REJECT_RE = /\b(walk(\s|-)?away|i'?m\s+out|no\s+deal|not\s+interested|deal'?s\s+off|forget\s+it|i'?ll\s+pass|no\s+thanks|no\s+thank\s+you)\b/i;
+const ACCEPT_RE = /\b(accept|deal\b|sold\b|i'?ll\s+take\s+it|let'?s\s+do\s+it|i\s+agree|sounds\s+good|alright(\s+let'?s)?|done\b|that\s+works)\b/i;
+// Capture group 1 = "$"-prefix or empty; group 2 = the digits.
+// Bare numbers are accepted, but year-like values (1900–2100) without a
+// `$` prefix are filtered out so phrases like "the 2023 Camry" don't
+// trigger a fake counter.
+const PRICE_RE  = /(\$\s*)?(\d{1,3}(?:,\d{3})+|\d{4,6})\b/g;
+
+function detectChatIntent(text) {
+  if (!text) return { action: "send_message", price: null };
+  // Reject (priority 1)
+  if (REJECT_RE.test(text)) return { action: "reject", price: null };
+  // Counter — any plausible price amount, $-prefixed or bare. We collect
+  // every match then prefer $-prefixed ones so phrases like "I'll do
+  // $22,500 since the mileage is 32,000" pick 22500 (the price) not 32000
+  // (the mileage). Floor of $5000 filters out small numbers like stock IDs.
+  const matches = [];
+  PRICE_RE.lastIndex = 0;
+  let m;
+  while ((m = PRICE_RE.exec(text)) !== null) {
+    const hadDollar = !!m[1];
+    const n = Number(m[2].replace(/,/g, ""));
+    if (!Number.isFinite(n) || n < 5000 || n > 100000) continue;
+    // Without a $ prefix, skip 4-digit values in year range (1900–2100)
+    // to avoid false positives like "2023 Camry" or "year 2024".
+    if (!hadDollar && n >= 1900 && n <= 2100) continue;
+    matches.push({ n, hadDollar });
+  }
+  if (matches.length > 0) {
+    const dollared = matches.filter((x) => x.hadDollar);
+    const pick = (dollared.length > 0 ? dollared : matches);
+    return { action: "propose", price: pick[pick.length - 1].n };
+  }
+  // Accept
+  if (ACCEPT_RE.test(text)) return { action: "accept", price: null };
+  // Default
+  return { action: "send_message", price: null };
+}
+
+function refreshChatIntent() {
+  const chip = $("chat-intent");
+  const icon = $("chat-intent-icon");
+  const label = $("chat-intent-label");
+  if (!chip || !icon || !label) return;
+  const intent = detectChatIntent($("chat-message").value);
+  let dataAction = "message", iconText = "💬", labelText = "Will send as a message";
+  if (intent.action === "reject") {
+    dataAction = "reject"; iconText = "👋"; labelText = "Will walk away (final)";
+  } else if (intent.action === "propose") {
+    dataAction = "counter"; iconText = "💵";
+    labelText = `Will counter at $${intent.price.toLocaleString()}`;
+  } else if (intent.action === "accept") {
+    const opp = state.role === "buyer" ? state.lastSellerPrice : state.lastBuyerPrice;
+    if (opp) {
+      dataAction = "accept"; iconText = "✅";
+      labelText = `Will accept their last offer ($${opp.toLocaleString()})`;
+    } else {
+      // No standing offer to accept — degrade to message.
+      dataAction = "message"; iconText = "💬";
+      labelText = "Will send as a message (no offer to accept yet)";
+    }
+  }
+  chip.dataset.action = dataAction;
+  icon.textContent = iconText;
+  label.textContent = labelText;
+}
+
+// Live update as the participant types.
+$("chat-message").addEventListener("input", refreshChatIntent);
+
+// Submit the human's turn — translates the detected intent into an
+// /api/p/turn call. Server contract is unchanged from the old radio UI.
 $("chat-submit").addEventListener("click", async () => {
   if (!state.humanTurnPending) return;
-  const action = document.querySelector("input[name='chat-action']:checked").value;
   const message = $("chat-message").value.trim();
-  let price = null;
-  if (action === "propose") {
-    const v = Number($("chat-price").value);
-    if (!Number.isFinite(v) || v <= 0) {
-      $("chat-input-status").textContent = "Enter a valid price (e.g. 22000) before submitting your offer.";
-      $("chat-input-status").style.color = "var(--bad)";
-      return;
-    }
-    price = v;
-  } else if (action === "accept") {
-    const opp = state.role === "buyer" ? state.lastSellerPrice : state.lastBuyerPrice;
-    if (!opp) {
-      $("chat-input-status").textContent = "There's no offer from the other side yet to accept.";
-      $("chat-input-status").style.color = "var(--bad)";
-      return;
-    }
-    price = opp;
-  }
-  // Validate min message length (zero is OK only for accept/reject which
-  // are explicit actions; for send_message and propose require some text).
-  if ((action === "send_message" || action === "propose") && message.length < 1) {
-    $("chat-input-status").textContent = "Type a message before submitting.";
+  if (!message) {
+    $("chat-input-status").textContent = "Type a message before sending.";
     $("chat-input-status").style.color = "var(--bad)";
     return;
+  }
+  const intent = detectChatIntent(message);
+  let action = intent.action;
+  let price = intent.price;
+  // Resolve "accept" → needs the opponent's last price.
+  if (action === "accept") {
+    const opp = state.role === "buyer" ? state.lastSellerPrice : state.lastBuyerPrice;
+    if (!opp) {
+      // No standing offer; treat the user's message as plain prose so the
+      // engine doesn't see a malformed accept. The chip already warned them.
+      action = "send_message";
+    } else {
+      price = opp;
+    }
   }
   $("chat-submit").disabled = true;
   $("chat-submit").setAttribute("title", "Sending…");
@@ -2540,17 +3437,13 @@ $("chat-submit").addEventListener("click", async () => {
     await api("/api/p/turn", {
       participantId: state.participantId,
       action,
-      message: message || (action === "accept" ? "I accept your offer." : action === "reject" ? "I'll have to walk away. Thanks anyway." : ""),
-      price: price !== null ? price : undefined,
+      message,
+      price: price != null ? price : undefined,
       isFinal: action === "reject",
     });
-    track("human_turn_submitted", { action, charCount: message.length, hadPrice: price !== null });
-    // Reset input fields. Keep "send_message" as the default action for next turn.
+    track("human_turn_submitted", { action, charCount: message.length, hadPrice: price != null });
     $("chat-message").value = "";
-    $("chat-price").value = "";
-    document.querySelector("input[name='chat-action'][value='send_message']").checked = true;
-    $("chat-price-wrap").style.display = "none";
-    // The server will send back a 'turn' event which calls disableChatInput().
+    refreshChatIntent();
   } catch (err) {
     $("chat-input-status").textContent = "Error sending turn: " + err.message;
     $("chat-input-status").style.color = "var(--bad)";
@@ -2564,7 +3457,10 @@ function appendTurn(t) {
   removeTypingIndicator();
   const div = renderTurnNode(t);
   $("transcript").appendChild(div);
-  updateTicker(t);
+  // Note: the offer board is no longer driven from here — the server-side
+  // orchestrator emits an `offer_update` SSE event after each turn that
+  // introduces a price, which calls applyOfferUpdate(). This decoupling
+  // makes the server the single authority on the displayed numbers.
   div.scrollIntoView({ behavior: "smooth", block: "end" });
 }
 
@@ -2579,7 +3475,15 @@ function renderTurnNode(t) {
   const bubble = document.createElement("div");
   bubble.className = "bubble " + t.emitterId;
 
-  const meta = `<div class="bubble-meta">turn #${t.turnNumber} · ${t.emitterId}</div>`;
+  // Timestamp shown in the bubble metadata — relative ("just now", "12s ago")
+  // for the most recent turn, absolute clock time otherwise. JS-formatted so
+  // the transcript reads as a chronologically-paced conversation, not a log dump.
+  const ts = t.timestamp ? new Date(t.timestamp) : new Date();
+  const timeStr = formatTurnTimestamp(ts);
+  const meta = `<div class="bubble-meta">
+    <span>turn #${t.turnNumber} · ${t.emitterId}</span>
+    <span class="bubble-time" title="${escapeHtml(ts.toISOString())}">${escapeHtml(timeStr)}</span>
+  </div>`;
   const body = `<div class="bubble-text">${renderMarkdown(t.message || "(no public message)")}</div>`;
   let toolLine = "";
   const proposal = (t.toolCalls || []).find((c) => c.name === "submit_proposal");
@@ -2625,36 +3529,128 @@ function removeTypingIndicator() {
 }
 
 // ─── Live price ticker ─────────────────────────────────────────────────
-function updateTicker(t) {
-  const proposal = (t.toolCalls || []).find((c) => c.name === "submit_proposal");
-  if (!proposal || !proposal.input || !Array.isArray(proposal.input.issues)) return;
-  const priceIssue = proposal.input.issues.find((i) => i.name === "price");
-  if (!priceIssue) return;
-  const price = Number(priceIssue.value);
-  if (!Number.isFinite(price)) return;
-
-  if (t.emitterId === "buyer")  state.lastBuyerPrice  = price;
-  if (t.emitterId === "seller") state.lastSellerPrice = price;
+//
+// The orchestrator-side server is the single authority on the offer board.
+// After every turn that introduces a new price, the server emits an
+// `offer_update` SSE event with the canonical { buyer, seller, spread,
+// source } payload. The SPA renders that payload here — no client-side
+// regex extraction, no per-turn toolCall introspection.
+//
+// applyOfferUpdate() is fed directly by the SSE handler.
+function applyOfferUpdate(payload) {
+  if (!payload || typeof payload !== "object") return;
+  const buyer  = (typeof payload.buyer  === "number") ? payload.buyer  : null;
+  const seller = (typeof payload.seller === "number") ? payload.seller : null;
+  state.lastBuyerPrice  = buyer;
+  state.lastSellerPrice = seller;
 
   const fmt = (p) => p == null ? "—" : "$" + p.toLocaleString();
   const tBuyer  = $("ticker-buyer");
   const tSeller = $("ticker-seller");
   const tSpread = $("ticker-spread");
+  if (!tBuyer || !tSeller || !tSpread) return;
 
-  tBuyer.textContent  = fmt(state.lastBuyerPrice);
-  tSeller.textContent = fmt(state.lastSellerPrice);
-  if (state.lastBuyerPrice != null && state.lastSellerPrice != null) {
-    tSpread.textContent = "$" + Math.abs(state.lastBuyerPrice - state.lastSellerPrice).toLocaleString();
+  tBuyer.textContent  = fmt(buyer);
+  tSeller.textContent = fmt(seller);
+  if (buyer != null && seller != null) {
+    tSpread.textContent = "$" + Math.abs(buyer - seller).toLocaleString();
   } else {
     tSpread.textContent = "—";
   }
 
-  // Highlight whichever side just changed; flash spread on every update.
-  const updatedCell = t.emitterId === "buyer" ? tBuyer : tSeller;
-  updatedCell.classList.add("flash", "live");
+  // Highlight whichever side just moved; flash the spread on every update.
+  // The server names the moving side via payload.source ("buyer" | "seller").
+  const updatedCell = payload.source === "seller" ? tSeller : tBuyer;
+  if (buyer != null) tBuyer.classList.add("live");
+  if (seller != null) tSeller.classList.add("live");
+  updatedCell.classList.add("flash");
   setTimeout(() => updatedCell.classList.remove("flash"), 700);
   tSpread.classList.add("flash");
   setTimeout(() => tSpread.classList.remove("flash"), 700);
+
+  // Refresh the gauge bars + the chat-intent chip (so an "accept" preview
+  // reflects the new opponent offer, in human modes).
+  updateGauge();
+  if (typeof refreshChatIntent === "function") refreshChatIntent();
+}
+
+// Anchored at the market range so the gauge has stable endpoints. Pulled
+// from the listing (window globals set during run start) — fall back to
+// generous defaults so the gauge never breaks if the values aren't ready.
+function updateGauge() {
+  const gBuyer  = $("gauge-buyer");
+  const gSeller = $("gauge-seller");
+  if (!gBuyer || !gSeller) return;
+  const lo = state.priceLow  || 18000;
+  const hi = state.priceHigh || 30000;
+  const span = Math.max(1, hi - lo);
+  let buyerPct  = 0;
+  let sellerPct = 0;
+  if (state.lastBuyerPrice  != null) buyerPct  = clamp01((state.lastBuyerPrice  - lo) / span) * 100;
+  if (state.lastSellerPrice != null) sellerPct = clamp01((hi - state.lastSellerPrice) / span) * 100;
+  gBuyer.style.width  = buyerPct.toFixed(1) + "%";
+  gSeller.style.width = sellerPct.toFixed(1) + "%";
+}
+function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+
+// Scroll-to-latest button — visible whenever the user has scrolled away
+// from the bottom of the transcript. We sentinel a 1px element after the
+// last bubble; when it leaves the viewport, show the button. Click → smooth
+// scroll back to the sentinel. Works in both modes:
+//   - agent mode: page scrolls (window is the scroll root)
+//   - human mode: the transcript itself scrolls (per the screen-7 layout)
+let __scrollObs = null;
+function installScrollLatchObserver() {
+  const tx  = $("transcript");
+  const btn = $("scroll-latest");
+  if (!tx || !btn) return;
+  // Place the click handler once.
+  if (!btn.__wired) {
+    btn.addEventListener("click", () => {
+      const last = tx.lastElementChild;
+      if (last) last.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
+    btn.__wired = true;
+  }
+  // Re-wire the observer to watch the *current* last child whenever a new
+  // turn arrives. We MutationObserver the transcript and re-target on add.
+  if (__scrollObs) { __scrollObs.disconnect(); __scrollObs = null; }
+  __scrollObs = new MutationObserver(() => {
+    const last = tx.lastElementChild;
+    if (!last) { btn.classList.remove("visible"); return; }
+    // Use IntersectionObserver lazily — re-create per-target so we always
+    // watch the actual latest element.
+    new IntersectionObserver((entries, io) => {
+      const e = entries[0];
+      if (!e) return;
+      btn.classList.toggle("visible", !e.isIntersecting);
+      io.disconnect();
+    }, { threshold: 0.6 }).observe(last);
+    // Also poll once per scroll event so the button toggles as they scroll.
+  });
+  __scrollObs.observe(tx, { childList: true });
+  // Scroll listener (window for agent mode, transcript for human mode).
+  const onScroll = () => {
+    const last = tx.lastElementChild;
+    if (!last) { btn.classList.remove("visible"); return; }
+    const r = last.getBoundingClientRect();
+    const inView = r.top < window.innerHeight && r.bottom > 0;
+    btn.classList.toggle("visible", !inView);
+  };
+  window.removeEventListener("scroll", onScroll);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  tx.removeEventListener("scroll", onScroll);
+  tx.addEventListener("scroll", onScroll, { passive: true });
+}
+
+// "just now" / "12s ago" / "3m ago" / "10:23" — compact, conversation-paced.
+function formatTurnTimestamp(d) {
+  const elapsed = Math.max(0, Date.now() - d.getTime());
+  if (elapsed < 8_000)    return "just now";
+  if (elapsed < 60_000)   return Math.floor(elapsed / 1000) + "s ago";
+  if (elapsed < 3600_000) return Math.floor(elapsed / 60_000) + "m ago";
+  // Fall through to a short clock time once the message is older than an hour.
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 // ─── Outcome reveal ─────────────────────────────────────────────────────
@@ -2716,7 +3712,7 @@ function renderOutcomeCard() {
   if (o.terms && typeof o.terms.price === "number") {
     termsHtml = `<div class="terms">price = $${o.terms.price.toLocaleString()}</div>`;
     if (o.type === "agreed") {
-      const walkaway = state.role === "buyer" ? 24500 : 22500;
+      const walkaway = state.role === "buyer" ? 23500 : 22500;
       const surplusVal = state.role === "buyer" ? walkaway - o.terms.price : o.terms.price - walkaway;
       surplus = `<div class="surplus">Your walk-away was $${walkaway.toLocaleString()}. ${surplusVal >= 0 ? "You saved" : "You exceeded by"} $${Math.abs(surplusVal).toLocaleString()}.</div>`;
     }
@@ -2733,7 +3729,7 @@ function renderPostSurvey() {
   // Headers don't carry a value — only Likert items count toward the
   // completion gate that enables the Continue button.
   const scaleQuestions = questions.filter((q) => q.kind !== "header");
-  $("post-survey").innerHTML = questions.map((q) => {
+  $("post-survey").innerHTML = questions.map((q, idx) => {
     if (q.kind === "header") {
       const sub = q.subtitle ? `<p class="survey-section-sub">${escapeHtml(q.subtitle)}</p>` : "";
       return `<div class="survey-section">
@@ -2743,26 +3739,43 @@ function renderPostSurvey() {
     }
     const lo = q.lowLabel || "not at all";
     const hi = q.highLabel || "very";
+    const labelId = "ql-" + q.key;
+    // Likert as a proper ARIA radiogroup so screen readers announce it
+    // correctly and arrow-key navigation moves between options.
     return `
-      <label>${escapeHtml(q.text)}</label>
-      <div class="likert" data-key="${q.key}">
-        ${[1,2,3,4,5,6,7].map((n) => `<button type="button" data-v="${n}">${n}</button>`).join("")}
+      <label id="${labelId}">${escapeHtml(q.text)}</label>
+      <div class="likert" role="radiogroup" aria-labelledby="${labelId}" data-key="${q.key}">
+        ${[1,2,3,4,5,6,7].map((n) => `<button type="button" role="radio" aria-checked="false" data-v="${n}" tabindex="${n === 1 ? "0" : "-1"}">${n}</button>`).join("")}
       </div>
       <div class="likert-labels"><span>${escapeHtml(lo)}</span><span>${escapeHtml(hi)}</span></div>
     `;
   }).join("");
   $("post-survey").querySelectorAll(".likert").forEach((row) => {
     const key = row.dataset.key;
-    row.querySelectorAll("button").forEach((b) => {
-      b.addEventListener("click", () => {
-        const newVal = Number(b.dataset.v);
-        const isRevision = state.postRatings[key] !== undefined && state.postRatings[key] !== newVal;
-        state.postRatings[key] = newVal;
-        row.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
-        b.classList.add("active");
-        $("btn-8-continue").disabled = Object.keys(state.postRatings).length < scaleQuestions.length;
-        // Section B — log Likert selection + revision events for analysis.
-        track("likert_select", { key: key, value: newVal, revision: isRevision });
+    const buttons = Array.from(row.querySelectorAll("button"));
+    const select = (b) => {
+      const newVal = Number(b.dataset.v);
+      const isRevision = state.postRatings[key] !== undefined && state.postRatings[key] !== newVal;
+      state.postRatings[key] = newVal;
+      buttons.forEach((x) => {
+        x.classList.toggle("active", x === b);
+        x.setAttribute("aria-checked", x === b ? "true" : "false");
+        x.setAttribute("tabindex", x === b ? "0" : "-1");
+      });
+      $("btn-8-continue").disabled = Object.keys(state.postRatings).length < scaleQuestions.length;
+      track("likert_select", { key: key, value: newVal, revision: isRevision });
+    };
+    buttons.forEach((b, i) => {
+      b.addEventListener("click", () => select(b));
+      // Arrow-key nav within the radiogroup; Home/End jump to ends.
+      b.addEventListener("keydown", (e) => {
+        let target = null;
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") target = buttons[i + 1] || buttons[0];
+        else if (e.key === "ArrowLeft" || e.key === "ArrowUp") target = buttons[i - 1] || buttons[buttons.length - 1];
+        else if (e.key === "Home") target = buttons[0];
+        else if (e.key === "End") target = buttons[buttons.length - 1];
+        else if (e.key === " " || e.key === "Enter") { e.preventDefault(); select(b); return; }
+        if (target) { e.preventDefault(); target.focus(); select(target); }
       });
     });
   });
@@ -2770,7 +3783,56 @@ function renderPostSurvey() {
 $("btn-8-continue").addEventListener("click", () => show(9));
 
 // ─── SCREEN 7 — demographics + finish ──────────────────────────────────
+// ─── Demographics validation ────────────────────────────────────────────
+//
+// All four fields are required. Age must be an integer in [18, 99]. The
+// submit button stays disabled until every field validates, with inline
+// error messages surfacing on first interaction (input/change events).
+function validateDemographics({ surfaceErrors } = { surfaceErrors: false }) {
+  const age = $("age").value.trim();
+  const gender = $("gender").value;
+  const exp = document.querySelector('input[name="experience"]:checked')?.value || "";
+  const aif = document.querySelector('input[name="ai_familiarity"]:checked')?.value || "";
+
+  const errors = {};
+  if (!age) errors.age = "Required.";
+  else {
+    const n = Number(age);
+    if (!Number.isInteger(n)) errors.age = "Enter a whole number.";
+    else if (n < 18) errors.age = "Must be 18 or older to participate.";
+    else if (n > 99) errors.age = "Please enter an age between 18 and 99.";
+  }
+  if (!gender) errors.gender = "Required.";
+  if (!exp) errors.experience = "Pick one.";
+  if (!aif) errors["ai-familiarity"] = "Pick one.";
+
+  if (surfaceErrors) {
+    for (const key of ["age", "gender", "experience", "ai-familiarity"]) {
+      const el = $(key + "-error");
+      if (!el) continue;
+      const msg = errors[key] || "";
+      el.textContent = msg;
+      el.classList.toggle("show", !!msg);
+    }
+  }
+
+  const valid = Object.keys(errors).length === 0;
+  $("btn-9-finish").disabled = !valid;
+  return valid;
+}
+// Live validation: fire on every input/change in the demographics form.
+$("age").addEventListener("input",  () => validateDemographics());
+$("gender").addEventListener("change", () => validateDemographics());
+document.querySelectorAll('#experience-group input, #ai-familiarity-group input')
+  .forEach((el) => el.addEventListener("change", () => validateDemographics()));
+// Surface error messages on blur (after the participant has interacted with a field).
+$("age").addEventListener("blur",   () => validateDemographics({ surfaceErrors: true }));
+$("gender").addEventListener("blur", () => validateDemographics({ surfaceErrors: true }));
+
 $("btn-9-finish").addEventListener("click", async () => {
+  // Defense in depth — even though the button is gated, validate again at
+  // click time and surface any remaining errors before hitting the network.
+  if (!validateDemographics({ surfaceErrors: true })) return;
   $("btn-9-finish").disabled = true;
   $("btn-9-finish").textContent = "Saving…";
   $("finish-spinner").classList.add("active");
@@ -2806,6 +3868,50 @@ function showFinishError(msg) {
   el.style.display = "block";
 }
 function hideFinishError() { $("finish-error").style.display = "none"; }
+
+// ─── Copy-completion-code button (screen-10) ────────────────────────────
+//
+// Uses the modern Clipboard API (navigator.clipboard.writeText). On success
+// the button briefly flashes "Copied!" with a green outline and the helper
+// text below confirms. Falls back to a hidden-textarea + execCommand approach
+// for the rare browser without Clipboard API access (e.g. insecure origins).
+$("copy-completion-code").addEventListener("click", async () => {
+  const code = ($("completion-code").textContent || "").trim();
+  if (!code || code === "—") return;
+  let ok = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(code);
+      ok = true;
+    } else {
+      // Legacy fallback for non-secure-context browsers.
+      const ta = document.createElement("textarea");
+      ta.value = code;
+      ta.style.position = "fixed"; ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+  } catch (e) { ok = false; }
+  const btn = $("copy-completion-code");
+  const label = btn.querySelector(".copy-btn-label");
+  const fb = $("copy-feedback");
+  if (ok) {
+    btn.classList.add("copied");
+    if (label) label.textContent = "Copied";
+    if (fb) fb.textContent = "Copied to clipboard.";
+    track("completion_code_copy", { success: true });
+    setTimeout(() => {
+      btn.classList.remove("copied");
+      if (label) label.textContent = "Copy";
+      if (fb) fb.textContent = "";
+    }, 2200);
+  } else {
+    if (fb) fb.textContent = "Couldn't copy automatically — please select and copy manually.";
+    track("completion_code_copy", { success: false });
+  }
+});
 
 // ─── SSE parser ─────────────────────────────────────────────────────────
 async function readSse(body, onEvent) {

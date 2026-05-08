@@ -49,8 +49,8 @@ const STIMULUS = {
   marketPrice: 24000,
   sellerListing: 25500,
   sellerMinimum: 22500,
-  buyerTarget: 22000,
-  buyerMax: 24500,
+  buyerTarget: 21500,
+  buyerMax: 23500,
 } as const;
 
 function bar(title: string): void {

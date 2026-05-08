@@ -35,6 +35,13 @@ export class ParticipantRuntime {
   private readonly participant: Participant;
   private readonly llm: LLMClient;
   private readonly systemPrompt: string;
+  /**
+   * Image content blocks (e.g. listing photos) attached to every turn's user
+   * message. Cached via Anthropic prompt caching — see llm.ts. Empty array
+   * if the participant doesn't have images, in which case the LLM call is
+   * text-only.
+   */
+  private readonly images: Array<{ mediaType: string; data: string }>;
 
   constructor(participant: Participant) {
     if (!participant.llm) {
@@ -49,6 +56,7 @@ export class ParticipantRuntime {
     this.model = participant.llm.model;
     this.llm = createLLMClient(participant.llm);
     this.systemPrompt = renderParticipantSystem(participant);
+    this.images = (participant.images ?? []).map((img) => ({ mediaType: img.mediaType, data: img.data }));
   }
 
   async takeTurn(input: ParticipantTurnInput): Promise<Turn> {
@@ -56,6 +64,7 @@ export class ParticipantRuntime {
     const response = await this.llm.call({
       systemStatic: this.systemPrompt,
       userMessage,
+      userImages: this.images.length > 0 ? this.images : undefined,
       tools: this.participant.tools,
       toolChoice: "auto",
     });

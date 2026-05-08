@@ -273,17 +273,62 @@ export function validateOrchestratorToolCall(
         return { ok: false, error: "message must be a non-empty string" };
       }
       if (message.length > 500) return { ok: false, error: "message must be <= 500 chars" };
+
+      // Maximally lenient audience normalization. The orchestrator LLM
+      // occasionally invents shapes the strict schema doesn't allow
+      // (e.g. "both", "everyone", "buyer,seller", a bare known id, etc.).
+      // Rather than failing 3x and degrading to round-robin fallback, we
+      // coerce every reasonable shape to something downstream code accepts.
+      // Mutates input.audience in place so session-runner sees the
+      // canonical form. Unrecognised garbage falls back to "all" — the
+      // moderator note still lands; we just lose targeting precision.
+
+      // 1. Already-canonical "all"
       if (audience === "all") return { ok: true };
-      if (Array.isArray(audience)) {
-        for (const id of audience) {
-          if (typeof id !== "string" || !knownIds.has(id)) {
-            return { ok: false, error: `audience contains unknown participant id: ${String(id)}` };
+
+      // 2. String forms
+      if (typeof audience === "string") {
+        const trimmed = audience.trim();
+        // 2a. Synonyms for "all" — common LLM word choices
+        if (/^(all|both|everyone|all\s*participants?|both\s*sides?|both\s*parties)$/i.test(trimmed)) {
+          input["audience"] = "all";
+          return { ok: true };
+        }
+        // 2b. Single known participant id (e.g. "buyer", "seller")
+        if (knownIds.has(trimmed)) {
+          input["audience"] = [trimmed];
+          return { ok: true };
+        }
+        // 2c. Comma-separated list of ids (e.g. "buyer,seller" or "buyer, seller")
+        if (trimmed.includes(",")) {
+          const parts = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+          const validParts = parts.filter((p) => knownIds.has(p));
+          if (validParts.length > 0) {
+            input["audience"] = validParts;
+            return { ok: true };
           }
         }
-        if (audience.length === 0) return { ok: false, error: "audience must be non-empty" };
+        // 2d. Unknown string — fall back to "all" rather than failing
+        input["audience"] = "all";
         return { ok: true };
       }
-      return { ok: false, error: "audience must be 'all' or an array of participant ids" };
+
+      // 3. Array forms
+      if (Array.isArray(audience)) {
+        // Filter to only known ids; tolerate unknown entries instead of failing.
+        const validIds = audience.filter((id): id is string => typeof id === "string" && knownIds.has(id));
+        if (validIds.length > 0) {
+          input["audience"] = validIds;
+          return { ok: true };
+        }
+        // Empty or all-unknown array — fall back to "all"
+        input["audience"] = "all";
+        return { ok: true };
+      }
+
+      // 4. Missing/null/object/etc. — fall back to "all"
+      input["audience"] = "all";
+      return { ok: true };
     }
     case "declare_outcome": {
       const type = input["type"];

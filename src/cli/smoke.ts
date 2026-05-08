@@ -104,12 +104,26 @@ async function main(): Promise<void> {
       stubState,
     ).ok,
   );
+  // Validator is intentionally lenient on broadcast_to audience shape — a
+  // bad/unknown audience gets coerced to "all" so the orchestrator never
+  // fails 3x on this and degrades to round-robin fallback. Verify the
+  // coercion happens (call returns ok and audience is rewritten).
   check(
-    "broadcast_to(unknown) rejected",
-    !validateOrchestratorToolCall(
-      { name: "broadcast_to", input: { audience: ["ghost"], message: "hi" } },
-      stubState,
-    ).ok,
+    "broadcast_to(unknown audience) coerced to 'all'",
+    (() => {
+      const call = { name: "broadcast_to", input: { audience: ["ghost"], message: "hi" } };
+      const r = validateOrchestratorToolCall(call as any, stubState);
+      return r.ok === true && (call.input as any).audience === "all";
+    })(),
+  );
+  check(
+    "broadcast_to(bare 'buyer' string) coerced to ['buyer']",
+    (() => {
+      const call = { name: "broadcast_to", input: { audience: "buyer", message: "hi" } };
+      const r = validateOrchestratorToolCall(call as any, stubState);
+      return r.ok === true && Array.isArray((call.input as any).audience)
+        && (call.input as any).audience[0] === "buyer";
+    })(),
   );
   check(
     "compress_context valid",

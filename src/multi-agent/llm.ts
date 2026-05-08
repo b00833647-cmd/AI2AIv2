@@ -13,6 +13,14 @@ export interface LLMRequest {
   systemDynamic?: string;
   /** User-turn content. For participants, this is the orchestrator-curated context. */
   userMessage: string;
+  /**
+   * Optional images attached to the user turn (e.g. listing photos).
+   * Sent as image content blocks BEFORE the userMessage text. We tag the
+   * last image with `cache_control: ephemeral` so the entire image set is
+   * cached — every turn after the first gets the cache-read discount and
+   * doesn't re-bill image tokens.
+   */
+  userImages?: Array<{ mediaType: string; data: string }>;
   /** Tools the model can call. May be empty. */
   tools: ToolDefinition[];
   /** If set, force the model to call exactly one of these tools. */
@@ -64,6 +72,29 @@ function resolveApiKey(cfg: LLMConfig): string {
     throw new Error(`No Anthropic API key found. Set ${hint} in your environment.`);
   }
   return key;
+}
+
+/**
+ * Build a multi-modal user-message content array: image blocks first, then
+ * the text block. The LAST image gets `cache_control: ephemeral` so all
+ * blocks up to and including it form a single cached prefix. The text after
+ * is the volatile per-turn payload (transcript, broadcasts, instruction).
+ */
+function buildUserContentWithImages(
+  images: Array<{ mediaType: string; data: string }>,
+  text: string,
+): Anthropic.ContentBlockParam[] {
+  const lastIdx = images.length - 1;
+  const blocks: Anthropic.ContentBlockParam[] = images.map((img, i) => {
+    const block: Anthropic.ImageBlockParam = {
+      type: "image",
+      source: { type: "base64", media_type: img.mediaType as Anthropic.Base64ImageSource["media_type"], data: img.data },
+    };
+    if (i === lastIdx) (block as { cache_control?: { type: "ephemeral" } }).cache_control = { type: "ephemeral" };
+    return block;
+  });
+  blocks.push({ type: "text", text });
+  return blocks;
 }
 
 function toAnthropicTools(tools: ToolDefinition[]): Anthropic.Tool[] {
@@ -132,11 +163,19 @@ export class AnthropicLLMClient implements LLMClient {
     const system = this.buildSystem(req);
     const tools = toAnthropicTools(req.tools);
 
+    // Build the user content: either a plain string (no images) or an array
+    // of image blocks followed by the text. The last image carries the cache
+    // breakpoint so the entire image set is cached — first turn writes the
+    // cache, every turn after reads it back at ~10% the cost.
+    const userContent = (req.userImages && req.userImages.length > 0)
+      ? buildUserContentWithImages(req.userImages, req.userMessage)
+      : req.userMessage;
+
     const params: Anthropic.MessageCreateParamsNonStreaming = {
       model: this.model,
       max_tokens: this.cfg.maxTokens ?? 8000,
       system,
-      messages: [{ role: "user", content: req.userMessage }],
+      messages: [{ role: "user", content: userContent }],
     };
 
     let forcesTool = false;

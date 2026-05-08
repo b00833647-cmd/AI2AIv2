@@ -251,19 +251,67 @@ const server = http.createServer(async (req, res) => {
 });
 
 // Boot-time env validation. Exits if no Anthropic key is reachable; warns
-// (but proceeds) if optional protections aren't configured.
+// (but proceeds) if optional protections aren't configured. In multi-key
+// mode, also reports which key each role resolved to (last-4 fingerprint
+// only — never logs the full secret) so misconfigurations are visible
+// at a glance.
 function validateBootEnv(): void {
-  const k1 = process.env["ANTHROPIC_API_KEY"];
-  const buyer = process.env["BUYER_ANTHROPIC_API_KEY"];
-  const seller = process.env["SELLER_ANTHROPIC_API_KEY"];
-  const orch = process.env["ORCHESTRATOR_ANTHROPIC_API_KEY"];
-  const haveAny = Boolean(k1 || (buyer && seller && orch));
+  const shared = process.env["ANTHROPIC_API_KEY"];
+  const buyerKey  = process.env["BUYER_ANTHROPIC_API_KEY"];
+  const sellerKey = process.env["SELLER_ANTHROPIC_API_KEY"];
+  const orchKey   = process.env["ORCHESTRATOR_ANTHROPIC_API_KEY"];
+  const haveAny = Boolean(shared || (buyerKey && sellerKey && orchKey));
   if (!haveAny) {
     console.error("[boot] ✗ No Anthropic API key configured.");
     console.error("[boot]   Set ANTHROPIC_API_KEY (single-key mode) OR all three of");
     console.error("[boot]   BUYER_ANTHROPIC_API_KEY / SELLER_ANTHROPIC_API_KEY / ORCHESTRATOR_ANTHROPIC_API_KEY.");
     process.exit(1);
   }
+
+  // Resolve what each role will actually use at runtime, mirroring
+  // resolveApiKey() in llm.ts. Then report the configuration clearly.
+  const fp = (k: string | undefined): string => {
+    if (!k) return "(none)";
+    const tail = k.slice(-4);
+    return `…${tail}`;
+  };
+  const sourceFor = (specific: string | undefined): "specific" | "shared" | "missing" => {
+    if (specific && specific.length > 0) return "specific";
+    if (shared && shared.length > 0) return "shared";
+    return "missing";
+  };
+  const buyerSrc  = sourceFor(buyerKey);
+  const sellerSrc = sourceFor(sellerKey);
+  const orchSrc   = sourceFor(orchKey);
+  const allSpecific = buyerSrc === "specific" && sellerSrc === "specific" && orchSrc === "specific";
+  const allShared   = buyerSrc === "shared"   && sellerSrc === "shared"   && orchSrc === "shared";
+
+  if (allSpecific) {
+    console.log("[boot] API keys: 3-key mode (per-role isolation)");
+    console.log(`[boot]   buyer        → BUYER_ANTHROPIC_API_KEY        ${fp(buyerKey)}`);
+    console.log(`[boot]   seller       → SELLER_ANTHROPIC_API_KEY       ${fp(sellerKey)}`);
+    console.log(`[boot]   orchestrator → ORCHESTRATOR_ANTHROPIC_API_KEY ${fp(orchKey)}`);
+    // Sanity: warn if the same key is reused for multiple roles — that
+    // defeats the point of separate workspaces.
+    const fps = [fp(buyerKey), fp(sellerKey), fp(orchKey)];
+    if (new Set(fps).size < 3) {
+      console.warn("[boot] ⚠ Two or more per-role keys appear identical (same last-4 fingerprint).");
+      console.warn("[boot]   For real workspace isolation, each role should have a key from its own Anthropic workspace.");
+    }
+  } else if (allShared) {
+    console.log("[boot] API keys: 1-key shared mode");
+    console.log(`[boot]   ANTHROPIC_API_KEY ${fp(shared)} (used by buyer / seller / orchestrator)`);
+  } else {
+    // Mixed setup — some per-role keys present, others falling back to shared.
+    // Common during a partial migration to 3-key mode. Warn but don't fail.
+    console.warn("[boot] ⚠ Mixed API key configuration detected:");
+    console.warn(`[boot]   buyer        → ${buyerSrc === "specific" ? `BUYER_ANTHROPIC_API_KEY ${fp(buyerKey)}` : `(falling back to shared) ${fp(shared)}`}`);
+    console.warn(`[boot]   seller       → ${sellerSrc === "specific" ? `SELLER_ANTHROPIC_API_KEY ${fp(sellerKey)}` : `(falling back to shared) ${fp(shared)}`}`);
+    console.warn(`[boot]   orchestrator → ${orchSrc === "specific" ? `ORCHESTRATOR_ANTHROPIC_API_KEY ${fp(orchKey)}` : `(falling back to shared) ${fp(shared)}`}`);
+    console.warn("[boot]   For full 3-workspace isolation, set ALL three of");
+    console.warn("[boot]   BUYER_ANTHROPIC_API_KEY / SELLER_ANTHROPIC_API_KEY / ORCHESTRATOR_ANTHROPIC_API_KEY.");
+  }
+
   if (!process.env["AI2AI_ADMIN_PASSWORD"]) {
     console.warn("[boot] ⚠ AI2AI_ADMIN_PASSWORD not set — /admin and /api/p/erase will return 503.");
   }
@@ -330,6 +378,92 @@ const lastTurnAcceptedAt = new Map<string, number>();
 const HUMAN_TURN_MIN_INTERVAL_MS = 1500;
 const HUMAN_TURN_MAX_MESSAGE_CHARS = 1500;
 
+/**
+ * Per-session offer-board state. The orchestrator-side server tracks each
+ * party's most recent offer here as turns arrive and emits an `offer_update`
+ * SSE event downstream so the SPA's ticker is a passive renderer of
+ * authoritative server state — not a client-side regex extractor.
+ */
+interface OfferBoard { buyer: number | null; seller: number | null; }
+
+/**
+ * Inspect a freshly-arrived Turn and return the price it represents, if any.
+ * Priority:
+ *   1. submit_proposal toolCall — authoritative, structured (price slot)
+ *   2. Free-text price detection on the message via detectPriceInText —
+ *      catches an agent who floats a number in send_message, or a human
+ *      who typed something the client missed.
+ * Returns null when no plausible price is found.
+ */
+function extractTurnPrice(t: { toolCalls?: EngineToolCall[]; message?: string }): number | null {
+  // 1. submit_proposal
+  const proposal = (t.toolCalls || []).find((c) => c.name === "submit_proposal");
+  const input = proposal?.input as { issues?: Array<{ name: string; value: number }> } | undefined;
+  if (input && Array.isArray(input.issues)) {
+    const priceIssue = input.issues.find((i) => i.name === "price");
+    if (priceIssue && Number.isFinite(priceIssue.value)) return Number(priceIssue.value);
+  }
+  // 2. Free-text fallback
+  return detectPriceInText(t.message ?? "");
+}
+
+/**
+ * Update the per-session offer board from a Turn and return whether the
+ * board changed. Mutates `board` in-place and is safe to call on every
+ * turn — the caller decides whether to emit an SSE update.
+ */
+function updateOfferBoardFromTurn(
+  board: OfferBoard,
+  t: { emitterId: string; toolCalls?: EngineToolCall[]; message?: string },
+): { changed: boolean; source: "buyer" | "seller" | null } {
+  const price = extractTurnPrice(t);
+  if (price == null) return { changed: false, source: null };
+  if (t.emitterId === "buyer" && board.buyer !== price) {
+    board.buyer = price;
+    return { changed: true, source: "buyer" };
+  }
+  if (t.emitterId === "seller" && board.seller !== price) {
+    board.seller = price;
+    return { changed: true, source: "seller" };
+  }
+  return { changed: false, source: null };
+}
+
+/**
+ * Server-side mirror of the SPA's intent-detection regex. Returns the last
+ * plausible price found in `text` (in USD), or null when none are present.
+ *
+ * Mirrors web/study.html `detectChatIntent` price logic exactly:
+ *   - `$`-prefixed amounts are accepted at face value
+ *   - Bare 4–6 digit numbers are accepted if they're outside year range
+ *     (1900–2100), to avoid false positives like "2023 Camry"
+ *   - Plausible range cap: $1,000–$100,000
+ *   - When multiple prices appear, the last one wins (typically the
+ *     speaker's own counter rather than a quote of the other side)
+ */
+function detectPriceInText(text: string): number | null {
+  if (!text) return null;
+  const re = /(\$\s*)?(\d{1,3}(?:,\d{3})+|\d{4,6})\b/g;
+  const matches: Array<{ n: number; hadDollar: boolean }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const hadDollar = !!m[1];
+    const digits = m[2];
+    if (!digits) continue;
+    const n = Number(digits.replace(/,/g, ""));
+    if (!Number.isFinite(n) || n < 5000 || n > 100000) continue;     // realistic used-car floor
+    if (!hadDollar && n >= 1900 && n <= 2100) continue;             // skip year-like bare numbers
+    matches.push({ n, hadDollar });
+  }
+  if (matches.length === 0) return null;
+  // Prefer $-prefixed matches when present — disambiguates against bare
+  // numbers that might be mileage ("$22,500 since the mileage is 32,000"
+  // → pick 22500, not 32000). Falls through to bare numbers if no $ used.
+  const dollared = matches.filter((x) => x.hadDollar);
+  if (dollared.length > 0) return dollared[dollared.length - 1]!.n;
+  return matches[matches.length - 1]!.n;
+}
+
 async function handleParticipantHumanTurn(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const body = await readJson<{
     participantId: string;
@@ -371,17 +505,33 @@ async function handleParticipantHumanTurn(req: http.IncomingMessage, res: http.S
   pendingHumanTurns.delete(body.participantId);
   lastTurnAcceptedAt.set(body.participantId, Date.now());
 
+  // ─── Safety-net price detection ───────────────────────────────────────
+  // If the client posted action="send_message" but the message text clearly
+  // contains a price ($-prefixed, or a bare 5-digit number outside year
+  // range), upgrade the action to "propose" with that price. This makes the
+  // offer board the authoritative record of every number put on the table,
+  // regardless of whether the client-side intent detector caught it.
+  let effectiveAction = body.action;
+  let effectivePrice  = body.price;
+  if (effectiveAction === "send_message") {
+    const detected = detectPriceInText(body.message);
+    if (detected != null) {
+      effectiveAction = "propose";
+      effectivePrice = detected;
+    }
+  }
+
   // Build the toolCalls payload to look identical to what an LLM would emit.
   const toolCalls: EngineToolCall[] = [];
-  if (body.action === "send_message") {
+  if (effectiveAction === "send_message") {
     toolCalls.push({
       name: "send_message",
       input: { message: body.message, intent: "other" },
     });
   } else {
     // proposal / counter / accept / reject
-    if (body.action !== "accept" && body.action !== "reject") {
-      if (typeof body.price !== "number" || !Number.isFinite(body.price) || body.price <= 0) {
+    if (effectiveAction !== "accept" && effectiveAction !== "reject") {
+      if (typeof effectivePrice !== "number" || !Number.isFinite(effectivePrice) || effectivePrice <= 0) {
         sendJson(res, 400, { error: "price required for propose/counter" });
         // Re-register the pending turn so the human can retry.
         pendingHumanTurns.set(body.participantId, pending);
@@ -391,11 +541,11 @@ async function handleParticipantHumanTurn(req: http.IncomingMessage, res: http.S
     toolCalls.push({
       name: "submit_proposal",
       input: {
-        action: body.action,
+        action: effectiveAction,
         issues: [
           {
             name: "price",
-            value: typeof body.price === "number" ? body.price : 0,
+            value: typeof effectivePrice === "number" ? effectivePrice : 0,
             justification: body.message || "(no justification provided)",
           },
         ],
@@ -524,6 +674,12 @@ async function handleRun(req: http.IncomingMessage, res: http.ServerResponse): P
     // 4. Run the session, streaming events as they happen.
     send("status", { stage: "negotiating", message: "Negotiation starting…" });
     const persistence = openPersistence();
+    // Per-session offer board — server is the single authority on the
+    // displayed buyer/seller numbers. We update it from every turn (using
+    // submit_proposal first, then a text-detection fallback) and emit an
+    // `offer_update` SSE event whenever it changes, so the SPA ticker is
+    // a passive renderer of state rather than a client-side regex.
+    const offerBoard: OfferBoard = { buyer: null, seller: null };
     try {
       const result = await runSession({
         pack,
@@ -542,6 +698,20 @@ async function handleRun(req: http.IncomingMessage, res: http.ServerResponse): P
               toolCalls: t.toolCalls,
               tokens: t.tokens,
             });
+            // Now update the orchestrator-tracked offer board and broadcast
+            // the new state to the SPA.
+            const offerUpdate = updateOfferBoardFromTurn(offerBoard, t);
+            if (offerUpdate.changed) {
+              send("offer_update", {
+                buyer: offerBoard.buyer,
+                seller: offerBoard.seller,
+                spread:
+                  offerBoard.buyer != null && offerBoard.seller != null
+                    ? Math.abs(offerBoard.buyer - offerBoard.seller)
+                    : null,
+                source: offerUpdate.source,
+              });
+            }
           } else if (event.type === "orchestrator_decision") {
             send("decision", {
               turnNumber: event.decision.turnNumber,
@@ -651,8 +821,8 @@ const STUDY_STIMULUS = {
   marketPriceHigh: 25000,
   sellerListing: 25500,
   sellerMinimum: 22500,
-  buyerTarget: 22000,
-  buyerMax: 24500,
+  buyerTarget: 21500,
+  buyerMax: 23500,
 } as const;
 
 // (NEUTRAL_OPPONENT removed — opponent is now drawn at random per session in
@@ -1055,6 +1225,9 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
   send("experiment_mode", { mode });
 
   const persistence = openPersistence();
+  // Per-session offer board (orchestrator-tracked). The server is the single
+  // authority on the displayed buyer/seller numbers — see updateOfferBoardFromTurn.
+  const offerBoard: OfferBoard = { buyer: null, seller: null };
   try {
     const result = await runSession({
       pack,
@@ -1084,6 +1257,21 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
             message: t.message ?? null,
             toolCalls: t.toolCalls,
           });
+          // Orchestrator-side offer tracking: update the per-session board
+          // from this turn (submit_proposal price first, then a text fallback)
+          // and broadcast the new state. Drives the SPA's offer ticker.
+          const offerUpdate = updateOfferBoardFromTurn(offerBoard, t);
+          if (offerUpdate.changed) {
+            send("offer_update", {
+              buyer: offerBoard.buyer,
+              seller: offerBoard.seller,
+              spread:
+                offerBoard.buyer != null && offerBoard.seller != null
+                  ? Math.abs(offerBoard.buyer - offerBoard.seller)
+                  : null,
+              source: offerUpdate.source,
+            });
+          }
         } else if (event.type === "session_end") {
           send("session_end", {
             outcome: event.outcome,

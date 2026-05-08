@@ -58,6 +58,22 @@ export interface DecisionSpace {
 
 // ─── Participant ───────────────────────────────────────────────────────────
 
+/**
+ * Visual context attached to a participant — listing photos, supporting
+ * documents, etc. Sent as image content blocks on every turn so the agent
+ * can reference what it actually sees, not just a text description. Cached
+ * via Anthropic prompt caching so subsequent turns get the cache-read
+ * discount instead of re-billing every image.
+ */
+export interface ParticipantImage {
+  /** MIME type, e.g. "image/jpeg" or "image/png". */
+  mediaType: string;
+  /** Base64-encoded image data (no data: URI prefix). */
+  data: string;
+  /** Optional human-readable label, surfaced to the agent in a preamble line. */
+  label?: string;
+}
+
 export interface Participant {
   id: ParticipantId;
   role: string;
@@ -73,6 +89,10 @@ export interface Participant {
   contextFilterModule?: string;
   /** Marks this side as a real human participant. See session-runner.ts. */
   human?: boolean;
+  /** Optional listing photos / supporting images delivered to the agent on
+   *  every turn (cached via Anthropic prompt caching). Skipped for human
+   *  participants. */
+  images?: ParticipantImage[];
 }
 
 // ─── Protocol hints ────────────────────────────────────────────────────────

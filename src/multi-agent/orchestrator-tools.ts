@@ -37,10 +37,10 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
       properties: {
         audience: {
           oneOf: [
-            { type: "array", items: { type: "string" }, description: "Array of participant ids" },
+            { type: "array", items: { type: "string" }, description: "Array of participant ids — use this even for a single recipient (wrap in []). Examples: [\"buyer\"], [\"seller\"], [\"buyer\",\"seller\"]." },
             { type: "string", enum: ["all"] },
           ],
-          description: "Either an array of participant ids, or the literal string 'all'.",
+          description: "Either the literal string 'all' OR an array of participant ids. Never a bare string id — wrap single recipients in [\"id\"].",
         },
         message: {
           type: "string",
