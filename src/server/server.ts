@@ -388,23 +388,31 @@ interface OfferBoard { buyer: number | null; seller: number | null; }
 
 /**
  * Inspect a freshly-arrived Turn and return the price it represents, if any.
- * Priority:
- *   1. submit_proposal toolCall — authoritative, structured (price slot)
- *   2. Free-text price detection on the message via detectPriceInText —
- *      catches an agent who floats a number in send_message, or a human
- *      who typed something the client missed.
- * Returns null when no plausible price is found.
+ *
+ * STRICT POLICY: only authoritative submit_proposal toolCalls count. Numbers
+ * mentioned conversationally in send_message text — quoting the listing,
+ * referencing a previous offer, citing market data, hypothesising aloud —
+ * MUST NOT update the offer board. The board reflects "what is on the
+ * counter right now", not every dollar figure in the chat.
+ *
+ * Both sides have proper paths to surface a counter as a submit_proposal:
+ *   - AI agents are bound by the HARD RULE in their system prompts —
+ *     any number representing their own move goes through submit_proposal.
+ *   - Human participants in /bhx and /shx — the client's intent detector
+ *     converts "$22,500" / "I can do 22500" into action=propose, and the
+ *     server constructs the corresponding submit_proposal toolCall before
+ *     the Turn lands here.
+ *
+ * If neither path produced a submit_proposal, the agent or human did NOT
+ * formally counter — and the board correctly does not change.
  */
 function extractTurnPrice(t: { toolCalls?: EngineToolCall[]; message?: string }): number | null {
-  // 1. submit_proposal
   const proposal = (t.toolCalls || []).find((c) => c.name === "submit_proposal");
   const input = proposal?.input as { issues?: Array<{ name: string; value: number }> } | undefined;
-  if (input && Array.isArray(input.issues)) {
-    const priceIssue = input.issues.find((i) => i.name === "price");
-    if (priceIssue && Number.isFinite(priceIssue.value)) return Number(priceIssue.value);
-  }
-  // 2. Free-text fallback
-  return detectPriceInText(t.message ?? "");
+  if (!input || !Array.isArray(input.issues)) return null;
+  const priceIssue = input.issues.find((i) => i.name === "price");
+  if (!priceIssue || !Number.isFinite(priceIssue.value)) return null;
+  return Number(priceIssue.value);
 }
 
 /**
