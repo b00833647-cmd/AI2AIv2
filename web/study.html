@@ -3406,14 +3406,22 @@ const ACCEPT_RE = /\b(accept|deal\b|sold\b|i'?ll\s+take\s+it|let'?s\s+do\s+it|i\
 // trigger a fake counter.
 const PRICE_RE  = /(\$\s*)?(\d{1,3}(?:,\d{3})+|\d{4,6})\b/g;
 
+// Phrasing that strongly implies the participant is making an offer of
+// their own, with the number that follows.
+const COUNTER_VERB_RE = /\b(i'?ll\s+(?:do|take|offer|go|pay|give|accept|stretch\s+to)|i'?d\s+(?:do|go|pay|stretch)|my\s+(?:offer|counter|price|bid)|i\s+can\s+(?:do|offer|pay|go|stretch|swing)|how\s+about|what\s+about|let'?s\s+(?:do|say|settle\s+at)|i\s+propose|i\s+counter|counter(?:ing)?\s+(?:at|with)|deal\s+at|going\s+to\s+say|i'?m\s+(?:at|in\s+at|going\s+to\s+offer)|final\s+offer)\b/i;
+
+// Phrasing that strongly implies a number in the message is being QUOTED
+// or NEGATED, not offered. e.g. "do not start with 25500" / "your $25,500
+// is too high" / "the listing is $25,500" / "less than $20,000".
+const QUOTE_NEGATE_RE = /\b(don'?t\b|do\s+not\b|never\b|not\s+\$?\d|your\s+\$?\d|your\s+(?:listing|asking|price|ask)|listing\s+(?:is|of|at)|asking\s+(?:is|of|for|\$?\d)|less\s+than|more\s+than|down\s+from|up\s+from|start\s+(?:with|at|from)|starting\s+(?:with|at|from)|too\s+(?:high|low)|can'?t\s+do|won'?t\s+(?:do|pay|go))\b/i;
+
 function detectChatIntent(text) {
   if (!text) return { action: "send_message", price: null };
   // Reject (priority 1)
   if (REJECT_RE.test(text)) return { action: "reject", price: null };
-  // Counter — any plausible price amount, $-prefixed or bare. We collect
-  // every match then prefer $-prefixed ones so phrases like "I'll do
-  // $22,500 since the mileage is 32,000" pick 22500 (the price) not 32000
-  // (the mileage). Floor of $5000 filters out small numbers like stock IDs.
+
+  // Collect all plausible price tokens (uses same filters as before:
+  // $5k floor, year-filter on bare 4-digit values).
   const matches = [];
   PRICE_RE.lastIndex = 0;
   let m;
@@ -3421,19 +3429,45 @@ function detectChatIntent(text) {
     const hadDollar = !!m[1];
     const n = Number(m[2].replace(/,/g, ""));
     if (!Number.isFinite(n) || n < 5000 || n > 100000) continue;
-    // Without a $ prefix, skip 4-digit values in year range (1900–2100)
-    // to avoid false positives like "2023 Camry" or "year 2024".
     if (!hadDollar && n >= 1900 && n <= 2100) continue;
-    matches.push({ n, hadDollar });
+    matches.push({ n, hadDollar, idx: m.index });
   }
-  if (matches.length > 0) {
-    const dollared = matches.filter((x) => x.hadDollar);
-    const pick = (dollared.length > 0 ? dollared : matches);
-    return { action: "propose", price: pick[pick.length - 1].n };
+
+  if (matches.length === 0) {
+    if (ACCEPT_RE.test(text)) return { action: "accept", price: null };
+    return { action: "send_message", price: null };
   }
-  // Accept
+
+  // Disambiguation: a number alone is NOT enough to call this a counter.
+  // We require at least one positive signal and we down-rank matches that
+  // sit inside an obvious quoting/negation context.
+  const trimmed = text.trim();
+  const isJustANumber = /^\$?\s*(\d{1,3}(?:,\d{3})+|\d{4,6})\s*\.?$/.test(trimmed);
+  const hasCounterVerb = COUNTER_VERB_RE.test(text);
+  const hasQuoteNegate = QUOTE_NEGATE_RE.test(text);
+
+  // Pick the candidate price: prefer $-prefixed; otherwise the last bare.
+  const dollared = matches.filter((x) => x.hadDollar);
+  const candidates = dollared.length > 0 ? dollared : matches;
+  const candidate = candidates[candidates.length - 1].n;
+
+  // STRONG counter signal: explicit verb phrasing with no quote/negation.
+  if (hasCounterVerb && !hasQuoteNegate) {
+    return { action: "propose", price: candidate };
+  }
+  // Just a number on its own line — clear intent to counter.
+  if (isJustANumber) {
+    return { action: "propose", price: candidate };
+  }
+  // $-prefixed number AND counter verb — strong signal even with some
+  // negation noise elsewhere ("don't be cheap, I'll do $22,500").
+  if (dollared.length > 0 && hasCounterVerb) {
+    return { action: "propose", price: candidate };
+  }
+  // Otherwise default to send_message. Numbers in quoting/negation context
+  // ("do not start with 25500", "your $25,500 listing is steep", "more
+  // than $20,000") stay as messages and don't update the offer board.
   if (ACCEPT_RE.test(text)) return { action: "accept", price: null };
-  // Default
   return { action: "send_message", price: null };
 }
 
@@ -3492,6 +3526,12 @@ $("chat-submit").addEventListener("click", async () => {
       price = opp;
     }
   }
+  // CRITICAL: clear pending state SYNCHRONOUSLY before the network call.
+  // This prevents a double-click or a fast-typing follow-up from also
+  // matching humanTurnPending=true and racing into a second POST that the
+  // server will reject with 409 "no_pending_turn". The server has already
+  // marked our slot as in-flight by the time we get here.
+  state.humanTurnPending = false;
   $("chat-submit").disabled = true;
   $("chat-submit").setAttribute("title", "Sending…");
   try {
@@ -3506,10 +3546,28 @@ $("chat-submit").addEventListener("click", async () => {
     $("chat-message").value = "";
     refreshChatIntent();
   } catch (err) {
-    $("chat-input-status").textContent = "Error sending turn: " + err.message;
+    // 409 "no_pending_turn" is a benign race: either the server already
+    // accepted a previous submission, or the engine moved on (session
+    // ended / SSE drop / fast keystroke). DON'T show an alarming error —
+    // just disable the chat input quietly and wait for the next prompt
+    // (the SSE 'human_turn_required' will re-enable it if relevant).
+    const msg = String(err && err.message || "");
+    if (msg.includes("409") || msg.includes("no_pending_turn")) {
+      $("chat-input-status").textContent = "Already received — waiting for the other side.";
+      $("chat-input-status").style.color = "var(--dim)";
+      $("chat-message").value = "";
+      refreshChatIntent();
+      track("human_turn_409", { action, message: msg });
+      // Don't re-enable the button; if it's still our turn, the next
+      // human_turn_required SSE event will re-enable it cleanly.
+      return;
+    }
+    // Real error — surface it and let the user retry.
+    $("chat-input-status").textContent = "Error sending turn: " + msg;
     $("chat-input-status").style.color = "var(--bad)";
     $("chat-submit").disabled = false;
     $("chat-submit").setAttribute("title", "Send turn");
+    state.humanTurnPending = true;  // restore so retry works
   }
 });
 
