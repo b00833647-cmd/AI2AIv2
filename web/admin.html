@@ -6,10 +6,10 @@
 <title>AI2AI · Admin</title>
 <style>
   /* ─── Design tokens ────────────────────────────────────────────────────
-     Mirrors web/study.html so both surfaces share a single visual language.
-     Edit one, copy the change to the other. */
+     Dark theme by default. Override under [data-theme="light"] for the
+     light-mode palette. Layout / spacing / type tokens are theme-neutral. */
   :root {
-    /* Surfaces */
+    /* Surfaces (DARK) */
     --bg:           #0f1115;
     --bg-elev:      #12161e;
     --panel:        #161922;
@@ -24,7 +24,7 @@
     --text-2:       #c4cad7;
     --dim:          #9aa1ae;
     --muted:        #6c7385;
-    /* Brand & semantics */
+    /* Brand & semantics (theme-shared) */
     --accent:       #6aa9ff;
     --accent-fade:  rgba(106,169,255,0.15);
     --accent-hover: #82b8ff;
@@ -43,6 +43,7 @@
     --space-6: 24px;
     --space-7: 32px;
     --space-8: 40px;
+    --space-9: 56px;
     /* Type scale */
     --text-xs:  11px;
     --text-sm:  12px;
@@ -53,6 +54,10 @@
     --text-2xl: 18px;
     --text-3xl: 22px;
     --text-4xl: 28px;
+    /* Weights */
+    --weight-medium: 500;
+    --weight-semi:   600;
+    --weight-bold:   700;
     /* Radii */
     --radius-sm:   4px;
     --radius:      6px;
@@ -72,6 +77,34 @@
     --duration-slow:  320ms;
     /* Focus */
     --focus-ring:     0 0 0 3px rgba(106,169,255,0.35);
+    /* Layout */
+    --shell-h:       54px;
+    --sidebar-w:     220px;
+    --sidebar-w-collapsed: 56px;
+    --footer-h:      32px;
+    --row-h-compact:    28px;
+    --row-h-comfortable:36px;
+    --row-h-spacious:   48px;
+  }
+  /* Light theme — overrides for [data-theme="light"]. Brand/semantic colors
+     stay the same so badges and accents read consistently across themes. */
+  [data-theme="light"] {
+    --bg:            #f7f8fb;
+    --bg-elev:       #ffffff;
+    --panel:         #ffffff;
+    --panel-2:       #f1f3f7;
+    --panel-3:       #e4e8ef;
+    --border:        #d8dde6;
+    --border-strong: #b6bdcc;
+    --border-soft:   #e8ecf2;
+    --text:          #161922;
+    --text-2:        #303747;
+    --dim:           #5a6273;
+    --muted:         #8b95a8;
+    --shadow-sm:     0 1px 2px rgba(15, 17, 21, 0.06);
+    --shadow:        0 2px 8px rgba(15, 17, 21, 0.08);
+    --shadow-md:     0 6px 20px rgba(15, 17, 21, 0.10);
+    --shadow-lg:     0 14px 38px rgba(15, 17, 21, 0.18);
   }
   @media (prefers-reduced-motion: reduce) {
     :root { --duration-fast: 0ms; --duration: 0ms; --duration-slow: 0ms; }
@@ -81,15 +114,420 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
          font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-         font-size: 14px; line-height: 1.5; }
-  header.topbar { padding: 12px 24px; border-bottom: 1px solid var(--border);
-                  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-  header.topbar h1 { margin: 0; font-size: 16px; font-weight: 600; }
-  header.topbar .links a, header.topbar .links button {
-    color: var(--dim); text-decoration: none; margin-left: 14px; font-size: 13px;
-    background: none; border: none; cursor: pointer; font: inherit; padding: 0;
+         font-size: 14px; line-height: 1.5;
+         transition: background var(--duration), color var(--duration); }
+
+  /* ─── App shell layout ──────────────────────────────────────────────────
+     CSS Grid layout with three named areas: top app-bar, left sidebar,
+     main content. Side detail panel slides in from the right (overlay).
+     Footer pinned across the bottom of main. */
+  .admin-app {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    grid-template-rows: var(--shell-h) 1fr var(--footer-h);
+    grid-template-areas:
+      "appbar appbar"
+      "sidebar main"
+      "sidebar footer";
+    min-height: 100vh;
+    transition: grid-template-columns var(--duration) var(--ease);
   }
-  header.topbar .links a:hover, header.topbar .links button:hover { color: var(--accent); }
+  .admin-app[data-sidebar="collapsed"] { grid-template-columns: var(--sidebar-w-collapsed) 1fr; }
+
+  /* App bar (top) */
+  .app-bar {
+    grid-area: appbar;
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: 0 var(--space-5);
+    background: rgba(15, 17, 21, 0.85);
+    backdrop-filter: blur(10px) saturate(140%);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 60;
+  }
+  [data-theme="light"] .app-bar { background: rgba(247, 248, 251, 0.88); }
+  .app-brand {
+    display: inline-flex; align-items: center; gap: var(--space-2);
+    font-weight: var(--weight-semi); font-size: var(--text-base);
+    color: var(--text);
+    text-decoration: none;
+  }
+  .app-brand-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: var(--radius);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--buyer) 100%);
+    color: #0a0f1a; font-weight: var(--weight-bold); font-size: var(--text-md);
+  }
+  .app-bar-divider { width: 1px; height: 22px; background: var(--border); margin: 0 var(--space-2); }
+  .app-search {
+    flex: 1 1 360px; max-width: 480px;
+    position: relative;
+  }
+  .app-search input {
+    width: 100%;
+    padding: 7px 10px 7px 32px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text); font: inherit; font-size: var(--text-md);
+    transition: border-color var(--duration-fast);
+  }
+  .app-search input::placeholder { color: var(--muted); }
+  .app-search input:focus { outline: none; border-color: var(--accent); }
+  .app-search-icon {
+    position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); pointer-events: none;
+  }
+  .app-search-kbd {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--muted); background: var(--panel-3);
+    padding: 2px 6px; border-radius: var(--radius-sm);
+    pointer-events: none;
+  }
+  .app-bar-spacer { flex: 1 1 auto; }
+  .app-bar-actions { display: inline-flex; align-items: center; gap: var(--space-2); }
+  .icon-btn {
+    width: 32px; height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--dim);
+    border: 1px solid transparent; border-radius: var(--radius);
+    cursor: pointer;
+    transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+  }
+  .icon-btn:hover { background: var(--panel-2); color: var(--text); border-color: var(--border); }
+  .icon-btn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+  .icon-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Sidebar */
+  .app-sidebar {
+    grid-area: sidebar;
+    background: var(--bg-elev);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: var(--space-4) 0;
+    transition: padding var(--duration);
+  }
+  .app-sidebar-section {
+    padding: 0 var(--space-4);
+    margin-bottom: var(--space-5);
+  }
+  .app-sidebar-label {
+    font-size: var(--text-xs);
+    text-transform: uppercase; letter-spacing: 0.10em;
+    color: var(--muted);
+    padding: 0 var(--space-2);
+    margin-bottom: var(--space-2);
+    user-select: none;
+    transition: opacity var(--duration);
+  }
+  [data-sidebar="collapsed"] .app-sidebar-label { opacity: 0; height: 0; margin: 0; pointer-events: none; }
+  .nav-item {
+    display: flex; align-items: center; gap: var(--space-3);
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    background: transparent;
+    color: var(--dim);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    font: inherit; font-size: var(--text-base); font-weight: var(--weight-medium);
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--duration-fast), color var(--duration-fast);
+    white-space: nowrap;
+  }
+  .nav-item:hover { background: var(--panel-2); color: var(--text); }
+  .nav-item.active {
+    background: var(--accent-fade);
+    color: var(--accent);
+    border-color: rgba(106,169,255,0.25);
+  }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .nav-item-label { transition: opacity var(--duration); }
+  [data-sidebar="collapsed"] .nav-item-label { opacity: 0; width: 0; pointer-events: none; }
+  [data-sidebar="collapsed"] .nav-item { justify-content: center; padding: 8px 0; }
+  [data-sidebar="collapsed"] .app-sidebar-section { padding: 0 var(--space-2); }
+
+  /* Recently-viewed (sidebar bottom) */
+  .recent-list { display: flex; flex-direction: column; gap: 2px; }
+  .recent-item {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--dim);
+    font: inherit; font-size: var(--text-sm);
+    font-family: ui-monospace, monospace;
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--duration-fast), color var(--duration-fast);
+  }
+  .recent-item:hover { background: var(--panel-2); color: var(--text); }
+  [data-sidebar="collapsed"] .recent-list { display: none; }
+
+  /* Main content */
+  .app-main {
+    grid-area: main;
+    overflow-y: auto;
+    padding: var(--space-5) var(--space-6);
+    transition: padding var(--duration);
+  }
+
+  /* Footer (live counters) */
+  .app-footer {
+    grid-area: footer;
+    display: flex; align-items: center;
+    padding: 0 var(--space-5);
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border);
+    color: var(--dim);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    gap: var(--space-5);
+    flex-wrap: wrap;
+  }
+  .footer-stat { display: inline-flex; align-items: center; gap: 6px; }
+  .footer-stat strong { color: var(--text); font-weight: var(--weight-semi); }
+  .footer-spacer { flex: 1; }
+  .footer-status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--good);
+    box-shadow: 0 0 0 0 rgba(109,208,132,0.5);
+    animation: footerPulse 2s ease-in-out infinite;
+  }
+  @keyframes footerPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(109,208,132,0.5); }
+    50%     { box-shadow: 0 0 0 5px rgba(109,208,132,0); }
+  }
+
+  /* Side detail panel (slides in from right, replaces full-page overlay) */
+  .side-panel {
+    position: fixed;
+    top: var(--shell-h);
+    right: 0; bottom: 0;
+    width: min(720px, 95vw);
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    overflow-y: auto;
+    z-index: 70;
+    transform: translateX(100%);
+    transition: transform var(--duration-slow) var(--ease);
+  }
+  .side-panel.open { transform: translateX(0); }
+  .side-panel-header {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: var(--space-3) var(--space-4);
+    display: flex; align-items: center; gap: var(--space-3);
+  }
+  .side-panel-title { font-size: var(--text-base); font-weight: var(--weight-semi); margin: 0; flex: 1; }
+  .side-panel-body { padding: var(--space-4); }
+  .side-panel-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 17, 21, 0.4);
+    z-index: 65;
+    opacity: 0; pointer-events: none;
+    transition: opacity var(--duration-slow);
+  }
+  .side-panel-overlay.open { opacity: 1; pointer-events: auto; }
+  [data-theme="light"] .side-panel-overlay { background: rgba(15, 17, 21, 0.25); }
+
+  /* Command palette */
+  .cmd-palette-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 17, 21, 0.55);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: none;
+    align-items: flex-start; justify-content: center;
+    padding-top: 14vh;
+    animation: cmdFadeIn var(--duration-fast) ease-out both;
+  }
+  .cmd-palette-overlay.open { display: flex; }
+  @keyframes cmdFadeIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .cmd-palette {
+    width: min(620px, 92vw);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+  .cmd-palette-input {
+    width: 100%;
+    padding: 14px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    color: var(--text); font: inherit; font-size: var(--text-xl);
+  }
+  .cmd-palette-input:focus { outline: none; }
+  .cmd-palette-list {
+    max-height: 50vh;
+    overflow-y: auto;
+    padding: var(--space-1) 0;
+  }
+  .cmd-palette-item {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: 10px 18px;
+    cursor: pointer;
+    color: var(--text);
+    font-size: var(--text-md);
+  }
+  .cmd-palette-item:hover, .cmd-palette-item.selected {
+    background: var(--accent-fade);
+    color: var(--accent);
+  }
+  .cmd-palette-item-section {
+    color: var(--muted); font-size: var(--text-xs);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 8px 18px 4px;
+  }
+  .cmd-palette-item-icon { width: 14px; height: 14px; opacity: 0.6; }
+  .cmd-palette-item-hint { margin-left: auto; color: var(--muted); font-family: ui-monospace, monospace; font-size: var(--text-xs); }
+  .cmd-palette-empty {
+    padding: 24px 18px; color: var(--muted); text-align: center; font-size: var(--text-md);
+  }
+
+  /* Density toggle */
+  .density-segmented {
+    display: inline-flex; align-items: stretch;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .density-segmented button {
+    background: transparent; border: none; padding: 4px 10px;
+    color: var(--dim); font: inherit; font-size: var(--text-xs);
+    cursor: pointer;
+    border-right: 1px solid var(--border);
+  }
+  .density-segmented button:last-child { border-right: none; }
+  .density-segmented button[aria-pressed="true"] {
+    background: var(--accent-fade);
+    color: var(--accent);
+  }
+
+  /* Density-driven row heights for the participants table */
+  [data-density="compact"]      table th, [data-density="compact"]      table td { padding: 4px 8px;  font-size: var(--text-xs); }
+  [data-density="comfortable"]  table th, [data-density="comfortable"]  table td { padding: 8px 10px; font-size: var(--text-md); }
+  [data-density="spacious"]     table th, [data-density="spacious"]     table td { padding: 12px 12px; font-size: var(--text-md); }
+
+  /* Multi-select row checkbox + bulk-actions bar */
+  .row-check {
+    width: 16px; height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  tr.is-selected td { background: var(--accent-fade); }
+  .bulk-actions-bar {
+    position: sticky; bottom: var(--footer-h); left: 0; right: 0;
+    margin: var(--space-3) calc(-1 * var(--space-6)) 0;
+    padding: 10px var(--space-6);
+    background: var(--panel);
+    border-top: 1px solid var(--accent);
+    display: none; align-items: center; gap: var(--space-3);
+    z-index: 50;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.18);
+    animation: bulkSlideUp var(--duration) var(--ease);
+  }
+  .bulk-actions-bar.show { display: flex; }
+  @keyframes bulkSlideUp {
+    from { transform: translateY(8px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+  .bulk-actions-count { color: var(--accent); font-weight: var(--weight-semi); }
+  .bulk-actions-spacer { flex: 1; }
+
+  /* Saved views / filter bookmarks */
+  .saved-views {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    padding: var(--space-2) 0;
+  }
+  .saved-view-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    color: var(--dim);
+    font-size: var(--text-xs); cursor: pointer;
+  }
+  .saved-view-chip:hover { background: var(--panel-3); color: var(--text); }
+  .saved-view-chip.active { background: var(--accent-fade); color: var(--accent); border-color: rgba(106,169,255,0.35); }
+  .saved-view-chip-x {
+    margin-left: 4px; opacity: 0.5; cursor: pointer;
+    width: 14px; height: 14px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    line-height: 1; font-size: 10px;
+  }
+  .saved-view-chip-x:hover { opacity: 1; background: var(--bad); color: #fff; }
+
+  /* Avatar/badge for participant IDs */
+  .pid-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .pid-badge-mark {
+    width: 18px; height: 18px;
+    border-radius: var(--radius-sm);
+    background: var(--panel-3);
+    flex-shrink: 0;
+    background-image: var(--pid-bg, linear-gradient(135deg, #6aa9ff, #6dd084));
+  }
+  .pid-badge-id {
+    font-family: ui-monospace, monospace;
+    font-size: var(--text-md);
+  }
+
+  /* Inline-edit cells (excluded / test_data toggles) */
+  .cell-toggle {
+    cursor: pointer;
+    user-select: none;
+    border: 1px solid transparent;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    transition: background var(--duration-fast), border-color var(--duration-fast);
+  }
+  .cell-toggle:hover { border-color: var(--border); background: var(--panel-2); }
+
+  /* Notes textarea (in detail panel) */
+  .notes-area {
+    width: 100%;
+    min-height: 80px;
+    padding: var(--space-3);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font: inherit; font-size: var(--text-md); line-height: 1.5;
+    resize: vertical;
+  }
+  .notes-area:focus { outline: none; border-color: var(--accent); }
+
+  /* Resize handle on table headers */
+  table th.sortable { position: relative; }
+  th.col-resize-handle {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 4px;
+    cursor: col-resize;
+    background: transparent;
+    transition: background var(--duration-fast);
+  }
+  th.col-resize-handle:hover { background: var(--accent); }
+
+  /* Hide the LEGACY topbar / nav (replaced by .app-bar + .app-sidebar). The
+     elements stay in the DOM because some JS still references them; CSS
+     just hides them so they don't render twice. */
+  header.topbar { display: none; }
+  nav.tabs { display: none; }
 
   /* Tab navigation — three semantic groups (Operations / Analysis / Data)
      visually separated by inline group labels so the 5 flat tabs feel
@@ -283,8 +721,84 @@
   .export-row .group-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 4px; }
 </style>
 </head>
-<body>
-<header class="topbar">
+<body class="admin-app" data-theme="dark" data-density="comfortable" data-sidebar="expanded">
+
+<!-- ─── Top app-bar ─────────────────────────────────────────────────────── -->
+<header class="app-bar" role="banner">
+  <button class="icon-btn" id="btn-sidebar-toggle" title="Toggle sidebar" aria-label="Toggle sidebar">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+  </button>
+  <a class="app-brand" href="#tab=overview">
+    <span class="app-brand-mark" aria-hidden="true">A</span>
+    <span class="app-brand-name">AI2AI Admin</span>
+  </a>
+  <span class="app-bar-divider" aria-hidden="true"></span>
+  <div class="app-search">
+    <span class="app-search-icon" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    </span>
+    <input id="app-global-search" type="text" placeholder="Jump to participant ID, completion code, or run a command…" autocomplete="off" />
+    <span class="app-search-kbd" aria-hidden="true">⌘K</span>
+  </div>
+  <span class="app-bar-spacer"></span>
+  <div class="app-bar-actions">
+    <button class="icon-btn" id="btn-theme-toggle" title="Toggle light/dark theme" aria-label="Toggle theme">
+      <svg id="icon-theme-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg id="icon-theme-light" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+    <button class="icon-btn" id="btn-refresh" title="Refresh data" aria-label="Refresh">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+    </button>
+    <a class="icon-btn" href="/blx" target="_blank" title="Open buyer flow" aria-label="Open buyer flow">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+    </a>
+  </div>
+</header>
+
+<!-- ─── Sidebar ─────────────────────────────────────────────────────────── -->
+<aside class="app-sidebar" role="navigation" aria-label="Primary">
+  <div class="app-sidebar-section">
+    <div class="app-sidebar-label">Operations</div>
+    <button class="nav-item" data-tab="overview">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span class="nav-item-label">Overview</span>
+    </button>
+    <button class="nav-item" data-tab="quality">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span class="nav-item-label">Quality</span>
+    </button>
+  </div>
+  <div class="app-sidebar-section">
+    <div class="app-sidebar-label">Analysis</div>
+    <button class="nav-item" data-tab="analytics">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 4 5-5"/></svg>
+      <span class="nav-item-label">Analytics</span>
+    </button>
+    <button class="nav-item" data-tab="cost">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M9 9h4.5a2.5 2.5 0 0 1 0 5H9"/></svg>
+      <span class="nav-item-label">Cost</span>
+    </button>
+  </div>
+  <div class="app-sidebar-section">
+    <div class="app-sidebar-label">Data</div>
+    <button class="nav-item" data-tab="exports">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+      <span class="nav-item-label">Exports</span>
+    </button>
+  </div>
+  <div class="app-sidebar-section" id="recent-section" style="display:none">
+    <div class="app-sidebar-label">Recently viewed</div>
+    <div class="recent-list" id="recent-list"></div>
+  </div>
+</aside>
+
+<!-- ─── Main content (existing tab panels live inside) ────────────────── -->
+<main class="app-main">
+
+<!-- LEGACY topbar/nav are still rendered above (display:none in CSS) so any
+     downstream JS that targets them keeps working. The shell handles
+     navigation, search, refresh, and theme. -->
+<header class="topbar" hidden>
   <h1>AI2AI · Admin Dashboard</h1>
   <div class="links">
     <a href="/blx" target="_blank">→ Buyer flow</a>
@@ -292,11 +806,7 @@
     <button onclick="loadAll()">⟳ Refresh</button>
   </div>
 </header>
-
-<!-- Tabs grouped semantically: live operations, analytical views, raw data.
-     Visual grouping only — the underlying tab routing logic still keys on
-     data-tab, so analyses elsewhere remain unaffected. -->
-<nav class="tabs" aria-label="Admin sections">
+<nav class="tabs" aria-label="Admin sections" hidden>
   <div class="tab-group">
     <span class="tab-group-label">Operations</span>
     <button class="tab-btn active" data-tab="overview">Overview</button>
@@ -312,8 +822,6 @@
     <button class="tab-btn" data-tab="exports">Exports</button>
   </div>
 </nav>
-
-<main>
 
 <!-- ─── Overview tab ─── -->
 <div id="tab-overview" class="tab-page active">
@@ -338,12 +846,21 @@
       <select id="filter-status"><option value="">All status</option><option value="finished">Finished</option><option value="in_progress">In progress</option><option value="abandoned">Abandoned</option></select>
       <label><input type="checkbox" id="filter-hide-flagged" /> Hide flagged</label>
       <label><input type="checkbox" id="filter-hide-test" checked /> Hide test data</label>
-      <span style="color:var(--dim);font-size:12px;margin-left:auto" id="filter-count">—</span>
+      <span class="density-segmented" role="group" aria-label="Row density" style="margin-left: auto">
+        <button data-density-btn="compact"     title="Compact">·</button>
+        <button data-density-btn="comfortable" title="Comfortable">≡</button>
+        <button data-density-btn="spacious"    title="Spacious">☰</button>
+      </span>
+      <button class="btn" id="btn-save-view" title="Save current filters as a named view">+ Save view</button>
+      <span style="color:var(--dim);font-size:12px" id="filter-count">—</span>
     </div>
+    <!-- Saved filter views — chips render here, click to apply, ✕ to remove. -->
+    <div class="saved-views" id="saved-views"></div>
     <div class="scroll-x">
       <table id="participants-table">
         <thead>
           <tr>
+            <th style="width:24px" title="Select all visible"><input type="checkbox" id="select-all-rows" class="row-check" aria-label="Select all visible rows" /></th>
             <th class="sortable" data-sort-key="id">ID</th>
             <th class="sortable" data-sort-key="role">Role</th>
             <th class="sortable" data-sort-key="mode">Mode</th>
@@ -515,19 +1032,70 @@
   </div>
 </div>
 
-<!-- Per-participant detail view (overlays the tabs) -->
-<div id="detail">
-  <a class="back" onclick="closeDetail()">← back to overview</a>
-  <div id="detail-body"></div>
-</div>
-
-<!-- Per-session replay viewer (overlays the tabs) -->
-<div id="replay">
-  <a class="back" onclick="closeReplay()">← back</a>
-  <div id="replay-body"></div>
+<!-- Bulk-actions bar — slides up when ≥1 row in the participants table is
+     checkbox-selected. Hidden by default; .show toggles visibility. -->
+<div class="bulk-actions-bar" id="bulk-actions-bar" role="region" aria-label="Bulk actions">
+  <span class="bulk-actions-count" id="bulk-actions-count">0 selected</span>
+  <span class="bulk-actions-spacer"></span>
+  <button class="btn" id="bulk-exclude">Exclude</button>
+  <button class="btn" id="bulk-test">Mark as test</button>
+  <button class="btn" id="bulk-export">Export selected (JSON)</button>
+  <button class="btn" id="bulk-clear">Clear</button>
 </div>
 
 </main>
+
+<!-- ─── Live counters footer ──────────────────────────────────────────── -->
+<footer class="app-footer" role="contentinfo">
+  <span class="footer-stat" title="Server connection status"><span class="footer-status-dot" aria-hidden="true"></span> Live</span>
+  <span class="footer-stat" id="footer-total"><strong>—</strong> participants</span>
+  <span class="footer-stat" id="footer-finished"><strong>—</strong> finished</span>
+  <span class="footer-stat" id="footer-active"><strong>—</strong> in-progress</span>
+  <span class="footer-stat" id="footer-agreement"><strong>—%</strong> agreement</span>
+  <span class="footer-spacer"></span>
+  <span class="footer-stat" id="footer-cost"><strong>—</strong> spend today</span>
+  <span class="footer-stat" id="footer-version" title="Last refreshed">last: <strong id="footer-refresh-time">—</strong></span>
+</footer>
+
+<!-- ─── Side detail panel (slides in from right) ──────────────────────── -->
+<div class="side-panel-overlay" id="side-panel-overlay"></div>
+<aside class="side-panel" id="side-panel" role="dialog" aria-labelledby="side-panel-title" aria-hidden="true">
+  <div class="side-panel-header">
+    <button class="icon-btn" id="side-panel-close" title="Close (Esc)" aria-label="Close">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <h2 class="side-panel-title" id="side-panel-title">Participant</h2>
+    <div class="app-bar-actions">
+      <button class="icon-btn" id="side-panel-prev" title="Previous (k)" aria-label="Previous participant">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <button class="icon-btn" id="side-panel-next" title="Next (j)" aria-label="Next participant">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="side-panel-body" id="side-panel-body"></div>
+</aside>
+
+<!-- ─── Command palette (Cmd+K / Ctrl+K) ──────────────────────────────── -->
+<div class="cmd-palette-overlay" id="cmd-palette-overlay" role="dialog" aria-modal="true" aria-label="Command palette">
+  <div class="cmd-palette" id="cmd-palette">
+    <input class="cmd-palette-input" id="cmd-palette-input" type="text" placeholder="Type a command, participant ID, or section name…" autocomplete="off" />
+    <div class="cmd-palette-list" id="cmd-palette-list"></div>
+  </div>
+</div>
+
+<!-- ─── Legacy detail/replay overlays (kept for backward compat with any
+     code that still references #detail/#replay; the side-panel above is
+     the new primary detail surface). -->
+<div id="detail" hidden>
+  <a class="back" onclick="closeDetail()">← back to overview</a>
+  <div id="detail-body"></div>
+</div>
+<div id="replay" hidden>
+  <a class="back" onclick="closeReplay()">← back</a>
+  <div id="replay-body"></div>
+</div>
 
 <script>
 // ─── Utilities ──────────────────────────────────────────────────────────
@@ -555,14 +1123,334 @@ function formatTime(sec) {
 }
 function fmt$(n) { return n == null ? "—" : "$" + Math.round(n).toLocaleString(); }
 
-// ─── Tab navigation ─────────────────────────────────────────────────────
-document.querySelectorAll(".tab-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b === btn));
-    const tab = btn.getAttribute("data-tab");
-    document.querySelectorAll(".tab-page").forEach((p) => p.classList.toggle("active", p.id === "tab-" + tab));
-    closeDetail(); closeReplay();
+// ─── Tab navigation (hash-driven) ───────────────────────────────────────
+//
+// State lives in window.location.hash so views are bookmarkable and the
+// browser's back/forward buttons navigate the admin naturally. Both the
+// new sidebar nav-items and the legacy tab buttons are wired to the same
+// activate() function, so any older code that targets .tab-btn keeps working.
+const VALID_TABS = ["overview", "analytics", "quality", "cost", "exports"];
+
+function readHashState() {
+  const h = (location.hash || "").replace(/^#/, "");
+  const out = {};
+  for (const part of h.split("&")) {
+    const [k, ...rest] = part.split("=");
+    if (k) out[k] = decodeURIComponent(rest.join("="));
+  }
+  return out;
+}
+function writeHashState(state) {
+  const parts = [];
+  for (const [k, v] of Object.entries(state)) {
+    if (v == null || v === "") continue;
+    parts.push(`${k}=${encodeURIComponent(v)}`);
+  }
+  const next = "#" + parts.join("&");
+  if (next !== location.hash) history.replaceState(null, "", next);
+}
+function activateTab(tab) {
+  if (!VALID_TABS.includes(tab)) tab = "overview";
+  // Sidebar nav items
+  document.querySelectorAll(".nav-item[data-tab]").forEach((el) => {
+    el.classList.toggle("active", el.dataset.tab === tab);
   });
+  // Legacy tab buttons (still in DOM, hidden)
+  document.querySelectorAll(".tab-btn").forEach((b) => {
+    b.classList.toggle("active", b.getAttribute("data-tab") === tab);
+  });
+  // Tab pages
+  document.querySelectorAll(".tab-page").forEach((p) => {
+    p.classList.toggle("active", p.id === "tab-" + tab);
+  });
+  // Update URL hash (preserves other params like filter/q)
+  const hs = readHashState();
+  hs.tab = tab;
+  writeHashState(hs);
+  // Close any open side surfaces when switching tabs.
+  closeSidePanel();
+  closeReplay();
+}
+
+// Wire BOTH the sidebar nav-items and the legacy tab buttons.
+document.querySelectorAll(".nav-item[data-tab], .tab-btn").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    activateTab(btn.getAttribute("data-tab"));
+  });
+});
+window.addEventListener("hashchange", () => {
+  const hs = readHashState();
+  if (hs.tab) activateTab(hs.tab);
+});
+
+// ─── Theme toggle (light / dark) ────────────────────────────────────────
+//
+// Persists to localStorage. Defaults to system preference on first visit.
+const THEME_KEY = "ai2ai_admin_theme";
+function applyTheme(theme) {
+  document.body.dataset.theme = theme === "light" ? "light" : "dark";
+  $("icon-theme-dark").style.display = theme === "light" ? "none" : "";
+  $("icon-theme-light").style.display = theme === "light" ? "" : "none";
+  $("btn-theme-toggle").setAttribute("aria-pressed", theme === "light" ? "true" : "false");
+  try { localStorage.setItem(THEME_KEY, theme); } catch {}
+}
+(function bootTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch {}
+  if (!saved) saved = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  applyTheme(saved);
+})();
+$("btn-theme-toggle").addEventListener("click", () => {
+  const next = document.body.dataset.theme === "light" ? "dark" : "light";
+  applyTheme(next);
+});
+
+// ─── Sidebar collapse ──────────────────────────────────────────────────
+const SIDEBAR_KEY = "ai2ai_admin_sidebar";
+function applySidebar(state) {
+  document.body.dataset.sidebar = state === "collapsed" ? "collapsed" : "expanded";
+  try { localStorage.setItem(SIDEBAR_KEY, state); } catch {}
+}
+(function bootSidebar() {
+  let saved = null;
+  try { saved = localStorage.getItem(SIDEBAR_KEY); } catch {}
+  applySidebar(saved === "collapsed" ? "collapsed" : "expanded");
+})();
+$("btn-sidebar-toggle").addEventListener("click", () => {
+  applySidebar(document.body.dataset.sidebar === "collapsed" ? "expanded" : "collapsed");
+});
+
+// ─── Refresh button (icon-bar) ──────────────────────────────────────────
+$("btn-refresh").addEventListener("click", () => loadAll());
+
+// ─── Density toggle ────────────────────────────────────────────────────
+//
+// Affects the participants table row height. Persists to localStorage.
+const DENSITY_KEY = "ai2ai_admin_density";
+function applyDensity(d) {
+  if (!["compact", "comfortable", "spacious"].includes(d)) d = "comfortable";
+  document.body.dataset.density = d;
+  document.querySelectorAll("[data-density-btn]").forEach((b) => {
+    b.setAttribute("aria-pressed", b.dataset.densityBtn === d ? "true" : "false");
+  });
+  try { localStorage.setItem(DENSITY_KEY, d); } catch {}
+}
+(function bootDensity() {
+  let saved = null;
+  try { saved = localStorage.getItem(DENSITY_KEY); } catch {}
+  applyDensity(saved || "comfortable");
+})();
+// (Density buttons are wired below where the controls bar is rendered.)
+
+// ─── Side detail panel (replaces the full-page #detail overlay) ─────────
+let __detailOpenId = null;
+let __detailRowOrder = [];
+function openSidePanel(id) {
+  __detailOpenId = id;
+  $("side-panel-overlay").classList.add("open");
+  $("side-panel").classList.add("open");
+  $("side-panel").setAttribute("aria-hidden", "false");
+  $("side-panel-title").textContent = "Loading…";
+  $("side-panel-body").innerHTML = "<div style='color:var(--dim);padding:24px;text-align:center'>Loading participant…</div>";
+  recordRecent(id);
+  fetch("/adx/p/" + encodeURIComponent(id))
+    .then((r) => r.ok ? r.json() : Promise.reject(new Error("not found")))
+    .then((d) => {
+      $("side-panel-title").textContent = "Participant " + id;
+      // Re-use the existing renderDetail() but route output into the panel.
+      const target = $("side-panel-body");
+      const stash = $("detail-body").innerHTML;
+      $("detail-body").innerHTML = "";
+      try { renderDetail(id, d); target.innerHTML = $("detail-body").innerHTML; }
+      finally { $("detail-body").innerHTML = stash; }
+    })
+    .catch((err) => {
+      $("side-panel-title").textContent = "Error";
+      $("side-panel-body").innerHTML = `<div class='error-banner'>Failed to load: ${escapeHtml(err.message)}</div>`;
+    });
+}
+function closeSidePanel() {
+  __detailOpenId = null;
+  $("side-panel-overlay").classList.remove("open");
+  $("side-panel").classList.remove("open");
+  $("side-panel").setAttribute("aria-hidden", "true");
+}
+function navigateDetail(delta) {
+  if (!__detailOpenId || __detailRowOrder.length === 0) return;
+  const idx = __detailRowOrder.indexOf(__detailOpenId);
+  if (idx < 0) return;
+  const next = __detailRowOrder[(idx + delta + __detailRowOrder.length) % __detailRowOrder.length];
+  if (next) openSidePanel(next);
+}
+$("side-panel-close").addEventListener("click", closeSidePanel);
+$("side-panel-overlay").addEventListener("click", closeSidePanel);
+$("side-panel-prev").addEventListener("click", () => navigateDetail(-1));
+$("side-panel-next").addEventListener("click", () => navigateDetail(+1));
+
+// ─── Recently viewed (sidebar bottom) ──────────────────────────────────
+const RECENT_KEY = "ai2ai_admin_recent";
+const RECENT_MAX = 8;
+function recordRecent(id) {
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch {}
+  arr = [id, ...arr.filter((x) => x !== id)].slice(0, RECENT_MAX);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(arr)); } catch {}
+  renderRecent();
+}
+function renderRecent() {
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch {}
+  const section = $("recent-section");
+  const list = $("recent-list");
+  if (!arr.length) { section.style.display = "none"; return; }
+  section.style.display = "";
+  list.innerHTML = arr.map((id) => `<button class="recent-item" data-pid="${escapeHtml(id)}">${escapeHtml(id)}</button>`).join("");
+  list.querySelectorAll(".recent-item").forEach((el) => {
+    el.addEventListener("click", () => openSidePanel(el.dataset.pid));
+  });
+}
+renderRecent();
+
+// ─── Command palette (Cmd+K / Ctrl+K) ───────────────────────────────────
+const cmdOverlay = $("cmd-palette-overlay");
+const cmdInput   = $("cmd-palette-input");
+const cmdList    = $("cmd-palette-list");
+let __cmdSelectedIdx = 0;
+
+const STATIC_COMMANDS = [
+  { kind: "tab", label: "Overview",  hint: "→ Operations",  action: () => activateTab("overview") },
+  { kind: "tab", label: "Quality",   hint: "→ Operations",  action: () => activateTab("quality") },
+  { kind: "tab", label: "Analytics", hint: "→ Analysis",    action: () => activateTab("analytics") },
+  { kind: "tab", label: "Cost",      hint: "→ Analysis",    action: () => activateTab("cost") },
+  { kind: "tab", label: "Exports",   hint: "→ Data",        action: () => activateTab("exports") },
+  { kind: "action", label: "Refresh data",   hint: "⟳",     action: () => loadAll() },
+  { kind: "action", label: "Toggle theme",   hint: "light/dark", action: () => $("btn-theme-toggle").click() },
+  { kind: "action", label: "Toggle sidebar", hint: "expand/collapse", action: () => $("btn-sidebar-toggle").click() },
+  { kind: "action", label: "Density: Compact",     hint: "rows", action: () => applyDensity("compact") },
+  { kind: "action", label: "Density: Comfortable", hint: "rows", action: () => applyDensity("comfortable") },
+  { kind: "action", label: "Density: Spacious",    hint: "rows", action: () => applyDensity("spacious") },
+];
+
+function openCmdPalette() {
+  cmdOverlay.classList.add("open");
+  cmdInput.value = "";
+  __cmdSelectedIdx = 0;
+  renderCmdResults("");
+  setTimeout(() => cmdInput.focus(), 10);
+}
+function closeCmdPalette() {
+  cmdOverlay.classList.remove("open");
+}
+function renderCmdResults(query) {
+  const q = (query || "").toLowerCase().trim();
+  const items = [];
+  // Static commands
+  for (const c of STATIC_COMMANDS) {
+    if (!q || c.label.toLowerCase().includes(q) || c.hint.toLowerCase().includes(q)) items.push(c);
+  }
+  // Participant ID match — full or prefix
+  if (allParticipants && allParticipants.length && q.length >= 2) {
+    const matches = allParticipants
+      .filter((p) => (p.id || "").toLowerCase().includes(q) || (p.completion_code || "").toLowerCase().includes(q))
+      .slice(0, 12);
+    for (const p of matches) {
+      items.push({
+        kind: "participant",
+        label: p.id,
+        hint: `${p.role || "?"} · ${p.outcome_type || p.status}`,
+        action: () => { closeCmdPalette(); openSidePanel(p.id); },
+      });
+    }
+  }
+  if (items.length === 0) {
+    cmdList.innerHTML = `<div class="cmd-palette-empty">No matches. Try a tab name, "refresh", or part of a participant ID.</div>`;
+    return;
+  }
+  let html = "";
+  let lastSection = null;
+  items.forEach((item, i) => {
+    const section = item.kind === "tab" ? "Sections" : item.kind === "action" ? "Actions" : "Participants";
+    if (section !== lastSection) {
+      html += `<div class="cmd-palette-item-section">${section}</div>`;
+      lastSection = section;
+    }
+    const sel = i === __cmdSelectedIdx ? " selected" : "";
+    html += `<div class="cmd-palette-item${sel}" data-idx="${i}">
+      <span>${escapeHtml(item.label)}</span>
+      <span class="cmd-palette-item-hint">${escapeHtml(item.hint || "")}</span>
+    </div>`;
+  });
+  cmdList.innerHTML = html;
+  cmdList.querySelectorAll(".cmd-palette-item").forEach((el) => {
+    el.addEventListener("click", () => {
+      const idx = Number(el.dataset.idx);
+      const item = items[idx];
+      if (item && item.action) { closeCmdPalette(); item.action(); }
+    });
+  });
+  cmdList.__items = items;
+}
+cmdInput.addEventListener("input", () => { __cmdSelectedIdx = 0; renderCmdResults(cmdInput.value); });
+cmdInput.addEventListener("keydown", (e) => {
+  const items = cmdList.__items || [];
+  if (e.key === "ArrowDown") { e.preventDefault(); __cmdSelectedIdx = Math.min(items.length - 1, __cmdSelectedIdx + 1); renderCmdResults(cmdInput.value); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); __cmdSelectedIdx = Math.max(0, __cmdSelectedIdx - 1); renderCmdResults(cmdInput.value); }
+  else if (e.key === "Enter") {
+    e.preventDefault();
+    const item = items[__cmdSelectedIdx];
+    if (item && item.action) { closeCmdPalette(); item.action(); }
+  } else if (e.key === "Escape") { e.preventDefault(); closeCmdPalette(); }
+});
+cmdOverlay.addEventListener("click", (e) => { if (e.target === cmdOverlay) closeCmdPalette(); });
+
+// Top-bar global search field also opens the palette pre-filled.
+$("app-global-search").addEventListener("focus", () => {
+  const v = $("app-global-search").value;
+  $("app-global-search").blur();
+  openCmdPalette();
+  if (v) { cmdInput.value = v; renderCmdResults(v); }
+});
+
+// ─── Global keyboard shortcuts ──────────────────────────────────────────
+document.addEventListener("keydown", (e) => {
+  const target = e.target;
+  const inField = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+  // Cmd+K / Ctrl+K — anywhere
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    if (cmdOverlay.classList.contains("open")) closeCmdPalette(); else openCmdPalette();
+    return;
+  }
+  // Escape — close panels
+  if (e.key === "Escape") {
+    if (cmdOverlay.classList.contains("open")) { closeCmdPalette(); return; }
+    if ($("side-panel").classList.contains("open")) { closeSidePanel(); return; }
+  }
+  // Don't fire single-letter shortcuts while typing in a field.
+  if (inField) return;
+  // / — focus global search (which opens palette)
+  if (e.key === "/") { e.preventDefault(); $("app-global-search").focus(); return; }
+  // ? — show shortcut help (re-uses the palette with a help message)
+  if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+    e.preventDefault();
+    openCmdPalette();
+    cmdInput.value = "";
+    cmdList.innerHTML = `<div class="cmd-palette-empty" style="text-align:left;padding:18px">
+      <div style="font-weight:600;color:var(--text);margin-bottom:8px">Keyboard shortcuts</div>
+      <div style="font-family:ui-monospace,monospace;line-height:1.9;font-size:12px">
+        <div><span style="color:var(--accent)">⌘K</span> &nbsp;or&nbsp; <span style="color:var(--accent)">Ctrl+K</span> — command palette</div>
+        <div><span style="color:var(--accent)">/</span> — focus global search</div>
+        <div><span style="color:var(--accent)">j</span> / <span style="color:var(--accent)">k</span> — next / previous participant (in side-panel)</div>
+        <div><span style="color:var(--accent)">Esc</span> — close palette / panel</div>
+        <div><span style="color:var(--accent)">?</span> — this help</div>
+      </div>
+    </div>`;
+    return;
+  }
+  // j / k — navigate participants in the open side panel
+  if (e.key === "j" && $("side-panel").classList.contains("open")) { e.preventDefault(); navigateDetail(+1); return; }
+  if (e.key === "k" && $("side-panel").classList.contains("open")) { e.preventDefault(); navigateDetail(-1); return; }
 });
 
 // ─── Data fetching ──────────────────────────────────────────────────────
@@ -728,13 +1616,42 @@ function applyFilter() {
       return String(va).localeCompare(String(vb)) * dir;
     });
   }
+  // Track ordered IDs so the side-panel j/k navigation traverses the
+  // currently-visible filtered set, not the raw allParticipants list.
+  __detailRowOrder = filtered.map((p) => p.id);
   renderTable(filtered);
+  refreshLiveCounters();
+}
+
+// Deterministic colored badge mark per participant id — gives every row a
+// visually distinct chip that's stable across sessions (researcher's eye
+// recognises "the green 5fG3 case" faster than parsing the ID itself).
+function pidGradient(id) {
+  let h1 = 0, h2 = 0;
+  for (let i = 0; i < id.length; i++) { h1 = (h1 * 31 + id.charCodeAt(i)) >>> 0; h2 = (h2 * 17 + id.charCodeAt(i)) >>> 0; }
+  return `linear-gradient(135deg, hsl(${h1 % 360} 60% 55%), hsl(${h2 % 360} 60% 45%))`;
+}
+
+// Multi-select state — set of participant ids selected via row checkbox.
+const selectedIds = new Set();
+function setRowSelected(id, on) {
+  if (on) selectedIds.add(id); else selectedIds.delete(id);
+  refreshBulkBar();
+  // Highlight / un-highlight the row visually.
+  const tr = document.querySelector(`#participants-body tr[data-pid="${CSS.escape(id)}"]`);
+  if (tr) tr.classList.toggle("is-selected", on);
+}
+function refreshBulkBar() {
+  const bar = $("bulk-actions-bar");
+  if (selectedIds.size === 0) { bar.classList.remove("show"); return; }
+  bar.classList.add("show");
+  $("bulk-actions-count").textContent = `${selectedIds.size} selected`;
 }
 
 function renderTable(rows) {
   if (rows.length === 0) {
     $("participants-body").innerHTML = `
-      <tr><td colspan="15" style="padding:0">
+      <tr><td colspan="16" style="padding:0">
         <div class="empty-state">
           <div class="empty-state-icon" aria-hidden="true">👥</div>
           <div class="empty-state-title">No participants match these filters</div>
@@ -762,8 +1679,11 @@ function renderTable(rows) {
       ? "<span class='badge dim'>agent</span>"
       : `<span class='badge accent'>${mode === 'human_buyer' ? '/bhx' : '/shx'}</span>`;
     const replayBtn = p.session_id ? `<button class="btn" onclick="openReplay('${p.session_id}')">replay</button>` : "";
-    return `<tr>
-      <td><button class="linklike" onclick="openDetail('${p.id}')">${p.id}</button></td>
+    const checked = selectedIds.has(p.id) ? " checked" : "";
+    const selectedClass = selectedIds.has(p.id) ? " is-selected" : "";
+    return `<tr data-pid="${escapeHtml(p.id)}" class="${selectedClass}">
+      <td style="width:24px"><input type="checkbox" class="row-check" data-pid="${escapeHtml(p.id)}"${checked} aria-label="Select participant ${escapeHtml(p.id)}" /></td>
+      <td><button class="linklike pid-badge" onclick="openDetail('${p.id}')"><span class="pid-badge-mark" style="--pid-bg:${pidGradient(p.id)}"></span><span class="pid-badge-id">${escapeHtml(p.id)}</span></button></td>
       <td>${p.role || "—"}</td>
       <td>${modeBadge}</td>
       <td>${personality}</td>
@@ -780,7 +1700,62 @@ function renderTable(rows) {
       <td>${replayBtn}</td>
     </tr>`;
   }).join("");
+  // Wire row checkboxes (delegated would work too; explicit is clearer).
+  $("participants-body").querySelectorAll(".row-check").forEach((cb) => {
+    cb.addEventListener("click", (e) => e.stopPropagation());
+    cb.addEventListener("change", (e) => {
+      setRowSelected(cb.dataset.pid, cb.checked);
+    });
+  });
+  refreshBulkBar();
 }
+
+// ─── Live counters footer refresh ──────────────────────────────────────
+function refreshLiveCounters() {
+  if (!allParticipants) return;
+  const total = allParticipants.length;
+  const finished = allParticipants.filter((p) => p.status === "finished" || p.outcome_type).length;
+  const active = allParticipants.filter((p) => p.status === "in_progress").length;
+  const agreed = allParticipants.filter((p) => p.outcome_type === "agreed").length;
+  const decided = allParticipants.filter((p) => p.outcome_type).length;
+  const rate = decided > 0 ? Math.round((agreed / decided) * 100) : 0;
+  const cost = (allParticipants.reduce((sum, p) => sum + (Number(p.tokens_total) || 0), 0) / 1_000_000) * 5;  // rough Sonnet 4.6 blended ~$5/MTok
+  $("footer-total").innerHTML    = `<strong>${total.toLocaleString()}</strong> participants`;
+  $("footer-finished").innerHTML = `<strong>${finished.toLocaleString()}</strong> finished`;
+  $("footer-active").innerHTML   = `<strong>${active.toLocaleString()}</strong> in-progress`;
+  $("footer-agreement").innerHTML = `<strong>${rate}%</strong> agreement`;
+  $("footer-cost").innerHTML     = `<strong>~$${cost.toFixed(2)}</strong> est. spend`;
+  $("footer-refresh-time").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+// ─── Bulk action handlers ──────────────────────────────────────────────
+$("bulk-clear")?.addEventListener("click", () => {
+  selectedIds.clear();
+  document.querySelectorAll(".row-check").forEach((cb) => { cb.checked = false; });
+  document.querySelectorAll("#participants-body tr").forEach((tr) => tr.classList.remove("is-selected"));
+  refreshBulkBar();
+});
+$("bulk-exclude")?.addEventListener("click", async () => {
+  if (!selectedIds.size) return;
+  if (!confirm(`Exclude ${selectedIds.size} participant(s) from analytics?`)) return;
+  await Promise.all([...selectedIds].map((id) => fetch(`/adx/exclude?id=${encodeURIComponent(id)}`, { method: "POST" }).catch(() => {})));
+  await loadAll();
+});
+$("bulk-test")?.addEventListener("click", async () => {
+  if (!selectedIds.size) return;
+  if (!confirm(`Mark ${selectedIds.size} participant(s) as test data?`)) return;
+  await Promise.all([...selectedIds].map((id) => fetch(`/adx/test-data?id=${encodeURIComponent(id)}`, { method: "POST" }).catch(() => {})));
+  await loadAll();
+});
+$("bulk-export")?.addEventListener("click", () => {
+  if (!selectedIds.size) return;
+  const ids = [...selectedIds];
+  const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), ids, count: ids.length }, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `ai2ai-selected-${ids.length}.json`;
+  a.click();
+});
 function outcomeColor(t) {
   if (t === "agreed") return "ok";
   if (t === "impasse" || t === "timeout") return "warn";
@@ -1145,22 +2120,17 @@ const SURVEY_ORDER = [
   "free_text",
 ];
 
+// openDetail() — kept as the public entry point that the table rows still
+// call via inline onclick. Routes to the new side-panel surface, which
+// loads + renders identical content via renderDetail() through a small
+// stash dance (see openSidePanel above). The legacy #detail overlay is
+// kept hidden in the DOM as a render target for renderDetail() output.
 async function openDetail(id) {
-  closeReplay();
-  document.querySelectorAll(".tab-page").forEach((p) => p.classList.remove("active"));
-  $("detail").style.display = "block";
-  $("detail-body").innerHTML = "<p style='color:var(--dim)'>Loading…</p>";
-  const res = await fetch("/adx/p/" + encodeURIComponent(id));
-  if (!res.ok) { $("detail-body").innerHTML = "<p>Not found.</p>"; return; }
-  const d = await res.json();
-  renderDetail(id, d);
+  openSidePanel(id);
 }
 
 function closeDetail() {
-  $("detail").style.display = "none";
-  const activeBtn = document.querySelector(".tab-btn.active");
-  const tab = activeBtn ? activeBtn.getAttribute("data-tab") : "overview";
-  document.querySelectorAll(".tab-page").forEach((p) => p.classList.toggle("active", p.id === "tab-" + tab));
+  closeSidePanel();
 }
 
 function renderDetail(id, d) {
@@ -1381,7 +2351,97 @@ function renderReplay(sessionId, r) {
   $("replay-body").innerHTML = html;
 }
 
+// ─── Density button wiring (UI is rendered above; JS applies state) ────
+document.querySelectorAll("[data-density-btn]").forEach((btn) => {
+  btn.addEventListener("click", () => applyDensity(btn.dataset.densityBtn));
+});
+applyDensity(document.body.dataset.density);  // sync aria-pressed states
+
+// ─── Saved views (named filter combos persisted to localStorage) ───────
+const SAVED_VIEWS_KEY = "ai2ai_admin_saved_views";
+function readSavedViews() {
+  try { return JSON.parse(localStorage.getItem(SAVED_VIEWS_KEY) || "[]"); } catch { return []; }
+}
+function writeSavedViews(arr) {
+  try { localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(arr)); } catch {}
+}
+function currentFilterSnapshot() {
+  return {
+    q: $("filter").value,
+    role: $("filter-role").value,
+    mode: $("filter-mode").value,
+    outcome: $("filter-outcome").value,
+    personality: $("filter-personality").value,
+    status: $("filter-status").value,
+    hideFlagged: $("filter-hide-flagged").checked,
+    hideTest: $("filter-hide-test").checked,
+  };
+}
+function applyFilterSnapshot(s) {
+  $("filter").value = s.q || "";
+  $("filter-role").value = s.role || "";
+  $("filter-mode").value = s.mode || "";
+  $("filter-outcome").value = s.outcome || "";
+  $("filter-personality").value = s.personality || "";
+  $("filter-status").value = s.status || "";
+  $("filter-hide-flagged").checked = !!s.hideFlagged;
+  $("filter-hide-test").checked = s.hideTest !== false;
+  applyFilter();
+}
+function renderSavedViews() {
+  const views = readSavedViews();
+  const wrap = $("saved-views");
+  if (!views.length) { wrap.innerHTML = ""; wrap.style.display = "none"; return; }
+  wrap.style.display = "";
+  wrap.innerHTML = views.map((v, i) => `
+    <span class="saved-view-chip" data-idx="${i}">
+      <span class="saved-view-chip-label">${escapeHtml(v.name)}</span>
+      <span class="saved-view-chip-x" data-remove="${i}" title="Remove this view">×</span>
+    </span>
+  `).join("");
+  wrap.querySelectorAll(".saved-view-chip").forEach((chip) => {
+    chip.addEventListener("click", (e) => {
+      if (e.target.classList.contains("saved-view-chip-x")) {
+        const i = Number(e.target.dataset.remove);
+        const arr = readSavedViews();
+        arr.splice(i, 1);
+        writeSavedViews(arr);
+        renderSavedViews();
+        return;
+      }
+      const i = Number(chip.dataset.idx);
+      const v = readSavedViews()[i];
+      if (v) applyFilterSnapshot(v.filters);
+    });
+  });
+}
+$("btn-save-view")?.addEventListener("click", () => {
+  const name = prompt("Name this view:");
+  if (!name) return;
+  const arr = readSavedViews();
+  arr.push({ name: name.trim(), filters: currentFilterSnapshot(), savedAt: Date.now() });
+  writeSavedViews(arr);
+  renderSavedViews();
+});
+renderSavedViews();
+
+// ─── Select-all header checkbox ────────────────────────────────────────
+$("select-all-rows")?.addEventListener("change", (e) => {
+  const checked = e.target.checked;
+  document.querySelectorAll("#participants-body .row-check").forEach((cb) => {
+    cb.checked = checked;
+    setRowSelected(cb.dataset.pid, checked);
+  });
+});
+
 // ─── Boot ───────────────────────────────────────────────────────────────
+//
+// Initial tab comes from the URL hash (e.g. #tab=analytics) so deep links
+// work. Defaults to overview when no hash is present.
+(function bootRouting() {
+  const hs = readHashState();
+  activateTab(hs.tab || "overview");
+})();
 loadAll();
 </script>
 </body>
