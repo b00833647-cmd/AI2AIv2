@@ -369,7 +369,7 @@ export function buildPack(args: PackBuildArgs): ScenarioPack {
               llm: {
                 provider: "anthropic" as const,
                 model: "claude-sonnet-4-6",
-                maxTokens: 3000,
+                maxTokens: 2500,
                 apiKeyEnv: "BUYER_ANTHROPIC_API_KEY",
               },
               systemPromptTemplate: buyerSystemPrompt,
@@ -412,7 +412,7 @@ export function buildPack(args: PackBuildArgs): ScenarioPack {
               llm: {
                 provider: "anthropic" as const,
                 model: "claude-sonnet-4-6",
-                maxTokens: 3000,
+                maxTokens: 2500,
                 apiKeyEnv: "SELLER_ANTHROPIC_API_KEY",
               },
               systemPromptTemplate: sellerSystemPrompt,
@@ -460,7 +460,7 @@ export function buildPack(args: PackBuildArgs): ScenarioPack {
       speakingOrder: "alternating",
       orchestratorMode: "default",
       permittedOutcomes: ["agreed", "rejected", "impasse", "timeout", "aborted"],
-      maxParticipantTokensPerTurn: 3000,
+      maxParticipantTokensPerTurn: 2500,
       // The buyer always opens with an inquiry/offer — orchestrator-enforced.
       firstSpeaker: "buyer",
     },
