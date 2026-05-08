@@ -3179,9 +3179,70 @@ async function runNegotiation() {
     if (!res.ok || !res.body) throw new Error("server returned " + res.status);
     await readSse(res.body, handleSse);
   } catch (err) {
-    setRunStatus("Error: " + err.message, true);
+    showSessionError("connection_lost", err);
   }
 }
+
+// ─── Session-error overlay (replaces the cryptic "Error: …" status) ────
+//
+// When the SSE stream drops mid-negotiation — usually because a single
+// LLM turn pushed past a proxy idle limit, or the user's network blipped
+// — the SPA used to show a tiny grey "Error: network error" line and
+// stall there. Now we render a clear banner with a Try-again button that
+// re-POSTs /api/p/run, and a Reload-page fallback. The server has a 15s
+// heartbeat so this should fire less often, but it's the safety net.
+function showSessionError(reason, err) {
+  const banner = $("outcome-banner");
+  if (!banner) return;
+  // Disable any pending chat input and remove the typing indicator so the
+  // UI doesn't look like the negotiation is still progressing.
+  if (typeof disableChatInput === "function") disableChatInput();
+  if (typeof removeTypingIndicator === "function") removeTypingIndicator();
+  // Don't blow away an already-revealed outcome — only render the banner if
+  // the session was running, not if it had already concluded.
+  if (state.outcome) return;
+
+  const errMsg = (err && err.message) ? String(err.message) : "Connection interrupted.";
+  const title  = reason === "connection_lost" ? "Connection interrupted" : "Something went wrong";
+  const help   = reason === "connection_lost"
+    ? "The negotiation stream lost contact with the server. This usually clears on retry — your responses so far are saved."
+    : "An unexpected error occurred during the negotiation.";
+
+  banner.className = "outcome-banner show error";
+  banner.innerHTML = `
+    <div class="verdict">${escapeHtml(title)}</div>
+    <div class="summary">${escapeHtml(help)}</div>
+    <div class="muted" style="font-size:12px;margin-top:6px;font-family:ui-monospace,monospace">${escapeHtml(errMsg)}</div>
+    <div class="continue-prompt" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="btn-primary" id="btn-retry-run">Try again</button>
+      <button class="btn-secondary" id="btn-reload-page">Reload the page</button>
+    </div>`;
+  banner.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  setRunStatus("Connection interrupted", true);
+  if (typeof updateStageStateFromOutcome === "function") {
+    updateStageStateFromOutcome({ type: "error" });
+  }
+  track("session_error", { reason, message: errMsg });
+
+  setTimeout(() => {
+    const retry  = $("btn-retry-run");
+    const reload = $("btn-reload-page");
+    if (retry) retry.addEventListener("click", () => {
+      track("session_error_retry", { reason });
+      banner.className = "outcome-banner";
+      banner.innerHTML = "";
+      // Pick the right run handler for the current mode.
+      const isHumanMode = state.mode === "human_buyer" || state.mode === "human_seller";
+      if (isHumanMode) runHumanNegotiation(); else runNegotiation();
+    });
+    if (reload) reload.addEventListener("click", () => {
+      track("session_error_reload", { reason });
+      window.location.reload();
+    });
+  }, 200);
+}
+
 function setRunStatus(text, isError) {
   const el = $("run-status");
   if (el) {
@@ -3244,7 +3305,7 @@ function handleSse(event, data) {
       updateStageStateFromOutcome(data.outcome);
       revealOutcome(data.outcome);
       break;
-    case "error":          setRunStatus("Error: " + data.message, true); break;
+    case "error":          showSessionError("server_error", { message: data.message }); break;
   }
 }
 
@@ -3286,7 +3347,7 @@ async function runHumanNegotiation() {
     if (!res.ok || !res.body) throw new Error("server returned " + res.status);
     await readSse(res.body, handleSse);
   } catch (err) {
-    setRunStatus("Error: " + err.message, true);
+    showSessionError("connection_lost", err);
   }
 }
 

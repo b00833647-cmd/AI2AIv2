@@ -658,9 +658,20 @@ async function handleRun(req: http.IncomingMessage, res: http.ServerResponse): P
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
+  // SSE heartbeat — Railway / Cloudflare / etc. close idle long-lived
+  // connections after ~30–60s of no traffic. A single Anthropic call
+  // (vision + thinking) can occasionally exceed that, leaving the SPA
+  // staring at "Error: network error". An SSE comment line (";:" prefix)
+  // counts as activity but is ignored by browser EventSource clients.
+  const heartbeat = setInterval(() => {
+    try { res.write(`: keepalive ${Date.now()}\n\n`); }
+    catch { /* socket closed; cleanup will fire below */ }
+  }, 15_000);
+
   let aborted = false;
   req.on("close", () => {
     aborted = true;
+    clearInterval(heartbeat);
   });
 
   try {
@@ -757,6 +768,7 @@ async function handleRun(req: http.IncomingMessage, res: http.ServerResponse): P
     console.error("[server] /api/run error:", err);
     send("error", { message: (err as Error).message });
   } finally {
+    clearInterval(heartbeat);
     res.end();
   }
 }
@@ -1213,9 +1225,17 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
   const send = (event: string, data: unknown): void => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
+  // SSE heartbeat — see /api/run handler for full rationale. Long Anthropic
+  // calls (vision + thinking) can occasionally exceed proxy idle limits;
+  // this comment-line ping keeps the stream alive between real events.
+  const heartbeat = setInterval(() => {
+    try { res.write(`: keepalive ${Date.now()}\n\n`); }
+    catch { /* socket closed; cleanup will fire below */ }
+  }, 15_000);
   let aborted = false;
   req.on("close", () => {
     aborted = true;
+    clearInterval(heartbeat);
     // If the human was mid-turn when they disconnected, reject the pending
     // promise so the engine can declare a timeout outcome rather than hanging.
     const pending = pendingHumanTurns.get(body.participantId);
@@ -1339,6 +1359,7 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
     console.error("[server] /api/p/run error:", err);
     send("error", { message: (err as Error).message });
   } finally {
+    clearInterval(heartbeat);
     persistence.close();
     res.end();
   }
