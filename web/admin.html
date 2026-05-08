@@ -44,6 +44,7 @@
     --space-7: 32px;
     --space-8: 40px;
     --space-9: 56px;
+    --space-10: 72px;
     /* Type scale */
     --text-xs:  11px;
     --text-sm:  12px;
@@ -55,21 +56,29 @@
     --text-3xl: 22px;
     --text-4xl: 28px;
     /* Weights */
-    --weight-medium: 500;
-    --weight-semi:   600;
-    --weight-bold:   700;
+    --weight-regular: 400;
+    --weight-medium:  500;
+    --weight-semi:    600;
+    --weight-bold:    700;
+    --weight-black:   800;
+    /* Line heights */
+    --leading-tight:  1.2;
+    --leading-snug:   1.35;
+    --leading-normal: 1.55;
     /* Radii */
     --radius-sm:   4px;
     --radius:      6px;
     --radius-md:   8px;
     --radius-lg:   10px;
     --radius-xl:   14px;
+    --radius-2xl:  18px;
     --radius-full: 9999px;
     /* Elevation */
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.30);
     --shadow:    0 2px 8px rgba(0,0,0,0.30);
     --shadow-md: 0 6px 20px rgba(0,0,0,0.40);
     --shadow-lg: 0 14px 38px rgba(0,0,0,0.55);
+    --shadow-xl: 0 22px 56px rgba(0,0,0,0.65);
     /* Motion */
     --ease:           cubic-bezier(0.2, 0.9, 0.3, 1.05);
     --duration-fast:  120ms;
@@ -105,6 +114,7 @@
     --shadow:        0 2px 8px rgba(15, 17, 21, 0.08);
     --shadow-md:     0 6px 20px rgba(15, 17, 21, 0.10);
     --shadow-lg:     0 14px 38px rgba(15, 17, 21, 0.18);
+    --shadow-xl:     0 22px 56px rgba(15, 17, 21, 0.24);
   }
   @media (prefers-reduced-motion: reduce) {
     :root { --duration-fast: 0ms; --duration: 0ms; --duration-slow: 0ms; }
@@ -523,47 +533,6 @@
   }
   th.col-resize-handle:hover { background: var(--accent); }
 
-  /* Hide the LEGACY topbar / nav (replaced by .app-bar + .app-sidebar). The
-     elements stay in the DOM because some JS still references them; CSS
-     just hides them so they don't render twice. */
-  header.topbar { display: none; }
-  nav.tabs { display: none; }
-
-  /* Tab navigation — three semantic groups (Operations / Analysis / Data)
-     visually separated by inline group labels so the 5 flat tabs feel
-     intentional rather than ad-hoc. */
-  nav.tabs {
-    background: rgba(15, 17, 21, 0.92);
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--border);
-    padding: 0 var(--space-6); display: flex; gap: 0;
-    position: sticky; top: 0; z-index: 10;
-    align-items: stretch; flex-wrap: wrap;
-  }
-  nav.tabs .tab-group {
-    display: flex; align-items: stretch;
-    border-right: 1px solid var(--border);
-    padding-right: var(--space-2);
-    margin-right: var(--space-2);
-  }
-  nav.tabs .tab-group:last-child { border-right: none; }
-  nav.tabs .tab-group-label {
-    align-self: center;
-    font-size: var(--text-xs);
-    text-transform: uppercase; letter-spacing: 0.10em;
-    color: var(--muted);
-    padding: 0 var(--space-2) 0 var(--space-1);
-    user-select: none;
-  }
-  nav.tabs button {
-    background: none; border: none; color: var(--dim); cursor: pointer;
-    padding: var(--space-3) var(--space-4); font: inherit; font-size: var(--text-md); font-weight: var(--weight-medium, 500);
-    border-bottom: 2px solid transparent;
-    transition: color var(--duration-fast), border-color var(--duration-fast);
-  }
-  nav.tabs button:hover { color: var(--text); }
-  nav.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
-
   /* ─── Reusable atoms ─────────────────────────────────────────────────── */
   .empty-state {
     padding: var(--space-7) var(--space-5);
@@ -794,34 +763,6 @@
 
 <!-- ─── Main content (existing tab panels live inside) ────────────────── -->
 <main class="app-main">
-
-<!-- LEGACY topbar/nav are still rendered above (display:none in CSS) so any
-     downstream JS that targets them keeps working. The shell handles
-     navigation, search, refresh, and theme. -->
-<header class="topbar" hidden>
-  <h1>AI2AI · Admin Dashboard</h1>
-  <div class="links">
-    <a href="/blx" target="_blank">→ Buyer flow</a>
-    <a href="/slx" target="_blank">→ Seller flow</a>
-    <button onclick="loadAll()">⟳ Refresh</button>
-  </div>
-</header>
-<nav class="tabs" aria-label="Admin sections" hidden>
-  <div class="tab-group">
-    <span class="tab-group-label">Operations</span>
-    <button class="tab-btn active" data-tab="overview">Overview</button>
-    <button class="tab-btn" data-tab="quality">Quality</button>
-  </div>
-  <div class="tab-group">
-    <span class="tab-group-label">Analysis</span>
-    <button class="tab-btn" data-tab="analytics">Analytics</button>
-    <button class="tab-btn" data-tab="cost">Cost</button>
-  </div>
-  <div class="tab-group">
-    <span class="tab-group-label">Data</span>
-    <button class="tab-btn" data-tab="exports">Exports</button>
-  </div>
-</nav>
 
 <!-- ─── Overview tab ─── -->
 <div id="tab-overview" class="tab-page active">

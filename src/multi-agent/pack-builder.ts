@@ -569,7 +569,7 @@ number in a send_message text.
     ✓ submit_proposal(action="propose",  price=22500, message="I can do $22,500.")
     ✓ submit_proposal(action="counter",  price=23000, message="What about $23,000? That feels fair given the mileage.")
     ✓ submit_proposal(action="accept",   price=24000, message="Alright, $24,000 works.")
-    ✓ submit_proposal(action="reject",   price=22000, message="$22,000 isn't going to work for me — I'm out.", is_final=true)
+    ✓ submit_proposal(action="reject",   price=24000, message="$24,000 is over my ceiling — I'll have to walk.", is_final=true)
     ✓ send_message: "the listing photo of the engine bay looks clean — what's the lowest you'd go?"
         (no specific amount of YOUR own → send_message is fine)
     ✓ send_message: "happy to discuss numbers once I hear more about your situation."
@@ -716,7 +716,7 @@ number in a send_message text.
     ✓ submit_proposal(action="propose",  price=22500, message="I can do $22,500.")
     ✓ submit_proposal(action="counter",  price=23000, message="What about $23,000? That feels fair given the mileage.")
     ✓ submit_proposal(action="accept",   price=24000, message="Alright, $24,000 works.")
-    ✓ submit_proposal(action="reject",   price=22000, message="$22,000 isn't going to work for me — I'm out.", is_final=true)
+    ✓ submit_proposal(action="reject",   price=24000, message="$24,000 is over my ceiling — I'll have to walk.", is_final=true)
     ✓ send_message: "the listing photo of the engine bay looks clean — what's the lowest you'd go?"
         (no specific amount of YOUR own → send_message is fine)
     ✓ send_message: "happy to discuss numbers once I hear more about your situation."
@@ -881,7 +881,7 @@ number in a send_message text.
     ✓ submit_proposal(action="propose",  price=22500, message="I can do $22,500.")
     ✓ submit_proposal(action="counter",  price=23000, message="What about $23,000? That feels fair given the mileage.")
     ✓ submit_proposal(action="accept",   price=24000, message="Alright, $24,000 works.")
-    ✓ submit_proposal(action="reject",   price=22000, message="$22,000 isn't going to work for me — I'm out.", is_final=true)
+    ✓ submit_proposal(action="reject",   price=24000, message="$24,000 is over my ceiling — I'll have to walk.", is_final=true)
     ✓ send_message: "the listing photo of the engine bay looks clean — what's the lowest you'd go?"
         (no specific amount of YOUR own → send_message is fine)
     ✓ send_message: "happy to discuss numbers once I hear more about your situation."
@@ -1021,7 +1021,7 @@ number in a send_message text.
     ✓ submit_proposal(action="propose",  price=22500, message="I can do $22,500.")
     ✓ submit_proposal(action="counter",  price=23000, message="What about $23,000? That feels fair given the mileage.")
     ✓ submit_proposal(action="accept",   price=24000, message="Alright, $24,000 works.")
-    ✓ submit_proposal(action="reject",   price=22000, message="$22,000 isn't going to work for me — I'm out.", is_final=true)
+    ✓ submit_proposal(action="reject",   price=24000, message="$24,000 is over my ceiling — I'll have to walk.", is_final=true)
     ✓ send_message: "the listing photo of the engine bay looks clean — what's the lowest you'd go?"
         (no specific amount of YOUR own → send_message is fine)
     ✓ send_message: "happy to discuss numbers once I hear more about your situation."
