@@ -1252,6 +1252,55 @@
     font-style: italic;
   }
 
+  /* Quick-action buttons under the textarea — explicit Accept and Walk-away
+     so the participant doesn't have to type to make decisive moves. */
+  .chat-quick-actions {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .quick-btn {
+    flex: 1 1 200px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--panel-2);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semi);
+    cursor: pointer;
+    transition: background var(--duration-fast), border-color var(--duration-fast),
+                color var(--duration-fast), transform var(--duration-fast);
+  }
+  .quick-btn:hover:not(:disabled) { transform: translateY(-1px); }
+  .quick-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .quick-btn-accept {
+    background: rgba(109,208,132,0.10);
+    border-color: rgba(109,208,132,0.45);
+    color: var(--good);
+  }
+  .quick-btn-accept:hover:not(:disabled) {
+    background: rgba(109,208,132,0.18);
+    border-color: var(--good);
+  }
+  .quick-btn-walk {
+    background: rgba(231,111,111,0.08);
+    border-color: rgba(231,111,111,0.35);
+    color: var(--bad);
+  }
+  .quick-btn-walk:hover:not(:disabled) {
+    background: rgba(231,111,111,0.15);
+    border-color: var(--bad);
+  }
+  .quick-btn-icon { font-size: var(--text-xl); line-height: 1; }
+  .quick-btn-label { white-space: nowrap; }
+
   /* ─── Negotiation stage layout (screen-7, all routes) ─────────────────
      The live negotiation always fills the viewport below the app shell.
      The transcript scrolls inside its own bounded box; the ticker and
@@ -1744,7 +1793,7 @@
         <div class="listing-price-row">
           <div class="listing-price" id="listing-price">$25,500</div>
           <div class="listing-price-note" id="listing-price-note">
-            Asking price · Market range for this configuration: $23,000–$25,000
+            Asking price · Market range for this configuration: $23,000–$26,000
           </div>
         </div>
 
@@ -2017,6 +2066,23 @@ I want you to start low — open at around $20,500 to anchor the negotiation. Fr
           <span id="chat-submit-label" class="chat-submit-icon">➤</span>
         </button>
       </div>
+      <!-- Quick-action buttons. Only visible when it's the human's turn —
+           hidden when waiting for the other side. The Accept button only
+           appears when the opponent has actually made an offer; until then
+           there's nothing to accept. Walk-away is always present (during
+           the participant's turn) and confirms before firing.
+           Both buttons bypass the textarea + intent-chip flow and POST
+           directly to /api/p/turn for one-click execution. -->
+      <div class="chat-quick-actions" id="chat-quick-actions" style="display:none">
+        <button type="button" class="quick-btn quick-btn-accept" id="btn-quick-accept" style="display:none">
+          <span class="quick-btn-icon" aria-hidden="true">✅</span>
+          <span class="quick-btn-label" id="btn-quick-accept-label">Accept and close</span>
+        </button>
+        <button type="button" class="quick-btn quick-btn-walk" id="btn-quick-walk">
+          <span class="quick-btn-icon" aria-hidden="true">👋</span>
+          <span class="quick-btn-label">Walk away</span>
+        </button>
+      </div>
       <div class="chat-input-status" id="chat-input-status">
         Wait for the other side to respond. The chat input will activate when it's your turn.
       </div>
@@ -2195,7 +2261,7 @@ const ROLE_INFO = {
   buyer: {
     listingContext: "You're considering this listing",
     badge: "FOR SALE",
-    priceLabel: "Asking price · Market range for this configuration: $23,000–$25,000",
+    priceLabel: "Asking price · Market range for this configuration: $23,000–$26,000",
     situation: "You can spend up to <strong>$23,500</strong> (your hard walk-away). " +
                "Your ideal target is <strong>$21,500</strong>. " +
                "You're a cash-funded buyer — no financing delays.",
@@ -2204,7 +2270,7 @@ const ROLE_INFO = {
   seller: {
     listingContext: "This is your listing",
     badge: "YOUR LISTING",
-    priceLabel: "Your asking price · Market range for this configuration: $23,000–$25,000",
+    priceLabel: "Your asking price · Market range for this configuration: $23,000–$26,000",
     situation: "You listed it at <strong>$25,500</strong>. " +
                "You won't go below <strong>$22,500</strong> (your hard walk-away). " +
                "You'd like a clean sale within 4 weeks before relocating.",
@@ -2233,6 +2299,15 @@ const ROLE_INFO = {
 // would_use_again, agent_represented, negotiation_difficulty) are retained
 // for continuity with already-collected data. The new multi-item scales
 // run alongside them and provide the deeper measurement.
+//
+// TODO (Amir review 2026-05-09): the full battery is intentionally generous
+// for the pilot. After we have ~50+ responses we should:
+//   - compute Cronbach's α per scale and drop low-α items
+//   - inspect overall single-item items (satisfaction, control, opponent_fair,
+//     would_use_again) for redundancy with their multi-item scales (the new
+//     blocks now cover the same constructs more reliably)
+//   - prune items that don't differentiate across conditions / personalities
+// Goal: get total survey down to ~25 items in agent mode, ~18 in human mode.
 const POST_QUESTIONS_AGENT = [
   // ─── Overall reactions (existing single-item summaries) ────────────────
   { kind: "header", title: "Overall", subtitle: "Your overall reactions to this negotiation." },
@@ -3377,9 +3452,14 @@ function enableChatInput(data) {
   $("chat-submit").disabled = false;
   $("chat-submit").setAttribute("title", "Send turn");
   $("chat-input-status").textContent =
-    "It's your turn — type your message below. (Turn #" +
+    "It's your turn — type a message, or use the buttons below. (Turn #" +
     (data?.turnNumber ?? "?") + ")";
   $("chat-input-status").style.color = "var(--accent)";
+  // Show the quick-action buttons. Walk away is always visible during the
+  // human's turn; Accept only appears when there's an opponent offer to
+  // accept (refreshQuickActions inspects state.lastSellerPrice / lastBuyerPrice).
+  $("chat-quick-actions").style.display = "flex";
+  refreshQuickActions();
   $("chat-message").focus();
   refreshChatIntent();
   track("human_turn_input_enabled", { turnNumber: data?.turnNumber });
@@ -3392,7 +3472,96 @@ function disableChatInput() {
   $("chat-input-status").textContent =
     "Wait for the other side to respond. The chat input will activate when it's your turn.";
   $("chat-input-status").style.color = "var(--dim)";
+  // Hide quick actions when it's not the human's turn — prevents accidental
+  // clicks and keeps the interface focused on watching the opponent's turn.
+  $("chat-quick-actions").style.display = "none";
 }
+
+// ─── Quick-action buttons (Accept / Walk away) ─────────────────────────
+//
+// Show whenever it's the human's turn (toggled by enableChatInput / disableChatInput).
+// Accept only renders when there's an opponent offer on the table — the label
+// shows the actual amount being accepted. Updated whenever offer_update fires.
+function refreshQuickActions() {
+  const acceptBtn   = $("btn-quick-accept");
+  const acceptLabel = $("btn-quick-accept-label");
+  if (!acceptBtn || !acceptLabel) return;
+  // The price we'd accept = the OPPONENT's last offer.
+  const oppPrice = state.role === "buyer" ? state.lastSellerPrice : state.lastBuyerPrice;
+  if (oppPrice != null) {
+    acceptBtn.style.display = "";
+    acceptLabel.textContent = `Accept $${oppPrice.toLocaleString()} — close the deal`;
+    acceptBtn.disabled = !state.humanTurnPending;
+  } else {
+    // No opponent offer yet — hide the Accept button entirely. The participant
+    // can still walk away or send a message.
+    acceptBtn.style.display = "none";
+  }
+  // Walk-away always available during the human's turn.
+  $("btn-quick-walk").disabled = !state.humanTurnPending;
+}
+
+// Click handlers — bypass the textarea + intent-chip flow and POST directly.
+$("btn-quick-accept").addEventListener("click", async () => {
+  if (!state.humanTurnPending) return;
+  const oppPrice = state.role === "buyer" ? state.lastSellerPrice : state.lastBuyerPrice;
+  if (oppPrice == null) {
+    $("chat-input-status").textContent = "There's no offer from the other side yet to accept.";
+    $("chat-input-status").style.color = "var(--bad)";
+    return;
+  }
+  // Lock UI, submit accept.
+  state.humanTurnPending = false;
+  $("btn-quick-accept").disabled = true;
+  $("btn-quick-walk").disabled = true;
+  $("chat-submit").disabled = true;
+  try {
+    await api("/api/p/turn", {
+      participantId: state.participantId,
+      action: "accept",
+      message: `I accept your offer of $${oppPrice.toLocaleString()}. Deal.`,
+      price: oppPrice,
+    });
+    track("quick_accept_clicked", { price: oppPrice });
+    $("chat-message").value = "";
+  } catch (err) {
+    $("chat-input-status").textContent = "Error sending: " + (err.message || err);
+    $("chat-input-status").style.color = "var(--bad)";
+    state.humanTurnPending = true;
+    $("btn-quick-accept").disabled = false;
+    $("btn-quick-walk").disabled = false;
+    $("chat-submit").disabled = false;
+  }
+});
+
+$("btn-quick-walk").addEventListener("click", async () => {
+  if (!state.humanTurnPending) return;
+  // Confirm — walk-away is final and ends the negotiation. One click feels
+  // too easy to misfire on, so we gate it behind a quick confirmation.
+  const ok = confirm("End the negotiation and walk away? You'll go to the post-survey questions.");
+  if (!ok) return;
+  state.humanTurnPending = false;
+  $("btn-quick-accept").disabled = true;
+  $("btn-quick-walk").disabled = true;
+  $("chat-submit").disabled = true;
+  try {
+    await api("/api/p/turn", {
+      participantId: state.participantId,
+      action: "reject",
+      message: "I'll have to walk away. Thanks anyway.",
+      isFinal: true,
+    });
+    track("quick_walk_clicked", {});
+    $("chat-message").value = "";
+  } catch (err) {
+    $("chat-input-status").textContent = "Error sending: " + (err.message || err);
+    $("chat-input-status").style.color = "var(--bad)";
+    state.humanTurnPending = true;
+    $("btn-quick-accept").disabled = false;
+    $("btn-quick-walk").disabled = false;
+    $("chat-submit").disabled = false;
+  }
+});
 
 // ─── Intent detection (human chat turn) ─────────────────────────────────
 //
@@ -3707,6 +3876,9 @@ function applyOfferUpdate(payload) {
   // reflects the new opponent offer, in human modes).
   updateGauge();
   if (typeof refreshChatIntent === "function") refreshChatIntent();
+  // Update the quick-action buttons too — Accept label needs to reflect
+  // the opponent's new offer; visibility key on whether there's an offer.
+  if (typeof refreshQuickActions === "function") refreshQuickActions();
 }
 
 // Anchored at the market range so the gauge has stable endpoints. Pulled

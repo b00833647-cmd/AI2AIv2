@@ -16,6 +16,7 @@ import zlib from "node:zlib";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { nanoid } from "nanoid";
 import { runSession } from "../multi-agent/session-runner.ts";
+import { extractOffer } from "../multi-agent/offer-extractor.ts";
 import {
   buildPack,
   pickOpponentPersonality,
@@ -493,12 +494,17 @@ function extractTurnPrice(t: { toolCalls?: EngineToolCall[]; message?: string })
  * Update the per-session offer board from a Turn and return whether the
  * board changed. Mutates `board` in-place and is safe to call on every
  * turn — the caller decides whether to emit an SSE update.
+ *
+ * Optional `overridePrice` lets a downstream extractor (the offer-extractor
+ * LLM) supply a price for turns whose toolCalls don't carry submit_proposal.
+ * The extractor's price is treated as an authoritative second opinion.
  */
 function updateOfferBoardFromTurn(
   board: OfferBoard,
   t: { emitterId: string; toolCalls?: EngineToolCall[]; message?: string },
+  overridePrice?: number | null,
 ): { changed: boolean; source: "buyer" | "seller" | null } {
-  const price = extractTurnPrice(t);
+  const price = overridePrice != null ? overridePrice : extractTurnPrice(t);
   if (price == null) return { changed: false, source: null };
   if (t.emitterId === "buyer" && board.buyer !== price) {
     board.buyer = price;
@@ -791,10 +797,13 @@ async function handleRun(req: http.IncomingMessage, res: http.ServerResponse): P
               toolCalls: t.toolCalls,
               tokens: t.tokens,
             });
-            // Now update the orchestrator-tracked offer board and broadcast
-            // the new state to the SPA.
-            const offerUpdate = updateOfferBoardFromTurn(offerBoard, t);
-            if (offerUpdate.changed) {
+            // Two-stage offer tracking — see /api/p/run for full rationale.
+            // 1. Authoritative: submit_proposal toolCall (instant).
+            // 2. LLM extractor (background): for turns whose text contains
+            //    an informal offer, the offer-extractor reads the message
+            //    and reports the price. Updates the board out-of-band.
+            const fastUpdate = updateOfferBoardFromTurn(offerBoard, t);
+            if (fastUpdate.changed) {
               send("offer_update", {
                 buyer: offerBoard.buyer,
                 seller: offerBoard.seller,
@@ -802,8 +811,28 @@ async function handleRun(req: http.IncomingMessage, res: http.ServerResponse): P
                   offerBoard.buyer != null && offerBoard.seller != null
                     ? Math.abs(offerBoard.buyer - offerBoard.seller)
                     : null,
-                source: offerUpdate.source,
+                source: fastUpdate.source,
               });
+            } else if (t.message && t.message.trim().length > 0) {
+              extractOffer(t.message, t.emitterId).then((extracted) => {
+                if (aborted) return;
+                if (!extracted || !extracted.has_offer) return;
+                if (extracted.confidence === "low") return;
+                if (extracted.price == null || !Number.isFinite(extracted.price)) return;
+                if (extracted.price < 5000 || extracted.price > 100_000) return;
+                const llmUpdate = updateOfferBoardFromTurn(offerBoard, t, extracted.price);
+                if (llmUpdate.changed) {
+                  send("offer_update", {
+                    buyer: offerBoard.buyer,
+                    seller: offerBoard.seller,
+                    spread:
+                      offerBoard.buyer != null && offerBoard.seller != null
+                        ? Math.abs(offerBoard.buyer - offerBoard.seller)
+                        : null,
+                    source: llmUpdate.source,
+                  });
+                }
+              }).catch(() => { /* extractor logs its own errors */ });
             }
           } else if (event.type === "orchestrator_decision") {
             send("decision", {
@@ -912,7 +941,7 @@ const STUDY_STIMULUS = {
   // and concession pacing have wider room.
   marketPrice: 24000,
   marketPriceLow: 23000,
-  marketPriceHigh: 25000,
+  marketPriceHigh: 26000,
   sellerListing: 25500,
   sellerMinimum: 22500,
   buyerTarget: 21500,
@@ -1359,11 +1388,24 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
             message: t.message ?? null,
             toolCalls: t.toolCalls,
           });
-          // Orchestrator-side offer tracking: update the per-session board
-          // from this turn (submit_proposal price first, then a text fallback)
-          // and broadcast the new state. Drives the SPA's offer ticker.
-          const offerUpdate = updateOfferBoardFromTurn(offerBoard, t);
-          if (offerUpdate.changed) {
+          // Orchestrator-side offer tracking — two-stage:
+          //
+          //  1. Authoritative path: if the turn has a `submit_proposal`
+          //     toolCall, take that price immediately and broadcast.
+          //  2. LLM-extractor path: if NO submit_proposal, hand the turn's
+          //     message to the offer-extractor LLM (Sonnet, separate from
+          //     the main orchestrator). It reads the message and decides
+          //     whether the speaker put a price on the table that wasn't
+          //     formalised — handles "How about 23K?", "25500 is over my
+          //     budget — I can do 23", quote-vs-offer ambiguity, etc.
+          //     If it returns has_offer with confidence high/medium, we
+          //     update the board and broadcast.
+          //
+          // The extractor runs in the background — we DO NOT await it
+          // before responding to the SSE consumer. Out-of-order updates
+          // are fine; the board converges to the correct state.
+          const fastUpdate = updateOfferBoardFromTurn(offerBoard, t);
+          if (fastUpdate.changed) {
             send("offer_update", {
               buyer: offerBoard.buyer,
               seller: offerBoard.seller,
@@ -1371,8 +1413,30 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
                 offerBoard.buyer != null && offerBoard.seller != null
                   ? Math.abs(offerBoard.buyer - offerBoard.seller)
                   : null,
-              source: offerUpdate.source,
+              source: fastUpdate.source,
             });
+          } else if (t.message && t.message.trim().length > 0) {
+            // No formal proposal — ask the extractor LLM whether the
+            // message text contained an informal offer.
+            extractOffer(t.message, t.emitterId).then((extracted) => {
+              if (aborted) return;
+              if (!extracted || !extracted.has_offer) return;
+              if (extracted.confidence === "low") return;
+              if (extracted.price == null || !Number.isFinite(extracted.price)) return;
+              if (extracted.price < 5000 || extracted.price > 100_000) return;
+              const llmUpdate = updateOfferBoardFromTurn(offerBoard, t, extracted.price);
+              if (llmUpdate.changed) {
+                send("offer_update", {
+                  buyer: offerBoard.buyer,
+                  seller: offerBoard.seller,
+                  spread:
+                    offerBoard.buyer != null && offerBoard.seller != null
+                      ? Math.abs(offerBoard.buyer - offerBoard.seller)
+                      : null,
+                  source: llmUpdate.source,
+                });
+              }
+            }).catch(() => { /* extractor logs its own errors */ });
           }
         } else if (event.type === "session_end") {
           send("session_end", {
