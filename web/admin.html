@@ -646,6 +646,8 @@
   .btn.primary:hover { background: #82b8ff; color: #0f1115; }
   .btn.danger { color: var(--bad); border-color: var(--bad); }
   .btn.danger:hover { background: rgba(231,111,111,0.1); color: var(--bad); }
+  .icon-btn.icon-btn-danger { color: var(--bad); }
+  .icon-btn.icon-btn-danger:hover { background: rgba(231,111,111,0.12); border-color: rgba(231,111,111,0.45); color: var(--bad); }
 
   /* Tab pages */
   .tab-page { display: none; }
@@ -981,6 +983,7 @@
   <button class="btn" id="bulk-exclude">Exclude</button>
   <button class="btn" id="bulk-test">Mark as test</button>
   <button class="btn" id="bulk-export">Export selected (JSON)</button>
+  <button class="btn danger" id="bulk-delete" title="Permanently delete selected participants and all their data — IRREVERSIBLE">Delete…</button>
   <button class="btn" id="bulk-clear">Clear</button>
 </div>
 
@@ -1007,6 +1010,9 @@
     </button>
     <h2 class="side-panel-title" id="side-panel-title">Participant</h2>
     <div class="app-bar-actions">
+      <button class="icon-btn icon-btn-danger" id="side-panel-delete" title="Permanently delete this participant" aria-label="Delete participant">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+      </button>
       <button class="icon-btn" id="side-panel-prev" title="Previous (k)" aria-label="Previous participant">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
       </button>
@@ -1696,6 +1702,89 @@ $("bulk-export")?.addEventListener("click", () => {
   a.href = URL.createObjectURL(blob);
   a.download = `ai2ai-selected-${ids.length}.json`;
   a.click();
+});
+
+// ─── Bulk delete (IRREVERSIBLE) ───────────────────────────────────────
+//
+// Two-stage confirmation:
+//   1. confirm() with the count + a clear "this is irreversible" warning
+//   2. For larger batches (>3), an additional type-to-confirm prompt
+//      (the participant must type DELETE in caps to proceed)
+// Auto-exports a JSON snapshot of the deleted ids first, so if the
+// researcher changes their mind they at least have a list to recover from
+// a backup against.
+$("bulk-delete")?.addEventListener("click", async () => {
+  if (!selectedIds.size) return;
+  const ids = [...selectedIds];
+  const stepOne = confirm(
+    `Permanently DELETE ${ids.length} participant${ids.length > 1 ? "s" : ""} ` +
+    `and ALL their data (responses, transcripts, sessions, events)?\n\n` +
+    `This is IRREVERSIBLE. The data is gone — recovery requires restoring from a backup.\n\n` +
+    `Click OK to continue, Cancel to abort.`
+  );
+  if (!stepOne) return;
+  // Type-to-confirm gate for larger batches.
+  if (ids.length > 3) {
+    const typed = prompt(`Type DELETE (in caps) to confirm permanent removal of ${ids.length} participants:`);
+    if (typed !== "DELETE") {
+      alert("Cancelled — you didn't type DELETE.");
+      return;
+    }
+  }
+  // Save a JSON snapshot of the ids being deleted as a recovery breadcrumb.
+  try {
+    const blob = new Blob(
+      [JSON.stringify({ deletedAt: new Date().toISOString(), ids, count: ids.length }, null, 2)],
+      { type: "application/json" }
+    );
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `ai2ai-deleted-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
+    a.click();
+  } catch { /* clipboard / download blocked — proceed anyway, user has the IDs visible */ }
+  // Fire the bulk delete request.
+  try {
+    const res = await fetch("/adx/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    selectedIds.clear();
+    await loadAll();
+    alert(`Deleted ${data.deleted} of ${data.requested} participants.${data.deleted < data.requested ? " (Some ids were already gone.)" : ""}`);
+  } catch (err) {
+    alert("Delete failed: " + (err.message || err));
+  }
+});
+
+// ─── Single delete from the side-panel header ─────────────────────────
+//
+// Same confirmation pattern as bulk delete, but for the currently-open
+// participant only. Closes the panel + refreshes the table on success.
+$("side-panel-delete")?.addEventListener("click", async () => {
+  if (!__detailOpenId) return;
+  const id = __detailOpenId;
+  const ok = confirm(
+    `Permanently DELETE participant ${id} and ALL their data ` +
+    `(responses, transcript, session, events)?\n\n` +
+    `This is IRREVERSIBLE. The data is gone — recovery requires restoring from a backup.`
+  );
+  if (!ok) return;
+  try {
+    const res = await fetch("/adx/delete?id=" + encodeURIComponent(id), { method: "POST" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    closeSidePanel();
+    selectedIds.delete(id);
+    await loadAll();
+    if (data.deleted === 0) {
+      alert(`Participant ${id} was already gone (deleted by someone else?).`);
+    }
+  } catch (err) {
+    alert("Delete failed: " + (err.message || err));
+  }
 });
 function outcomeColor(t) {
   if (t === "agreed") return "ok";

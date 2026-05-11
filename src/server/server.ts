@@ -212,6 +212,10 @@ const server = http.createServer(async (req, res) => {
       await handleAdminTestData(req, res);
       return;
     }
+    if (req.method === "POST" && (url.pathname === "/adx/delete" || url.pathname === "/admin/delete")) {
+      await handleAdminDelete(req, res, url);
+      return;
+    }
     if (req.method === "GET" && (url.pathname === "/adx/backup" || url.pathname === "/admin/backup")) {
       await handleAdminBackup(req, res);
       return;
@@ -1731,6 +1735,59 @@ async function handleAdminTestData(req: http.IncomingMessage, res: http.ServerRe
   if (!require400(res, typeof body.participantId === "string", "participantId required")) return;
   withDb((db) => db.setTestData(body.participantId, body.testData === true));
   sendJson(res, 200, { ok: true });
+}
+
+/**
+ * IRREVERSIBLY delete one or more participants and all their cascading
+ * data. Two calling conventions:
+ *   - Single: POST /adx/delete?id=<participantId>  (no body)
+ *   - Bulk:   POST /adx/delete  with body { ids: string[] }
+ *
+ * Returns { deleted: <number>, requested: <number> } so the caller can
+ * tell whether all requested ids actually existed. No-op for unknown ids.
+ *
+ * Admin-auth gated. Once the transaction commits, the data is GONE —
+ * no soft-delete, no recovery beyond restoring from a backup.
+ */
+async function handleAdminDelete(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  url: URL,
+): Promise<void> {
+  if (!requireAdmin(req, res)) return;
+
+  let ids: string[] = [];
+  // Single-id query-string path.
+  const queryId = url.searchParams.get("id");
+  if (queryId) ids = [queryId];
+
+  // Bulk JSON-body path. If the request has a content-type or body, parse
+  // it; otherwise the query-string path took care of things.
+  if (ids.length === 0) {
+    const body = await readJson<{ ids?: unknown }>(req, res);
+    if (body === null) return;
+    if (!Array.isArray(body.ids) || body.ids.length === 0) {
+      sendJson(res, 400, {
+        error: "ids required",
+        message: "Pass ?id=<participantId> for a single delete, or POST { ids: [...] } for bulk.",
+      });
+      return;
+    }
+    ids = body.ids.filter((x): x is string => typeof x === "string");
+  }
+
+  if (ids.length === 0) {
+    sendJson(res, 400, { error: "no valid ids" });
+    return;
+  }
+  // Hard cap to prevent runaway requests.
+  if (ids.length > 500) {
+    sendJson(res, 400, { error: "too many ids", message: "Max 500 participants per request." });
+    return;
+  }
+
+  const deleted = withDb((db) => db.deleteParticipantsCascade(ids));
+  sendJson(res, 200, { deleted, requested: ids.length });
 }
 
 async function handleAdminBackup(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {

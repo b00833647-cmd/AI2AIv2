@@ -1241,6 +1241,68 @@ export class SqlitePersistence implements Persistence {
       .run(testData ? 1 : 0, participantId);
   }
 
+  /**
+   * IRREVERSIBLY delete a participant and ALL their associated data:
+   * - participant_responses, participant_events, behavior_prompts (auto-cascade
+   *   from the FK with ON DELETE CASCADE on study_participants)
+   * - the session row, plus its turns / orchestrator_decisions / outcomes
+   *   (auto-cascade from the FK on sessions)
+   *
+   * Wraps everything in a single transaction so a failure mid-delete leaves
+   * the DB consistent. Returns the number of rows actually removed (0 if
+   * the participant id wasn't found).
+   *
+   * Designed to be safe to call on any participant id — non-existent ids
+   * are a silent no-op (returns 0). Caller is responsible for confirmation
+   * UX. Once committed, the data is gone — no soft-delete, no recovery.
+   */
+  deleteParticipantCascade(participantId: string): number {
+    const tx = this.db.transaction((id: string) => {
+      // Look up the linked session id (if any) before nuking the row.
+      const row = this.db
+        .prepare(`SELECT session_id FROM study_participants WHERE id = ?`)
+        .get(id) as { session_id: string | null } | undefined;
+      if (!row) return 0;
+
+      // Deleting the participant cascades behavior_prompts, participant_responses,
+      // participant_events automatically (ON DELETE CASCADE).
+      const partResult = this.db
+        .prepare(`DELETE FROM study_participants WHERE id = ?`)
+        .run(id);
+
+      // Delete the session row too (if linked) — cascades turns, decisions, outcomes.
+      // Other participants might reference the same session in theory; in
+      // practice the session is 1:1 with the participant for this study, but
+      // we double-check that no OTHER participant points to this session
+      // before deleting it (defensive programming).
+      if (row.session_id) {
+        const others = this.db
+          .prepare(`SELECT COUNT(*) AS n FROM study_participants WHERE session_id = ?`)
+          .get(row.session_id) as { n: number };
+        if (others.n === 0) {
+          this.db.prepare(`DELETE FROM sessions WHERE id = ?`).run(row.session_id);
+        }
+      }
+
+      return partResult.changes;
+    });
+    return tx(participantId) as number;
+  }
+
+  /**
+   * Bulk variant — calls deleteParticipantCascade for each id in a single
+   * outer transaction. Returns the total number of participant rows deleted
+   * across the batch (each successful delete contributes 1).
+   */
+  deleteParticipantsCascade(participantIds: readonly string[]): number {
+    let total = 0;
+    const tx = this.db.transaction((ids: readonly string[]) => {
+      for (const id of ids) total += this.deleteParticipantCascade(id);
+    });
+    tx(participantIds);
+    return total;
+  }
+
   // ─── Replay data ────────────────────────────────────────────────────────
 
   /**
