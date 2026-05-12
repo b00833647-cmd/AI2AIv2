@@ -2304,10 +2304,33 @@ async function openReplay(sessionId) {
   renderReplay(sessionId, r);
 }
 function closeReplay() {
+  // Two responsibilities:
+  //   1. Hide the replay overlay itself.
+  //   2. Restore the tab-page that was visible BEFORE the replay opened.
+  //      openReplay() deactivates every .tab-page so the replay overlay
+  //      shows alone — without restoring one here, clicking "← back" left
+  //      the user staring at a blank document.
+  //
+  // We read the current tab from the URL hash (the source of truth) and
+  // toggle .active directly. We CAN'T call activateTab() here because
+  // activateTab() calls closeReplay() at the end of every tab switch —
+  // that would be mutual recursion. The direct toggle stays in sync with
+  // activateTab()'s own toggling logic on line ~1110.
+  //
+  // PREVIOUS BUG #1 (fixed earlier this session): closeReplay() used to
+  // look for `.tab-btn.active` (gone since the modern-shell refactor),
+  // default to "overview" when null, and reset every tab to Overview —
+  // making the sidebar look broken.
+  //
+  // PREVIOUS BUG #2 (this fix): after that earlier fix, closeReplay()
+  // stopped touching tab-pages entirely. But openReplay() still hides
+  // them all, so "← back" left a blank page.
   $("replay").style.display = "none";
-  const activeBtn = document.querySelector(".tab-btn.active");
-  const tab = activeBtn ? activeBtn.getAttribute("data-tab") : "overview";
-  document.querySelectorAll(".tab-page").forEach((p) => p.classList.toggle("active", p.id === "tab-" + tab));
+  const hs = readHashState();
+  const tab = VALID_TABS.includes(hs.tab) ? hs.tab : "overview";
+  document.querySelectorAll(".tab-page").forEach((p) => {
+    p.classList.toggle("active", p.id === "tab-" + tab);
+  });
 }
 
 function renderReplay(sessionId, r) {
