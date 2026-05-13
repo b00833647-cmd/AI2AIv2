@@ -2118,7 +2118,7 @@ I want you to start low — open at around $20,500 to anchor the negotiation. Fr
         <div class="survey-scroll">
           <div id="post-survey"></div>
 
-          <label for="free-text">Any comments on the study? (optional)</label>
+          <label for="free-text">Any comments on the study?</label>
           <textarea id="free-text" rows="3"></textarea>
         </div>
 
@@ -2308,142 +2308,91 @@ const ROLE_INFO = {
 //     blocks now cover the same constructs more reliably)
 //   - prune items that don't differentiate across conditions / personalities
 // Goal: get total survey down to ~25 items in agent mode, ~18 in human mode.
+// Streamlined v2 (2026-05-13, per Amir's review). 9 Likert items, no section
+// headers for the standalone questions; two named buckets ("Negotiation
+// experience" and "The process"); anchor labels vary by item type
+// (question-form items → "Not at all" / "Very much"; statement-form items →
+// "Strongly disagree" / "Strongly agree"). Free-text comment below, with
+// "(optional)" stripped from the label — it stays optional but no longer
+// telegraphs that to the participant.
 const POST_QUESTIONS_AGENT = [
-  // ─── Overall reactions (existing single-item summaries) ────────────────
-  { kind: "header", title: "Overall", subtitle: "Your overall reactions to this negotiation." },
-  { key: "satisfaction",      text: "Satisfied with the outcome?" },
-  { key: "agent_represented", text: "Your agent represented your preferences well?" },
-  { key: "control",           text: "Felt in control of how your agent negotiated?" },
-  { key: "opponent_fair",     text: "The opponent's agent seemed fair?" },
-  { key: "trust_ai",          text: "Trust in AI to handle real negotiations on your behalf?" },
-  { key: "would_use_again",   text: "Would you use a tool like this in real life?" },
+  // ─── Standalone Q1: overall satisfaction ───
+  { key: "satisfaction",
+    text: "How satisfied are you with your experience today?",
+    lowLabel: "Not at all", highLabel: "Very much" },
 
-  // ─── Your AI agent — Competence + Warmth + Anthropomorphism + Representativeness ───
-  { kind: "header", title: "About your AI agent", subtitle: "The AI agent that negotiated on your behalf." },
-  { key: "competence_own_capable",   text: "My AI agent was capable." },
-  { key: "competence_own_competent", text: "My AI agent was competent." },
-  { key: "competence_own_skilled",   text: "My AI agent was skilled." },
-  { key: "warmth_own_warm",      text: "My AI agent was warm." },
-  { key: "warmth_own_friendly",  text: "My AI agent was friendly." },
-  { key: "warmth_own_sincere",   text: "My AI agent was sincere." },
-  { key: "anthro_own_humanlike",  text: "My AI agent felt human-like." },
-  { key: "anthro_own_intentions", text: "My AI agent seemed to have its own thoughts and intentions." },
-  { key: "anthro_own_reactions",  text: "My AI agent showed genuine reactions during the conversation." },
-  { key: "arep_followed", text: "My AI agent followed my instructions." },
-  { key: "arep_as_me",    text: "My AI agent did what I would have done myself." },
-  { key: "arep_loyalty",  text: "My AI agent advocated for my interests." },
+  // ─── Standalone Q2: would-use-again (moved up per Amir) ───
+  { key: "would_use_again",
+    text: "Would you use a tool like this in real life?",
+    lowLabel: "Not at all", highLabel: "Very much" },
 
-  // ─── Opponent AI agent — Competence + Warmth + Anthropomorphism ───
-  { kind: "header", title: "About the opponent's AI agent", subtitle: "The AI agent on the other side of the negotiation." },
-  { key: "competence_opp_capable",   text: "The opponent's AI agent was capable." },
-  { key: "competence_opp_competent", text: "The opponent's AI agent was competent." },
-  { key: "competence_opp_skilled",   text: "The opponent's AI agent was skilled." },
-  { key: "warmth_opp_warm",      text: "The opponent's AI agent was warm." },
-  { key: "warmth_opp_friendly",  text: "The opponent's AI agent was friendly." },
-  { key: "warmth_opp_sincere",   text: "The opponent's AI agent was sincere." },
-  { key: "anthro_opp_humanlike",  text: "The opponent's AI agent felt human-like." },
-  { key: "anthro_opp_intentions", text: "The opponent's AI agent seemed to have its own thoughts and intentions." },
-  { key: "anthro_opp_reactions",  text: "The opponent's AI agent showed genuine reactions during the conversation." },
+  // ─── Bucket: Negotiation experience ───
+  { kind: "header", title: "Negotiation experience" },
+  { key: "agent_represented",
+    text: "Did your agent represent your preferences well in the negotiation?",
+    lowLabel: "Not at all", highLabel: "Very much" },
+  { key: "control",
+    text: "Did you feel in control of the negotiation on your behalf?",
+    lowLabel: "Not at all", highLabel: "Very much" },
 
-  // ─── The deal — Outcome fairness ───
-  { kind: "header", title: "The deal" },
-  { key: "outfair_self",  text: "The final result was fair to me." },
-  { key: "outfair_other", text: "The final result was fair to the other side." },
-  { key: "outfair_share", text: "I got a fair share of the value in the deal." },
+  // ─── Bucket: The process ───
+  { kind: "header", title: "The process" },
+  { key: "emot_pleasant",
+    text: "The negotiation was pleasant.",
+    lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
+  { key: "emot_anxious",
+    text: "The negotiation made me feel anxious or stressed.",
+    lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
+  { key: "effort_invested",
+    text: "I invested significant effort in this negotiation.",
+    lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
+  { key: "engage_engaged",
+    text: "I was fully engaged throughout the negotiation.",
+    lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
 
-  // ─── The negotiation process — Procedural fairness + Counterpart trust + Pressure ───
-  { kind: "header", title: "The negotiation process" },
-  { key: "procfair_conducted", text: "The negotiation was conducted fairly." },
-  { key: "procfair_respect",   text: "I was treated with respect during the negotiation." },
-  { key: "procfair_voice",     text: "My side had a fair chance to make its case." },
-  { key: "ctrust_trusted",   text: "I trusted the other side during the negotiation." },
-  { key: "ctrust_honest",    text: "The other side seemed honest with us." },
-  { key: "ctrust_goodfaith", text: "The other side acted in good faith." },
-  { key: "press_pushed",    text: "I felt pushed into things I didn't want." },
-  { key: "press_pressured", text: "The negotiation felt pressured overall." },
-  { key: "press_tactics",   text: "The other side used pressure tactics." },
-
-  // ─── Your experience — Emotion + Effort/engagement ───
-  { kind: "header", title: "Your experience" },
-  { key: "emot_pleasant",   text: "The negotiation was pleasant." },
-  { key: "emot_anxious",    text: "The negotiation made me feel anxious or stressed." },
-  { key: "effort_invested", text: "I invested significant effort in this negotiation." },
-  { key: "engage_engaged",  text: "I was fully engaged throughout the negotiation." },
-
-  // ─── Looking ahead — Future intention ───
-  { kind: "header", title: "Looking ahead" },
-  { key: "future_again",     text: "I would use an AI agent for a real negotiation in the future." },
-  { key: "future_recommend", text: "I would recommend AI-assisted negotiation to a friend." },
-  { key: "future_real",      text: "I'd be comfortable letting an AI negotiate something important on my behalf." },
-
-  // ─── Background — Algorithm aversion baseline ───
-  { kind: "header", title: "Background" },
-  { key: "alg_pref", text: "Generally, I trust AI more than humans for tasks like negotiating.",
-    lowLabel: "strongly disagree", highLabel: "strongly agree" },
+  // ─── Standalone closing Q ───
+  { key: "outfair_share",
+    text: "I got a fair share of the value in the deal.",
+    lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
 ];
+// Human-mode mirror of POST_QUESTIONS_AGENT. The structure is identical;
+// items 3 and 4 are reworded because the participant is the negotiator
+// themselves (no delegated agent). DB keys are kept stable so the
+// construct line up across the two conditions.
 const POST_QUESTIONS_HUMAN = [
-  // ─── Overall reactions (existing single-item summaries) ────────────────
-  { kind: "header", title: "Overall", subtitle: "Your overall reactions to this negotiation." },
-  { key: "satisfaction",            text: "Satisfied with the outcome?" },
-  { key: "control",                 text: "Felt in control of the negotiation?" },
-  { key: "negotiation_difficulty",  text: "How difficult did you find this negotiation?" },
-  { key: "opponent_fair",           text: "The AI counterpart seemed fair?" },
-  { key: "trust_ai",                text: "Trust in AI as a negotiation counterpart?" },
-  { key: "would_use_again",         text: "Would you rather negotiate yourself, or via an AI agent next time?",
-    lowLabel: "strongly prefer self", highLabel: "strongly prefer AI" },
+  { key: "satisfaction",
+    text: "How satisfied are you with your experience today?",
+    lowLabel: "Not at all", highLabel: "Very much" },
 
-  // ─── AI counterpart — Competence + Warmth + Anthropomorphism ───
-  { kind: "header", title: "About the AI counterpart", subtitle: "The AI agent you negotiated against." },
-  { key: "competence_opp_capable",   text: "The AI counterpart was capable." },
-  { key: "competence_opp_competent", text: "The AI counterpart was competent." },
-  { key: "competence_opp_skilled",   text: "The AI counterpart was skilled." },
-  { key: "warmth_opp_warm",      text: "The AI counterpart was warm." },
-  { key: "warmth_opp_friendly",  text: "The AI counterpart was friendly." },
-  { key: "warmth_opp_sincere",   text: "The AI counterpart was sincere." },
-  { key: "anthro_opp_humanlike",  text: "The AI counterpart felt human-like." },
-  { key: "anthro_opp_intentions", text: "The AI counterpart seemed to have its own thoughts and intentions." },
-  { key: "anthro_opp_reactions",  text: "The AI counterpart showed genuine reactions to what I said." },
+  { key: "would_use_again",
+    text: "Would you use a tool like this in real life?",
+    lowLabel: "Not at all", highLabel: "Very much" },
 
-  // ─── The deal — Outcome fairness ───
-  { kind: "header", title: "The deal" },
-  { key: "outfair_self",  text: "The final result was fair to me." },
-  { key: "outfair_other", text: "The final result was fair to the other side." },
-  { key: "outfair_share", text: "I got a fair share of the value in the deal." },
+  { kind: "header", title: "Negotiation experience" },
+  { key: "agent_represented",
+    text: "Do you think that you represented your preferences well in the negotiation?",
+    lowLabel: "Not at all", highLabel: "Very much" },
+  { key: "control",
+    text: "Did you feel in control of the negotiation?",
+    lowLabel: "Not at all", highLabel: "Very much" },
 
-  // ─── The negotiation process — Procedural fairness + Counterpart trust + Pressure ───
-  { kind: "header", title: "The negotiation process" },
-  { key: "procfair_conducted", text: "The negotiation was conducted fairly." },
-  { key: "procfair_respect",   text: "I was treated with respect during the negotiation." },
-  { key: "procfair_voice",     text: "I had a fair chance to make my case." },
-  { key: "ctrust_trusted",   text: "I trusted the other side during the negotiation." },
-  { key: "ctrust_honest",    text: "The other side was honest with me." },
-  { key: "ctrust_goodfaith", text: "The other side acted in good faith." },
-  { key: "press_pushed",    text: "I felt pushed into things I didn't want." },
-  { key: "press_pressured", text: "The negotiation felt pressured overall." },
-  { key: "press_tactics",   text: "The other side used pressure tactics." },
+  { kind: "header", title: "The process" },
+  { key: "emot_pleasant",
+    text: "The negotiation was pleasant.",
+    lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
+  { key: "emot_anxious",
+    text: "The negotiation made me feel anxious or stressed.",
+    lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
+  { key: "effort_invested",
+    text: "I invested significant effort in this negotiation.",
+    lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
+  { key: "engage_engaged",
+    text: "I was fully engaged throughout the negotiation.",
+    lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
 
-  // ─── Your experience — Emotion + Effort/engagement ───
-  { kind: "header", title: "Your experience" },
-  { key: "emot_pleasant",   text: "The negotiation was pleasant." },
-  { key: "emot_anxious",    text: "The negotiation made me feel anxious or stressed." },
-  { key: "effort_invested", text: "I invested significant effort in this negotiation." },
-  { key: "engage_engaged",  text: "I was fully engaged throughout the negotiation." },
-
-  // ─── Looking ahead — Future intention ───
-  { kind: "header", title: "Looking ahead" },
-  { key: "future_again",     text: "I would use an AI agent for a real negotiation in the future." },
-  { key: "future_recommend", text: "I would recommend AI-assisted negotiation to a friend." },
-  { key: "future_real",      text: "I'd be comfortable letting an AI negotiate something important on my behalf." },
-
-  // ─── Counterpart attribution (only meaningful in human modes) ───
-  { kind: "header", title: "Counterpart attribution" },
-  { key: "attribution_humanlike", text: "How human-like did the other side feel during the conversation?",
-    lowLabel: "clearly an AI", highLabel: "indistinguishable from a real person" },
-
-  // ─── Background — Algorithm aversion baseline ───
-  { kind: "header", title: "Background" },
-  { key: "alg_pref", text: "Generally, I trust AI more than humans for tasks like negotiating.",
-    lowLabel: "strongly disagree", highLabel: "strongly agree" },
+  { key: "outfair_share",
+    text: "I got a fair share of the value in the deal.",
+    lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
 ];
 function getPostQuestions() {
   if (state.mode === "human_buyer" || state.mode === "human_seller") return POST_QUESTIONS_HUMAN;
