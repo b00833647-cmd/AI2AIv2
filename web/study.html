@@ -477,6 +477,12 @@
     margin: 0 0 6px;
     font-size: 13px; color: var(--dim);
   }
+  /* Standalone-question separator: a thin rule that breaks a Likert item
+     out of the bucket above it, without printing a section header. */
+  .survey-divider {
+    margin: 28px 0 12px;
+    border-top: 1px solid var(--border);
+  }
 
   .likert {
     display: grid;
@@ -2350,7 +2356,8 @@ const POST_QUESTIONS_AGENT = [
     text: "I was fully engaged throughout the negotiation.",
     lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
 
-  // ─── Standalone closing Q ───
+  // ─── Standalone closing Q (divider keeps it out of the bucket above) ───
+  { kind: "divider" },
   { key: "outfair_share",
     text: "I got a fair share of the value in the deal.",
     lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
@@ -2390,6 +2397,8 @@ const POST_QUESTIONS_HUMAN = [
     text: "I was fully engaged throughout the negotiation.",
     lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
 
+  // Standalone closing Q (divider keeps it out of the bucket above)
+  { kind: "divider" },
   { key: "outfair_share",
     text: "I got a fair share of the value in the deal.",
     lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
@@ -3982,9 +3991,9 @@ function renderOutcomeCard() {
 }
 function renderPostSurvey() {
   const questions = getPostQuestions();
-  // Headers don't carry a value — only Likert items count toward the
-  // completion gate that enables the Continue button.
-  const scaleQuestions = questions.filter((q) => q.kind !== "header");
+  // Headers and dividers don't carry a value — only Likert items count
+  // toward the completion gate that enables the Continue button.
+  const scaleQuestions = questions.filter((q) => !q.kind);
   $("post-survey").innerHTML = questions.map((q, idx) => {
     if (q.kind === "header") {
       const sub = q.subtitle ? `<p class="survey-section-sub">${escapeHtml(q.subtitle)}</p>` : "";
@@ -3992,6 +4001,9 @@ function renderPostSurvey() {
         <h3 class="survey-section-title">${escapeHtml(q.title)}</h3>
         ${sub}
       </div>`;
+    }
+    if (q.kind === "divider") {
+      return `<div class="survey-divider" role="separator" aria-hidden="true"></div>`;
     }
     const lo = q.lowLabel || "not at all";
     const hi = q.highLabel || "very";
