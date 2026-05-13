@@ -2061,13 +2061,17 @@ function renderCostByPersonality(rows) {
 // Unknown keys fall back to the raw key string in the per-participant
 // detail view, so adding a key here is purely cosmetic.
 const SURVEY_LABELS = {
-  // Overall
-  satisfaction: "Satisfied with the outcome?",
-  agent_represented: "Your agent represented your preferences well?",
-  control: "Felt in control of how your agent negotiated?",
+  // ─── v2 active items (rendered first in SURVEY_ORDER) ─────────────────
+  // These four keys had their participant-facing wording revised in v2.
+  // Labels here are deliberately neutral so they read sensibly against
+  // both v1 and v2 historical answers.
+  satisfaction:      "Overall satisfaction",
+  would_use_again:   "Would use this tool in real life",
+  agent_represented: "Represented preferences well",
+  control:           "Felt in control of the negotiation",
+  // ─── legacy keys (only present in v1 data — labels kept for back-compat) ───
   opponent_fair: "The opponent's/AI counterpart seemed fair?",
-  trust_ai: "Trust in AI for real negotiations?",
-  would_use_again: "Would use again / prefer AI next time",
+  trust_ai:      "Trust in AI for real negotiations?",
   negotiation_difficulty: "How difficult did you find this negotiation?",
   free_text: "Any comments on the study?",
   // Competence — own / opponent
@@ -2129,8 +2133,21 @@ const SURVEY_LABELS = {
 
 // Stable display order in the per-participant detail panel — matches the
 // participant SPA's section order so the admin reads naturally.
-const SURVEY_ORDER = [
-  "satisfaction","agent_represented","control","opponent_fair","trust_ai","would_use_again","negotiation_difficulty",
+// Display order mirrors the v2 questionnaire (post-survey screen). New
+// participants only emit the nine V2_ACTIVE keys; legacy keys remain in
+// the order so v1 historical responses still group sensibly underneath.
+const V2_ACTIVE_ORDER = [
+  // Standalone Q1 + Q2
+  "satisfaction", "would_use_again",
+  // Bucket: Negotiation experience
+  "agent_represented", "control",
+  // Bucket: The process
+  "emot_pleasant", "emot_anxious", "effort_invested", "engage_engaged",
+  // Closing standalone Q
+  "outfair_share",
+];
+const LEGACY_ORDER = [
+  "opponent_fair", "trust_ai", "negotiation_difficulty",
   "competence_own_capable","competence_own_competent","competence_own_skilled",
   "warmth_own_warm","warmth_own_friendly","warmth_own_sincere",
   "anthro_own_humanlike","anthro_own_intentions","anthro_own_reactions",
@@ -2138,17 +2155,16 @@ const SURVEY_ORDER = [
   "competence_opp_capable","competence_opp_competent","competence_opp_skilled",
   "warmth_opp_warm","warmth_opp_friendly","warmth_opp_sincere",
   "anthro_opp_humanlike","anthro_opp_intentions","anthro_opp_reactions",
-  "outfair_self","outfair_other","outfair_share",
+  "outfair_self","outfair_other",
   "procfair_conducted","procfair_respect","procfair_voice",
   "ctrust_trusted","ctrust_honest","ctrust_goodfaith",
   "press_pushed","press_pressured","press_tactics",
-  "emot_pleasant","emot_anxious",
-  "effort_invested","engage_engaged",
   "future_again","future_recommend","future_real",
   "attribution_humanlike",
   "alg_pref",
   "free_text",
 ];
+const SURVEY_ORDER = [...V2_ACTIVE_ORDER, ...LEGACY_ORDER];
 
 // openDetail() — kept as the public entry point that the table rows still
 // call via inline onclick. Routes to the new side-panel surface, which
@@ -2259,7 +2275,17 @@ function renderDetail(id, d) {
       const ai = SURVEY_ORDER.indexOf(a.key), bi = SURVEY_ORDER.indexOf(b.key);
       return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
     });
+    // Insert a divider between v2-active and legacy keys so admins can
+    // immediately see which questions belong to the current instrument vs
+    // the historical v1 battery.
+    const activeSet = new Set(V2_ACTIVE_ORDER);
+    let legacyDividerEmitted = false;
     for (const r of sorted) {
+      const isLegacy = !activeSet.has(r.key);
+      if (isLegacy && !legacyDividerEmitted) {
+        html += `<tr><td colspan="2" style="padding-top:14px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:0.06em">Legacy items (v1 instrument)</td></tr>`;
+        legacyDividerEmitted = true;
+      }
       const label = SURVEY_LABELS[r.key] || r.key;
       const value = r.value_int != null
         ? `<strong>${r.value_int}</strong> <span style="color:var(--dim);font-size:11px">/ 7</span>`
