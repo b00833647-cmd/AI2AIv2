@@ -2322,12 +2322,14 @@ const ROLE_INFO = {
 // "(optional)" stripped from the label — it stays optional but no longer
 // telegraphs that to the participant.
 const POST_QUESTIONS_AGENT = [
-  // ─── Standalone Q1: overall satisfaction ───
+  // ─── Standalone Q1 ───
+  { kind: "header", title: "Overall" },
   { key: "satisfaction",
     text: "How satisfied are you with your experience today?",
     lowLabel: "Not at all", highLabel: "Very much" },
 
-  // ─── Standalone Q2: would-use-again (moved up per Amir) ───
+  // ─── Standalone Q2 (moved up per Amir's comment #14) ───
+  { kind: "header", title: "Future use" },
   { key: "would_use_again",
     text: "Would you use a tool like this in real life?",
     lowLabel: "Not at all", highLabel: "Very much" },
@@ -2356,8 +2358,8 @@ const POST_QUESTIONS_AGENT = [
     text: "I was fully engaged throughout the negotiation.",
     lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
 
-  // ─── Standalone closing Q (divider keeps it out of the bucket above) ───
-  { kind: "divider" },
+  // ─── Standalone closing Q ───
+  { kind: "header", title: "The outcome" },
   { key: "outfair_share",
     text: "I got a fair share of the value in the deal.",
     lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
@@ -2367,10 +2369,12 @@ const POST_QUESTIONS_AGENT = [
 // themselves (no delegated agent). DB keys are kept stable so the
 // construct line up across the two conditions.
 const POST_QUESTIONS_HUMAN = [
+  { kind: "header", title: "Overall" },
   { key: "satisfaction",
     text: "How satisfied are you with your experience today?",
     lowLabel: "Not at all", highLabel: "Very much" },
 
+  { kind: "header", title: "Future use" },
   { key: "would_use_again",
     text: "Would you use a tool like this in real life?",
     lowLabel: "Not at all", highLabel: "Very much" },
@@ -2397,8 +2401,8 @@ const POST_QUESTIONS_HUMAN = [
     text: "I was fully engaged throughout the negotiation.",
     lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
 
-  // Standalone closing Q (divider keeps it out of the bucket above)
-  { kind: "divider" },
+  // Standalone closing Q
+  { kind: "header", title: "The outcome" },
   { key: "outfair_share",
     text: "I got a fair share of the value in the deal.",
     lowLabel: "Strongly disagree", highLabel: "Strongly agree" },
