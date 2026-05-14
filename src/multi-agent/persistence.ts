@@ -1431,12 +1431,40 @@ export class SqlitePersistence implements Persistence {
       const promptText = (latestPrompt?.["prompt_text"] as string) ?? null;
       const promptRevisions = prompts.length;
 
-      // Survey responses by key
-      const surveyKeys = ["satisfaction","agent_represented","control","opponent_fair","trust_ai","would_use_again"];
-      const surveyValues: Record<string, number | null> = {};
-      for (const k of surveyKeys) {
+      // ─── Survey raw scores ──────────────────────────────────────────
+      //
+      // v2 active items (every new participant — 9 Likert + 1 free text).
+      // Surfaced as fixed columns so the wide row is rectangular and easy
+      // to slice into stats packages. NULLs for participants who didn't
+      // complete the survey or who participated under v1 (those v1 keys
+      // that overlap with v2, like `satisfaction`, will still be filled).
+      const V2_SURVEY_KEYS = [
+        "satisfaction",
+        "would_use_again",
+        "agent_represented",
+        "control",
+        "emot_pleasant",
+        "emot_anxious",
+        "effort_invested",
+        "engage_engaged",
+        "outfair_share",
+      ];
+      const surveyValues: Record<string, number | string | null> = {};
+      for (const k of V2_SURVEY_KEYS) {
         const r = findResp("post_survey", k);
         surveyValues[k] = (r?.["value_int"] as number) ?? null;
+      }
+      // Legacy v1 items: include every other answered post-survey key as
+      // `legacy_<key>` columns. Historical participants (the 79 already in
+      // the DB) keep their rich item-level scores in the export without us
+      // having to enumerate the 47-key v1 instrument explicitly here.
+      const legacyValues: Record<string, number | string | null> = {};
+      for (const r of responses) {
+        if (r["screen"] !== "post_survey") continue;
+        const k = String(r["key"] || "");
+        if (!k || k.startsWith("_")) continue;
+        if (V2_SURVEY_KEYS.includes(k) || k === "free_text") continue;
+        legacyValues["legacy_" + k] = (r["value_int"] as number) ?? (r["value_text"] as string) ?? null;
       }
       const freeText = findResp("post_survey", "free_text")?.["value_text"] ?? null;
 
@@ -1501,8 +1529,15 @@ export class SqlitePersistence implements Persistence {
 
       const expMode = (part["experiment_mode"] as string) ?? "agent";
       out.push({
-        // Identity
-        participant_id: p.id,
+        // Identity — Prolific PID is the canonical identifier where present
+        // (study_participants.id == prolific_pid for new participants per
+        // 2026-05-14 alignment change). prolific_pid is duplicated as a
+        // separate column too so downstream tools that key on a named
+        // 'prolific_pid' column work without inspecting the id.
+        participant_id:      p.id,
+        prolific_pid:        p.prolific_pid,
+        prolific_study_id:   p.prolific_study_id,
+        prolific_session_id: p.prolific_session_id,
         external_id: part["external_id"] ?? null,
         role: p.role,
         experiment_mode: expMode,
@@ -1534,11 +1569,9 @@ export class SqlitePersistence implements Persistence {
         language: part["language"] ?? null,
         connection_type: part["connection_type"] ?? null,
         user_agent: part["user_agent"] ?? null,
-        // Prolific tokens — populated when the participant arrived via the
-        // Prolific URL pattern. nullable for direct-link / pilot participants.
-        prolific_pid:        p.prolific_pid,
-        prolific_study_id:   p.prolific_study_id,
-        prolific_session_id: p.prolific_session_id,
+        // (Prolific tokens already at the top of the row in the Identity
+        // block — see participant_id / prolific_pid / prolific_study_id /
+        // prolific_session_id above.)
         // Quality flags
         flag_mobile: p.flag_mobile,
         flag_speeding: p.flag_speeding,
@@ -1562,9 +1595,13 @@ export class SqlitePersistence implements Persistence {
         buyer_last_offer: buyerLastOffer,
         seller_first_offer: sellerFirstOffer,
         seller_last_offer: sellerLastOffer,
-        // Survey
+        // Survey — v2 active items as named columns, free_text below
         ...surveyValues,
         free_text: freeText,
+        // Legacy v1 items (only present for participants who answered the
+        // older instrument; null/absent on v2 rows). Prefixed with
+        // `legacy_` so they're easy to drop in stats prep.
+        ...legacyValues,
         // Dwell times
         ...dwell,
         // Event counts
@@ -1595,6 +1632,7 @@ export class SqlitePersistence implements Persistence {
            t.id AS turn_id,
            t.session_id,
            sp.id AS participant_id,
+           sp.prolific_pid,
            sp.role AS participant_role,
            t.turn_number,
            t.emitter,
@@ -1625,6 +1663,7 @@ export class SqlitePersistence implements Persistence {
       thinking: string | null;
       tool_calls_json: string;
       tokens_json: string;
+      prolific_pid: string | null;
     }>;
     // Enrich each row with parsed action/price + tokens broken out, while
     // preserving the raw JSON columns for full fidelity.
@@ -1662,6 +1701,7 @@ export class SqlitePersistence implements Persistence {
         turn_id: r.turn_id,
         session_id: r.session_id,
         participant_id: r.participant_id,
+        prolific_pid: r.prolific_pid,
         participant_role: r.participant_role,
         turn_number: r.turn_number,
         timestamp: r.timestamp,
@@ -1697,6 +1737,7 @@ export class SqlitePersistence implements Persistence {
         `SELECT
            od.session_id,
            sp.id AS participant_id,
+           sp.prolific_pid,
            od.decision_index,
            od.turn_number,
            od.timestamp,
@@ -1712,6 +1753,7 @@ export class SqlitePersistence implements Persistence {
       .all() as Array<{
       session_id: string;
       participant_id: string | null;
+      prolific_pid: string | null;
       decision_index: number;
       turn_number: number;
       timestamp: string;
@@ -1736,6 +1778,7 @@ export class SqlitePersistence implements Persistence {
       return {
         session_id: r.session_id,
         participant_id: r.participant_id,
+        prolific_pid: r.prolific_pid,
         decision_index: r.decision_index,
         turn_number: r.turn_number,
         timestamp: r.timestamp,
@@ -1765,6 +1808,7 @@ export class SqlitePersistence implements Persistence {
     type LogRow = {
       session_id: string;
       participant_id: string | null;
+      prolific_pid: string | null;
       timestamp: string;
       agent: string;            // 'buyer' | 'seller' | 'orchestrator'
       action: string | null;    // proposal action OR orchestrator tool name
@@ -1786,6 +1830,7 @@ export class SqlitePersistence implements Persistence {
       rows.push({
         session_id: t["session_id"] as string,
         participant_id: (t["participant_id"] as string | null) ?? null,
+        prolific_pid: (t["prolific_pid"] as string | null) ?? null,
         timestamp: t["timestamp"] as string,
         agent: t["agent"] as string,
         action: (t["action"] as string | null) ?? "speak",
@@ -1807,6 +1852,7 @@ export class SqlitePersistence implements Persistence {
       rows.push({
         session_id: d["session_id"] as string,
         participant_id: (d["participant_id"] as string | null) ?? null,
+        prolific_pid: (d["prolific_pid"] as string | null) ?? null,
         timestamp: d["timestamp"] as string,
         agent: "orchestrator",
         action: (d["tool_name"] as string),
@@ -1873,12 +1919,28 @@ export class SqlitePersistence implements Persistence {
 
   /** All survey responses flat, one row per (participant × question). */
   exportAllSurvey(): Array<Record<string, unknown>> {
+    // Long-format post-survey table. One row per (participant × item).
+    // Prolific tokens are joined onto every row so the file stands alone
+    // for analysis without needing a second JOIN against participants.
+    // For new participants the participant_id IS the prolific_pid; for
+    // historical rows (nanoid id) the prolific_pid column carries the
+    // separate Prolific token if any.
     return this.db
       .prepare(
-        `SELECT pr.participant_id, sp.role, pr.key, pr.value_int, pr.value_text, pr.submitted_at
+        `SELECT pr.participant_id,
+                sp.prolific_pid,
+                sp.prolific_study_id,
+                sp.prolific_session_id,
+                sp.role,
+                sp.experiment_mode,
+                pr.key,
+                pr.value_int,
+                pr.value_text,
+                pr.submitted_at
          FROM participant_responses pr
          LEFT JOIN study_participants sp ON sp.id = pr.participant_id
          WHERE pr.screen = 'post_survey'
+           AND (pr.key IS NULL OR pr.key NOT LIKE '\\_%' ESCAPE '\\')
          ORDER BY pr.participant_id, pr.key`,
       )
       .all() as Array<Record<string, unknown>>;
@@ -1888,9 +1950,16 @@ export class SqlitePersistence implements Persistence {
   exportAllEvents(limit = 100_000): Array<Record<string, unknown>> {
     return this.db
       .prepare(
-        `SELECT participant_id, client_ts, server_ts, screen, event_type, payload_json
-           FROM participant_events
-           ORDER BY id ASC
+        `SELECT pe.participant_id,
+                sp.prolific_pid,
+                pe.client_ts,
+                pe.server_ts,
+                pe.screen,
+                pe.event_type,
+                pe.payload_json
+           FROM participant_events pe
+           LEFT JOIN study_participants sp ON sp.id = pe.participant_id
+           ORDER BY pe.id ASC
            LIMIT ?`,
       )
       .all(limit) as Array<Record<string, unknown>>;

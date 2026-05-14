@@ -1053,7 +1053,39 @@ async function handleParticipantStart(req: http.IncomingMessage, res: http.Serve
 
   const body = await readJson<StartBody>(req, res);
   if (body === null) return;
-  const id = nanoid(12);
+  const cleanPid = sanitizeProlific(body.prolificPid);
+  const cleanStudyId = sanitizeProlific(body.prolificStudyId);
+  const cleanSessionId = sanitizeProlific(body.prolificSessionId);
+
+  // PRIMARY-KEY ALIGNMENT WITH PROLIFIC
+  //
+  // When the participant arrives with a sanitized Prolific PID, use that
+  // value as the participant ID (study_participants.id) rather than
+  // generating a parallel nanoid. This way every downstream extract —
+  // survey CSV, agent log XLSX, JSON dump — uses the Prolific PID as the
+  // canonical participant identifier with zero translation. (Researcher
+  // request 2026-05-14: "the participant ID we record must be the same
+  // as prolific id".)
+  //
+  // Same-PID re-entry: if the participant clears sessionStorage and re-
+  // hits the URL, the server detects the existing row and returns the
+  // same id — they resume their record instead of crashing the insert
+  // on a primary-key conflict.
+  //
+  // Direct visits / pilot runs without a Prolific PID continue to get a
+  // nanoid id (the historical behavior).
+  let id: string;
+  if (cleanPid) {
+    const existing = withDb((db) => db.getStudyParticipant(cleanPid));
+    if (existing) {
+      sendJson(res, 200, { participantId: existing.id });
+      return;
+    }
+    id = cleanPid;
+  } else {
+    id = nanoid(12);
+  }
+
   const ua = body.userAgent ?? "";
   const { browser, os, deviceType } = parseUserAgent(ua);
   withDb((db) => {
@@ -1071,16 +1103,21 @@ async function handleParticipantStart(req: http.IncomingMessage, res: http.Serve
       device_type: deviceType,
       connection_type: body.connectionType ?? null,
       // Prolific tokens — null when not provided so historical participants
-      // and direct-link visits remain compatible.
-      prolific_pid:        sanitizeProlific(body.prolificPid),
-      prolific_study_id:   sanitizeProlific(body.prolificStudyId),
-      prolific_session_id: sanitizeProlific(body.prolificSessionId),
+      // and direct-link visits remain compatible. prolific_pid is also the
+      // primary key value when present (see id derivation above), so this
+      // column is mostly belt-and-braces for downstream JOINs that find it
+      // more convenient than re-checking the id column.
+      prolific_pid:        cleanPid,
+      prolific_study_id:   cleanStudyId,
+      prolific_session_id: cleanSessionId,
     } as Parameters<typeof db.updateStudyParticipant>[1]);
   });
   sendJson(res, 200, { participantId: id });
 }
 
-/** Trim + cap Prolific ID-like strings; null out unsubstituted templates. */
+/** Trim + cap Prolific ID-like strings; null out unsubstituted templates
+ *  and reject anything outside [A-Za-z0-9_-] so the value is safe to use
+ *  as a SQL primary key without escaping concerns. */
 function sanitizeProlific(v: string | null | undefined): string | null {
   if (typeof v !== "string") return null;
   const trimmed = v.trim();
@@ -1092,6 +1129,10 @@ function sanitizeProlific(v: string | null | undefined): string | null {
        || trimmed.includes("%STUDY_ID%") || trimmed.includes("%SESSION_ID%")) {
     return null;
   }
+  // Strict character set: alphanumeric + dash + underscore. Anything else
+  // (spaces, SQL meta-chars, null bytes, multibyte) is rejected because the
+  // value can land in study_participants.id (see handleParticipantStart).
+  if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) return null;
   return trimmed.slice(0, 64);
 }
 
