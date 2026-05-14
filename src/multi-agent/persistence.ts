@@ -781,6 +781,7 @@ export class SqlitePersistence implements Persistence {
     flag_speeding: number;
     flag_short_prompt: number;
     flag_mobile: number;
+    flag_copy_paste: number;
   }> {
     // Idle threshold: a participant is considered "in progress" only if their
     // most recent client/server activity is within this many seconds. Past
@@ -844,7 +845,16 @@ export class SqlitePersistence implements Persistence {
              SELECT 1 FROM behavior_prompts WHERE participant_id = sp.id AND length(prompt_text) < 80
            ) THEN 1 ELSE 0 END AS flag_short_prompt,
            -- Mobile/tablet flag: violates the "PC or laptop only" consent.
-           CASE WHEN sp.device_type IN ('phone', 'tablet') THEN 1 ELSE 0 END AS flag_mobile
+           CASE WHEN sp.device_type IN ('phone', 'tablet') THEN 1 ELSE 0 END AS flag_mobile,
+           -- Copy/paste/cut/right-click flag: any blocked clipboard or
+           -- contextmenu attempt anywhere in the participant's session
+           -- promotes to a single visible badge in the admin (the client
+           -- already preventDefaults the action; this is the audit trail).
+           CASE WHEN EXISTS (
+             SELECT 1 FROM participant_events
+              WHERE participant_id = sp.id
+                AND event_type IN ('paste', 'copy_attempt', 'cut_attempt', 'rightclick_attempt')
+           ) THEN 1 ELSE 0 END AS flag_copy_paste
          FROM study_participants sp
          LEFT JOIN sessions s ON s.id = sp.session_id
          ORDER BY sp.created_at DESC
@@ -876,6 +886,7 @@ export class SqlitePersistence implements Persistence {
       flag_speeding: number;
       flag_short_prompt: number;
       flag_mobile: number;
+      flag_copy_paste: number;
     }>;
   }
 
@@ -1502,6 +1513,7 @@ export class SqlitePersistence implements Persistence {
         flag_mobile: p.flag_mobile,
         flag_speeding: p.flag_speeding,
         flag_short_prompt: p.flag_short_prompt,
+        flag_copy_paste: p.flag_copy_paste,
         flag_degraded: degraded,
         // Free-text inputs
         personal_context: personalCtx,

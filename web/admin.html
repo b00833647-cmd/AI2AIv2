@@ -1548,7 +1548,7 @@ function applyFilter() {
     if (outcome && p.outcome_type !== outcome) return false;
     if (personality && p.opponent_personality !== personality) return false;
     if (status && p.status !== status) return false;
-    if (hideFlagged && (p.flag_mobile || p.flag_speeding || p.flag_short_prompt)) return false;
+    if (hideFlagged && (p.flag_mobile || p.flag_speeding || p.flag_short_prompt || p.flag_copy_paste)) return false;
     if (hideTest && p.test_data) return false;
     return true;
   });
@@ -1620,6 +1620,7 @@ function renderTable(rows) {
     if (p.flag_mobile) flags.push("<span class='badge bad' title='Phone or tablet'>mobile</span>");
     if (p.flag_speeding) flags.push("<span class='badge bad'>speed</span>");
     if (p.flag_short_prompt) flags.push("<span class='badge warn'>short</span>");
+    if (p.flag_copy_paste) flags.push("<span class='badge warn' title='Tried to copy/paste/cut or right-click during the experiment'>clip</span>");
     const personality = p.opponent_personality ? `<span class='badge accent'>${p.opponent_personality}</span>` : "—";
     const mode = p.experiment_mode || "agent";
     const modeBadge = mode === "agent"
@@ -1941,7 +1942,7 @@ function renderSurveyMeans(rows) {
 function renderQuality(rows) {
   if (!rows) return;
   const flagged = rows.filter(p =>
-    p.flag_mobile || p.flag_speeding || p.flag_short_prompt ||
+    p.flag_mobile || p.flag_speeding || p.flag_short_prompt || p.flag_copy_paste ||
     p.excluded || p.test_data || p.status === "abandoned"
   );
   if (flagged.length === 0) {
@@ -1956,6 +1957,7 @@ function renderQuality(rows) {
     if (p.flag_mobile) flags.push("<span class='badge bad'>mobile</span>");
     if (p.flag_speeding) flags.push("<span class='badge bad'>speed</span>");
     if (p.flag_short_prompt) flags.push("<span class='badge warn'>short</span>");
+    if (p.flag_copy_paste) flags.push("<span class='badge warn'>clip</span>");
     const excluded = p.excluded ? "<span class='badge bad'>yes</span>" : "<span class='badge dim'>no</span>";
     const testData = p.test_data ? "<span class='badge warn'>yes</span>" : "<span class='badge dim'>no</span>";
     return `<tr>

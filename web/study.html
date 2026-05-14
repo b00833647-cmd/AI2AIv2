@@ -2739,12 +2739,45 @@ document.addEventListener("focusout", (e) => {
   }
 }, true);
 
+// ─── Block + record clipboard / right-click attempts ──────────────────
+//
+// Quality control: free-text inputs (personal context, behavior prompt,
+// chat turns, free-text comment) MUST be the participant's own writing.
+// We block paste/copy/cut + right-click across the whole document and
+// emit a telemetry event for each blocked attempt. The server promotes
+// any of these events to a `flag_copy_paste` badge on the admin view.
+//
+// All four use the capture phase so they fire BEFORE any per-input
+// handler. preventDefault() blocks the browser's default behavior.
 document.addEventListener("paste", (e) => {
   noteInteraction();
+  e.preventDefault();
   const tgt = summarizeTarget(e.target);
   const txt = (e.clipboardData || window.clipboardData);
   const pastedLen = txt ? (txt.getData("text") || "").length : 0;
-  track("paste", { ...(tgt || {}), pastedLen });
+  track("paste", { ...(tgt || {}), pastedLen, blocked: true });
+}, true);
+
+document.addEventListener("copy", (e) => {
+  noteInteraction();
+  e.preventDefault();
+  const tgt = summarizeTarget(e.target);
+  const sel = String(window.getSelection() || "");
+  track("copy_attempt", { ...(tgt || {}), selectionLen: sel.length, blocked: true });
+}, true);
+
+document.addEventListener("cut", (e) => {
+  noteInteraction();
+  e.preventDefault();
+  const tgt = summarizeTarget(e.target);
+  track("cut_attempt", { ...(tgt || {}), blocked: true });
+}, true);
+
+document.addEventListener("contextmenu", (e) => {
+  noteInteraction();
+  e.preventDefault();
+  const tgt = summarizeTarget(e.target);
+  track("rightclick_attempt", { ...(tgt || {}), blocked: true });
 }, true);
 
 document.addEventListener("keydown", (e) => {
