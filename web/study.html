@@ -2263,6 +2263,22 @@ I want you to start low — open at around $20,500 to anchor the negotiation. Fr
       </div>
       <p class="muted" id="copy-feedback" style="font-size: 12px; margin-top: 8px; min-height: 18px;"></p>
     </div>
+
+    <!-- Prolific completion handoff — visible only on routes that have a
+         configured Prolific completion link (see PROLIFIC_COMPLETION map
+         in the boot script). The "Continue to Prolific" button is the
+         primary action; auto-redirect fires 3 seconds after this screen
+         becomes active. -->
+    <div id="prolific-handoff" style="display:none; text-align:center; margin-top: 22px;">
+      <hr class="sep" />
+      <p class="muted" style="margin-bottom: 12px;">Click the button below to return to Prolific and confirm your submission.</p>
+      <a id="prolific-continue-link" class="btn-primary" href="#" style="display:inline-block; padding: 12px 24px; text-decoration:none;">
+        Continue to Prolific →
+      </a>
+      <p id="prolific-redirect-msg" class="muted" style="font-size: 12px; margin-top: 10px;">
+        You will be automatically redirected in 3 seconds.
+      </p>
+    </div>
   </div>
 </section>
 
@@ -2525,6 +2541,31 @@ async function ensureParticipant(prolific) {
     throw err;
   }
 }
+
+// ─── Prolific completion handoff (per-route) ────────────────────────────
+//
+// Maps each experiment route to its Prolific completion code + URL. When
+// the participant reaches screen-10 (debrief), the platform's internal
+// completion code is replaced with the Prolific code below, the
+// "Continue to Prolific" button is wired with the URL, and a 3-second
+// auto-redirect fires.
+//
+// Only routes listed here trigger the handoff. /slx, /bhx, /shx are
+// commented placeholders — fill in once Prolific issues their codes.
+const PROLIFIC_COMPLETION = {
+  "/blx": { code: "CL2ZWLNV", url: "https://app.prolific.com/submissions/complete?cc=CL2ZWLNV" },
+  // "/slx": { code: "<TBD>", url: "https://app.prolific.com/submissions/complete?cc=<TBD>" },
+  // "/bhx": { code: "<TBD>", url: "https://app.prolific.com/submissions/complete?cc=<TBD>" },
+  // "/shx": { code: "<TBD>", url: "https://app.prolific.com/submissions/complete?cc=<TBD>" },
+};
+function getProlificCompletion() {
+  const path = window.location.pathname.toLowerCase();
+  for (const route of Object.keys(PROLIFIC_COMPLETION)) {
+    if (path === route || path.startsWith(route + "/")) return PROLIFIC_COMPLETION[route];
+  }
+  return null;
+}
+const PROLIFIC_REDIRECT_MS = 3000;
 
 // ─── Prolific URL param parsing ──────────────────────────────────────────
 //
@@ -2893,10 +2934,23 @@ document.addEventListener("focusout", (e) => {
 // emit a telemetry event for each blocked attempt. The server promotes
 // any of these events to a `flag_copy_paste` badge on the admin view.
 //
-// All four use the capture phase so they fire BEFORE any per-input
-// handler. preventDefault() blocks the browser's default behavior.
+// EXCEPTIONS — copy/paste is intentionally allowed and NOT recorded on:
+//   - screen-prolific (welcome / Prolific PID gate) — participants may
+//     paste their PID from elsewhere; copying the URL out is fine too.
+//   - screen-10 (debrief) — participants need to copy the completion
+//     code to give back to Prolific.
+//
+// All four handlers use the capture phase so they fire BEFORE any
+// per-input handler. preventDefault() blocks the browser's default.
+function isClipboardAllowedScreen() {
+  const active = document.querySelector(".screen.active");
+  if (!active) return false;
+  return active.id === "screen-prolific" || active.id === "screen-10";
+}
+
 document.addEventListener("paste", (e) => {
   noteInteraction();
+  if (isClipboardAllowedScreen()) return;
   e.preventDefault();
   const tgt = summarizeTarget(e.target);
   const txt = (e.clipboardData || window.clipboardData);
@@ -2906,6 +2960,7 @@ document.addEventListener("paste", (e) => {
 
 document.addEventListener("copy", (e) => {
   noteInteraction();
+  if (isClipboardAllowedScreen()) return;
   e.preventDefault();
   const tgt = summarizeTarget(e.target);
   const sel = String(window.getSelection() || "");
@@ -2914,6 +2969,7 @@ document.addEventListener("copy", (e) => {
 
 document.addEventListener("cut", (e) => {
   noteInteraction();
+  if (isClipboardAllowedScreen()) return;
   e.preventDefault();
   const tgt = summarizeTarget(e.target);
   track("cut_attempt", { ...(tgt || {}), blocked: true });
@@ -2921,6 +2977,7 @@ document.addEventListener("cut", (e) => {
 
 document.addEventListener("contextmenu", (e) => {
   noteInteraction();
+  if (isClipboardAllowedScreen()) return;
   e.preventDefault();
   const tgt = summarizeTarget(e.target);
   track("rightclick_attempt", { ...(tgt || {}), blocked: true });
@@ -4304,8 +4361,35 @@ $("btn-9-finish").addEventListener("click", async () => {
       responses: state.postRatings,
       freeText: $("free-text").value.trim() || undefined,
     });
-    $("completion-code").textContent = r.completionCode;
+    // If this route has a Prolific completion code configured, override
+    // the platform-generated code with the Prolific one so the participant
+    // gets the credit code Prolific expects. Otherwise show the
+    // platform-generated code (existing behavior, used for direct visits
+    // and routes without a Prolific listing).
+    const prolific = getProlificCompletion();
+    if (prolific) {
+      $("completion-code").textContent = prolific.code;
+      // Reveal the handoff block + wire the Continue button URL.
+      const link = $("prolific-continue-link");
+      if (link) link.href = prolific.url;
+      const handoff = $("prolific-handoff");
+      if (handoff) handoff.style.display = "block";
+    } else {
+      $("completion-code").textContent = r.completionCode;
+    }
     show(10);
+    // Auto-redirect 3s after debrief is shown. Skip if no Prolific config
+    // (direct visit / unrouted access). Tracking the click + the auto-fire
+    // separately so we can tell which path most participants took.
+    if (prolific) {
+      track("prolific_handoff_shown", { code: prolific.code });
+      setTimeout(() => {
+        if (document.querySelector("#screen-10.active")) {
+          track("prolific_handoff_auto_redirect", { code: prolific.code });
+          window.location.href = prolific.url;
+        }
+      }, PROLIFIC_REDIRECT_MS);
+    }
   } catch (err) {
     showFinishError("Error: " + err.message);
     $("btn-9-finish").disabled = false;
