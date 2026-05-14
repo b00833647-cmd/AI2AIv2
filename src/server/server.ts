@@ -1657,8 +1657,8 @@ interface FinishBody {
 // new entries — the client uses the same codes for the on-screen
 // "Continue to Prolific" button + auto-redirect URL.
 const PROLIFIC_COMPLETION_CODES: Record<string, string> = {
-  "agent/buyer": "CL2ZWLNV",                  // /blx
-  // "agent/seller":         "<TBD>",         // /slx
+  "agent/buyer":  "CL2ZWLNV",                 // /blx
+  "agent/seller": "CL2ZWLNV",                 // /slx
   // "human_buyer/buyer":    "<TBD>",         // /bhx
   // "human_seller/seller":  "<TBD>",         // /shx
 };
