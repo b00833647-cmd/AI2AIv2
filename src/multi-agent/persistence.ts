@@ -223,6 +223,10 @@ export class SqlitePersistence implements Persistence {
     for (const sql of MIGRATIONS) {
       try { this.db.exec(sql); } catch { /* column already exists */ }
     }
+    // NOTE: orphan purge is NOT called from the constructor — withDb opens
+    // a fresh persistence per request, so doing it here would purge on
+    // every API call. The server calls purgeOrphanedRows() once at startup
+    // (see server.ts boot section).
   }
 
   async startSession(state: OrchestratorState): Promise<void> {
@@ -1300,29 +1304,105 @@ export class SqlitePersistence implements Persistence {
         .get(id) as { session_id: string | null } | undefined;
       if (!row) return 0;
 
-      // Deleting the participant cascades behavior_prompts, participant_responses,
-      // participant_events automatically (ON DELETE CASCADE).
+      // Step 1: explicit DELETEs from every participant-keyed table.
+      // ON DELETE CASCADE on study_participants(id) should already do this
+      // for behavior_prompts / participant_responses / participant_events,
+      // but we issue the same DELETEs explicitly so a misbehaving FK setup
+      // (e.g. PRAGMA foreign_keys disabled on a connection, or a future
+      // schema edit that drops the cascade clause) cannot leave orphans.
+      this.db.prepare(`DELETE FROM behavior_prompts      WHERE participant_id = ?`).run(id);
+      this.db.prepare(`DELETE FROM participant_responses WHERE participant_id = ?`).run(id);
+      this.db.prepare(`DELETE FROM participant_events    WHERE participant_id = ?`).run(id);
+
       const partResult = this.db
         .prepare(`DELETE FROM study_participants WHERE id = ?`)
         .run(id);
 
-      // Delete the session row too (if linked) — cascades turns, decisions, outcomes.
-      // Other participants might reference the same session in theory; in
-      // practice the session is 1:1 with the participant for this study, but
-      // we double-check that no OTHER participant points to this session
-      // before deleting it (defensive programming).
+      // Step 2: explicit DELETEs from every session-keyed table when no
+      // other study_participant references the same session. Same belt-
+      // and-braces logic — sessions FK chain handles this when ON DELETE
+      // CASCADE fires correctly, but we hit each table explicitly so the
+      // wide-format export stays free of session-orphan rows even if the
+      // FK chain is ever bypassed.
       if (row.session_id) {
         const others = this.db
           .prepare(`SELECT COUNT(*) AS n FROM study_participants WHERE session_id = ?`)
           .get(row.session_id) as { n: number };
         if (others.n === 0) {
-          this.db.prepare(`DELETE FROM sessions WHERE id = ?`).run(row.session_id);
+          const sid = row.session_id;
+          this.db.prepare(`DELETE FROM turns                  WHERE session_id = ?`).run(sid);
+          this.db.prepare(`DELETE FROM orchestrator_decisions WHERE session_id = ?`).run(sid);
+          this.db.prepare(`DELETE FROM participants           WHERE session_id = ?`).run(sid);
+          this.db.prepare(`DELETE FROM outcomes               WHERE session_id = ?`).run(sid);
+          this.db.prepare(`DELETE FROM scores                 WHERE session_id = ?`).run(sid);
+          this.db.prepare(`DELETE FROM sessions               WHERE id = ?`).run(sid);
         }
       }
 
       return partResult.changes;
     });
     return tx(participantId) as number;
+  }
+
+  /**
+   * One-shot orphan sweep — removes rows in session-keyed tables whose
+   * session is no longer in `sessions`, and rows in participant-keyed
+   * tables whose participant is no longer in `study_participants`.
+   *
+   * Idempotent: a clean DB returns { tableName: 0, ... }. Safe to run on
+   * every startup (see SqlitePersistence constructor) — keeps the DB free
+   * of any stale rows from pre-cascade deletes or interrupted transactions.
+   *
+   * Returns a per-table count of rows removed so a researcher can see what
+   * was cleaned up if anything was off.
+   */
+  purgeOrphanedRows(): Record<string, number> {
+    const counts: Record<string, number> = {};
+    const tx = this.db.transaction(() => {
+      // Step 1 — sessions that no study_participant references. These come
+      // from CLI runs, pre-study testing, or any past delete path that
+      // removed the study_participant but left the session behind. They
+      // pollute every session-keyed export sheet (Agent Log, Turns,
+      // Orchestrator, Briefings, Outcomes) so we wipe them first and let
+      // the dependent rows cascade out via ON DELETE CASCADE on sessions.
+      const sessRes = this.db
+        .prepare(
+          `DELETE FROM sessions
+            WHERE id NOT IN (
+              SELECT session_id FROM study_participants WHERE session_id IS NOT NULL
+            )`,
+        )
+        .run();
+      counts.sessions = sessRes.changes;
+
+      // Step 2 — belt-and-braces: any session-keyed row whose session is
+      // STILL missing from `sessions` (in case the cascade didn't fire).
+      const sessionTables = [
+        "turns", "orchestrator_decisions", "participants", "outcomes", "scores",
+      ];
+      for (const t of sessionTables) {
+        const r = this.db
+          .prepare(`DELETE FROM ${t} WHERE session_id NOT IN (SELECT id FROM sessions)`)
+          .run();
+        counts[t] = r.changes;
+      }
+
+      // Step 3 — participant-keyed rows with no participant. Same belt-
+      // and-braces: ON DELETE CASCADE on study_participants(id) should
+      // already do this, but we DELETE explicitly so the export is clean
+      // even if the FK chain ever bypasses.
+      const participantTables = [
+        "behavior_prompts", "participant_responses", "participant_events",
+      ];
+      for (const t of participantTables) {
+        const r = this.db
+          .prepare(`DELETE FROM ${t} WHERE participant_id NOT IN (SELECT id FROM study_participants)`)
+          .run();
+        counts[t] = r.changes;
+      }
+    });
+    tx();
+    return counts;
   }
 
   /**

@@ -403,6 +403,24 @@ function validateBootEnv(): void {
 }
 validateBootEnv();
 
+// One-shot orphan purge at boot. Removes any rows in session-keyed tables
+// (turns / orchestrator_decisions / participants / outcomes / scores) whose
+// session_id is no longer in `sessions`, and rows in participant-keyed
+// tables whose participant_id is no longer in `study_participants`.
+// Idempotent — a clean DB is a no-op. Catches data left behind by older
+// delete paths or interrupted transactions so subsequent exports are clean.
+try {
+  const purged = withDb((db) => db.purgeOrphanedRows());
+  const total = Object.values(purged).reduce((a, b) => a + b, 0);
+  if (total > 0) {
+    console.log(`[boot] ✓ purged ${total} orphan rows: ${JSON.stringify(purged)}`);
+  } else {
+    console.log("[boot] ✓ no orphan rows to purge");
+  }
+} catch (e) {
+  console.warn("[boot] ⚠ orphan purge failed:", (e as Error).message);
+}
+
 server.listen(PORT, () => {
   console.log(`[boot] ✓ AI2AI server listening on http://localhost:${PORT}`);
   console.log(`[boot]   buyer study  → /blx`);
