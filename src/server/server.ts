@@ -1561,14 +1561,45 @@ interface FinishBody {
   freeText?: string;
   timeOnScreenMs?: number;
 }
+
+// Prolific completion codes per (experiment_mode + role). Only routes
+// with an active Prolific listing should be in the map; others fall
+// back to the participant's internal ID (see deriveCompletionCode).
+// Mirror this map in web/study.html's PROLIFIC_COMPLETION when adding
+// new entries — the client uses the same codes for the on-screen
+// "Continue to Prolific" button + auto-redirect URL.
+const PROLIFIC_COMPLETION_CODES: Record<string, string> = {
+  "agent/buyer": "CL2ZWLNV",                  // /blx
+  // "agent/seller":         "<TBD>",         // /slx
+  // "human_buyer/buyer":    "<TBD>",         // /bhx
+  // "human_seller/seller":  "<TBD>",         // /shx
+};
+
+/**
+ * Resolve the completion code for a finished participant. If the
+ * participant's (experiment_mode + role) has a Prolific code, use that —
+ * the participant entered the study via a Prolific listing and Prolific
+ * needs that exact code. Otherwise fall back to the internal participant
+ * ID, which is unique per record and gives the admin a stable identifier
+ * for direct-link / QA / pilot participants without coining a separate
+ * `AI2AI-XXX` token.
+ */
+function deriveCompletionCode(participant: {
+  id: string;
+  experiment_mode?: string | null;
+  role?: string | null;
+}): string {
+  const key = `${participant.experiment_mode || ""}/${participant.role || ""}`;
+  return PROLIFIC_COMPLETION_CODES[key] || participant.id;
+}
+
 async function handleParticipantFinish(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const body = await readJson<FinishBody>(req, res);
   if (body === null) return;
   if (!require400(res, typeof body.participantId === "string", "participantId required")) return;
   if (!require400(res, body.responses && typeof body.responses === "object", "responses required")) return;
 
-  const completionCode = `AI2AI-${nanoid(8).toUpperCase()}`;
-  withDb((db) => {
+  const completionCode = withDb((db) => {
     const items = Object.entries(body.responses).map(([key, value]) => {
       if (typeof value === "number") return { key, valueInt: value };
       return { key, valueText: String(value) };
@@ -1580,10 +1611,14 @@ async function handleParticipantFinish(req: http.IncomingMessage, res: http.Serv
       items.push({ key: "_time_on_screen_ms", valueInt: body.timeOnScreenMs });
     }
     db.insertParticipantResponses(body.participantId, "post_survey", items);
+    // Look up the participant's mode+role to derive the right completion code.
+    const p = db.getStudyParticipant(body.participantId);
+    const code = p ? deriveCompletionCode(p) : body.participantId;
     db.updateStudyParticipant(body.participantId, {
       finished_at: new Date().toISOString(),
-      completion_code: completionCode,
+      completion_code: code,
     });
+    return code;
   });
   sendJson(res, 200, { ok: true, completionCode });
 }

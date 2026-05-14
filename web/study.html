@@ -4361,31 +4361,30 @@ $("btn-9-finish").addEventListener("click", async () => {
       responses: state.postRatings,
       freeText: $("free-text").value.trim() || undefined,
     });
-    // If this route has a Prolific completion code configured, override
-    // the platform-generated code with the Prolific one so the participant
-    // gets the credit code Prolific expects. Otherwise show the
-    // platform-generated code (existing behavior, used for direct visits
-    // and routes without a Prolific listing).
+    // The server returns the correct completion code for this route — the
+    // Prolific code when /api/p/finish maps the participant's mode+role to
+    // a configured Prolific listing, otherwise the participant's internal
+    // ID. Display verbatim, no client-side override.
+    $("completion-code").textContent = r.completionCode;
+    // Reveal the Prolific handoff block + wire the Continue URL when this
+    // route has a Prolific listing. The map below only carries URLs (the
+    // codes themselves live server-side; see deriveCompletionCode).
     const prolific = getProlificCompletion();
     if (prolific) {
-      $("completion-code").textContent = prolific.code;
-      // Reveal the handoff block + wire the Continue button URL.
       const link = $("prolific-continue-link");
       if (link) link.href = prolific.url;
       const handoff = $("prolific-handoff");
       if (handoff) handoff.style.display = "block";
-    } else {
-      $("completion-code").textContent = r.completionCode;
     }
     show(10);
-    // Auto-redirect 3s after debrief is shown. Skip if no Prolific config
-    // (direct visit / unrouted access). Tracking the click + the auto-fire
-    // separately so we can tell which path most participants took.
+    // Auto-redirect 3s after debrief is shown when there's a Prolific
+    // destination URL. Telemetry distinguishes the click path from the
+    // auto-fire path so we can see how many participants wait vs. click.
     if (prolific) {
-      track("prolific_handoff_shown", { code: prolific.code });
+      track("prolific_handoff_shown", { code: r.completionCode });
       setTimeout(() => {
         if (document.querySelector("#screen-10.active")) {
-          track("prolific_handoff_auto_redirect", { code: prolific.code });
+          track("prolific_handoff_auto_redirect", { code: r.completionCode });
           window.location.href = prolific.url;
         }
       }, PROLIFIC_REDIRECT_MS);
