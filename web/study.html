@@ -298,6 +298,20 @@
   .screen { display: none; }
   .screen.active { display: block; }
 
+  /* Prolific gate is the only "single-card landing" deck — it does NOT
+     fill the main container like the experiment screens. Center its
+     panel both horizontally and vertically in the available viewport. */
+  #screen-prolific.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - var(--shell-h, 0px) - 96px);
+  }
+  #screen-prolific .panel {
+    width: min(560px, 100%);
+    margin: 0;
+  }
+
   /* Mobile-device block — shown after consent if user is on phone/tablet.
      Non-dismissible full-viewport overlay. */
   body.mobile-blocked .screen { display: none !important; }
@@ -1633,7 +1647,7 @@
      /api/p/start. Direct visits without the URL params can leave the
      field blank or type a placeholder for testing. -->
 <section id="screen-prolific" class="screen active">
-  <div class="panel center reading" style="max-width: 560px;">
+  <div class="panel center reading">
     <h2 style="font-size: 22px; margin-bottom: 6px;">Welcome — please confirm your Prolific ID</h2>
     <p class="muted" style="margin-top: 0;">
       We use this to credit your Prolific submission. It is automatically filled
