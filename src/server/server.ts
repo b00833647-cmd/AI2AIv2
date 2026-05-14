@@ -1154,6 +1154,35 @@ function sanitizeProlific(v: string | null | undefined): string | null {
   return trimmed.slice(0, 64);
 }
 
+/**
+ * Insert a per-download attempt-number suffix into a filename when the
+ * caller passed `?attempt=N` on the request URL. The admin's export
+ * buttons increment a localStorage counter on each click and append
+ * the counter to the link, so consecutive downloads on the same day
+ * don't overwrite each other on the researcher's disk.
+ *
+ * Examples:
+ *   withAttemptSuffix(req, "ai2ai-full-2026-05-12.xlsx")          // no ?attempt → unchanged
+ *   withAttemptSuffix({url: "...?attempt=3"}, "ai2ai-full-...xlsx") // → ai2ai-full-2026-05-12-3.xlsx
+ *
+ * The suffix is clamped to a positive integer ≤ 9999 to stop someone
+ * from passing `?attempt=foo' OR 1=1` and getting weird output.
+ */
+function withAttemptSuffix(req: { url?: string | undefined }, baseName: string): string {
+  if (!req.url) return baseName;
+  const idx = req.url.indexOf("?");
+  if (idx < 0) return baseName;
+  const params = new URLSearchParams(req.url.slice(idx + 1));
+  const raw = params.get("attempt");
+  if (!raw) return baseName;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1 || n > 9999) return baseName;
+  // Insert "-N" before the LAST dot (preserves multi-extension names).
+  const dot = baseName.lastIndexOf(".");
+  if (dot < 0) return `${baseName}-${n}`;
+  return `${baseName.slice(0, dot)}-${n}${baseName.slice(dot)}`;
+}
+
 /** Tiny user-agent parser — good enough for analysis grouping. */
 function parseUserAgent(ua: string): { browser: string; os: string; deviceType: string } {
   const isMobile = /Mobi|Android|iPhone|iPad|iPod/.test(ua);
@@ -1935,7 +1964,7 @@ async function handleAdminDelete(
 async function handleAdminBackup(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (!requireAdmin(req, res)) return;
   const bytes = withDb((db) => db.backupBytes());
-  const fname = `ai2ai-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.db`;
+  const fname = withAttemptSuffix(req, `ai2ai-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.db`);
   res.writeHead(200, {
     "Content-Type": "application/octet-stream",
     "Content-Disposition": `attachment; filename="${fname}"`,
@@ -1994,7 +2023,7 @@ async function handleAdminExportParticipantsXlsx(req: http.IncomingMessage, res:
     for (const row of rows) ws.addRow(row);
   }
   const buf = await wb.xlsx.writeBuffer();
-  const fname = `ai2ai-participants-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const fname = withAttemptSuffix(req, `ai2ai-participants-${new Date().toISOString().slice(0, 10)}.xlsx`);
   res.writeHead(200, {
     "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "Content-Disposition": `attachment; filename="${fname}"`,
@@ -2065,7 +2094,7 @@ async function handleAdminExportFullXlsx(req: http.IncomingMessage, res: http.Se
   addSheet("Agent Briefings", data.briefings);
   addSheet("Events", data.events);
   const buf = await wb.xlsx.writeBuffer();
-  const fname = `ai2ai-full-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const fname = withAttemptSuffix(req, `ai2ai-full-${new Date().toISOString().slice(0, 10)}.xlsx`);
   res.writeHead(200, {
     "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "Content-Disposition": `attachment; filename="${fname}"`,
@@ -2078,7 +2107,7 @@ async function handleAdminExportParticipantsCsv(req: http.IncomingMessage, res: 
   if (!requireAdmin(req, res)) return;
   const rows = withDb((db) => db.exportFlatParticipants());
   const csv = toCsv(rows);
-  const fname = `ai2ai-participants-${new Date().toISOString().slice(0, 10)}.csv`;
+  const fname = withAttemptSuffix(req, `ai2ai-participants-${new Date().toISOString().slice(0, 10)}.csv`);
   res.writeHead(200, {
     "Content-Type": "text/csv; charset=utf-8",
     "Content-Disposition": `attachment; filename="${fname}"`,
@@ -2105,7 +2134,7 @@ async function handleAdminExportAllJson(req: http.IncomingMessage, res: http.Ser
       },
     };
   });
-  const fname = `ai2ai-full-${new Date().toISOString().slice(0, 10)}.json`;
+  const fname = withAttemptSuffix(req, `ai2ai-full-${new Date().toISOString().slice(0, 10)}.json`);
   res.writeHead(200, {
     "Content-Type": "application/json; charset=utf-8",
     "Content-Disposition": `attachment; filename="${fname}"`,
@@ -2135,7 +2164,7 @@ async function handleAdminExportTranscriptsZip(req: http.IncomingMessage, res: h
     return out;
   });
   const zipBuffer = buildZip(transcripts);
-  const fname = `ai2ai-transcripts-${new Date().toISOString().slice(0, 10)}.zip`;
+  const fname = withAttemptSuffix(req, `ai2ai-transcripts-${new Date().toISOString().slice(0, 10)}.zip`);
   res.writeHead(200, {
     "Content-Type": "application/zip",
     "Content-Disposition": `attachment; filename="${fname}"`,

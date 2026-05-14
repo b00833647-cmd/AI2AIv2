@@ -2449,6 +2449,41 @@ document.querySelectorAll("[data-density-btn]").forEach((btn) => {
 });
 applyDensity(document.body.dataset.density);  // sync aria-pressed states
 
+// ─── Per-download attempt counter ─────────────────────────────────────
+//
+// Increments a localStorage counter every time the researcher clicks an
+// export / backup link, and appends `?attempt=N` to the URL so the
+// server's Content-Disposition filename gets a `-N` suffix (e.g.
+// ai2ai-full-2026-05-12-3.xlsx). Two consecutive downloads on the same
+// day no longer overwrite each other in the Downloads folder.
+//
+// Counter is per-browser, persisted across reloads, increments forever.
+// Reset by clearing localStorage or typing
+//   localStorage.removeItem("ai2ai_download_attempt")
+// in the console.
+const DOWNLOAD_ATTEMPT_KEY = "ai2ai_download_attempt";
+function nextDownloadAttempt() {
+  let n = 0;
+  try { n = parseInt(localStorage.getItem(DOWNLOAD_ATTEMPT_KEY) || "0", 10) || 0; } catch {}
+  n += 1;
+  try { localStorage.setItem(DOWNLOAD_ATTEMPT_KEY, String(n)); } catch {}
+  return n;
+}
+// Intercept clicks on every download link (data exports + DB backup) and
+// rewrite the href to include the next attempt number. Capture phase so
+// we run before the browser starts the download.
+document.addEventListener("click", (e) => {
+  const a = e.target.closest('a[href^="/adx/export/"], a[href^="/adx/backup"]');
+  if (!a) return;
+  const baseHref = a.getAttribute("href") || "";
+  if (!baseHref || baseHref.startsWith("javascript:")) return;
+  const n = nextDownloadAttempt();
+  // Strip any prior ?attempt= from the href, then append the fresh one.
+  const url = new URL(baseHref, window.location.origin);
+  url.searchParams.set("attempt", String(n));
+  a.href = url.pathname + (url.search || "");
+}, true);
+
 // ─── Saved views (named filter combos persisted to localStorage) ───────
 const SAVED_VIEWS_KEY = "ai2ai_admin_saved_views";
 function readSavedViews() {
