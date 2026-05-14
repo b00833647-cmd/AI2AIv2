@@ -1712,14 +1712,14 @@
     interested in understanding how individuals respond to a certain negotiation scenario.</p>
 
     <h3>Time involvement</h3>
-    <p>Your participation will take approximately 4 minutes.</p>
+    <p>Your participation will take approximately <span id="consent-time">4 minutes</span>.</p>
 
     <h3>Protection of confidentiality</h3>
     <p>The information that you give in the study will be handled confidentially. Your data
     will be anonymous which means that your name will not be collected or linked to the data.</p>
 
     <h3>Payments</h3>
-    <p>You will receive <strong>0.50 GBP</strong> as payment for your participation. Payment is
+    <p>You will receive <strong id="consent-payment">0.50 GBP</strong> as payment for your participation. Payment is
     only awarded if the study is completed. By completion, we mean that you have continued to
     the end of the study and that the answers you provide speak directly to the questions
     being asked (i.e., are not random answers).</p>
@@ -2617,12 +2617,35 @@ function detectRoleFromPath() {
 //   (b) Fresh visit → render the Prolific screen with auto-filled
 //       PID/STUDY/SESSION fields read from the URL, wait for the
 //       Continue click, then call /api/p/start with the prolific tokens.
+// ─── Per-route consent-form copy ──────────────────────────────────────
+//
+// The agent routes (/blx, /slx) take ~4 minutes and pay 0.50 GBP. The
+// human-typed routes (/bhx, /shx) take longer (~15 min, since the
+// participant types every turn themselves) and pay 1.50 GBP. The consent
+// markup defaults to the agent values; we swap them to the human values
+// on /bhx and /shx so the participant sees the right numbers BEFORE
+// consenting.
+const CONSENT_COPY_BY_MODE = {
+  agent:        { time: "4 minutes",  payment: "0.50 GBP" },
+  human_buyer:  { time: "15 minutes", payment: "1.50 GBP" },
+  human_seller: { time: "15 minutes", payment: "1.50 GBP" },
+};
+function applyConsentCopy(mode) {
+  const copy = CONSENT_COPY_BY_MODE[mode];
+  if (!copy) return;
+  const t = $("consent-time");
+  const p = $("consent-payment");
+  if (t) t.textContent = copy.time;
+  if (p) p.textContent = copy.payment;
+}
+
 async function continueFromProlific() {
   const preset = detectRoleFromPath();
   if (!preset) return; // legacy /study fallback — leave screen 1 visible
 
   state.role = preset.role;
   state.mode = preset.mode;
+  applyConsentCopy(preset.mode);
 
   // Read Prolific tokens from URL + (optionally) the participant-edited PID
   // field on the form. The form value is the source of truth, so if the
@@ -2660,6 +2683,12 @@ async function continueFromProlific() {
 }
 
 (async function boot() {
+  // Apply the per-route consent-form copy (time + payment) BEFORE the
+  // Prolific gate is dismissed, so even if the user inspects the page
+  // they see the correct numbers for their actual route.
+  const _preset = detectRoleFromPath();
+  if (_preset) applyConsentCopy(_preset.mode);
+
   // Pre-fill the Prolific form from URL params (read-only-feel when present).
   const urlProlific = readProlificFromUrl();
   const pidInput = $("prolific-pid");
