@@ -202,6 +202,12 @@ const MIGRATIONS: string[] = [
   "ALTER TABLE study_participants ADD COLUMN test_data INTEGER NOT NULL DEFAULT 0",
   // Experiment mode: 'agent' (delegated, default) | 'human_buyer' | 'human_seller'.
   "ALTER TABLE study_participants ADD COLUMN experiment_mode TEXT NOT NULL DEFAULT 'agent'",
+  // Prolific tokens — captured from URL params at /api/p/start when the
+  // participant arrives via a Prolific listing. nullable so participants
+  // arriving via direct links / lab walkthroughs continue to work.
+  "ALTER TABLE study_participants ADD COLUMN prolific_pid TEXT",
+  "ALTER TABLE study_participants ADD COLUMN prolific_study_id TEXT",
+  "ALTER TABLE study_participants ADD COLUMN prolific_session_id TEXT",
 ];
 
 export class SqlitePersistence implements Persistence {
@@ -460,6 +466,9 @@ export class SqlitePersistence implements Persistence {
       excluded_reason: string;
       test_data: boolean;
       experiment_mode: string;
+      prolific_pid: string | null;
+      prolific_study_id: string | null;
+      prolific_session_id: string | null;
     }>,
   ): void {
     const cols: string[] = [];
@@ -497,13 +506,17 @@ export class SqlitePersistence implements Persistence {
     excluded: number;
     excluded_reason: string | null;
     test_data: number;
+    prolific_pid: string | null;
+    prolific_study_id: string | null;
+    prolific_session_id: string | null;
   } | undefined {
     return this.db
       .prepare(
         `SELECT id, created_at, finished_at, role, consent, age, gender,
                 experience, ai_familiarity, attention_check_pass, session_id,
                 completion_code, device_type, browser, os, user_agent,
-                experiment_mode, excluded, excluded_reason, test_data
+                experiment_mode, excluded, excluded_reason, test_data,
+                prolific_pid, prolific_study_id, prolific_session_id
            FROM study_participants WHERE id = ?`,
       )
       .get(id) as
@@ -528,6 +541,9 @@ export class SqlitePersistence implements Persistence {
           excluded: number;
           excluded_reason: string | null;
           test_data: number;
+          prolific_pid: string | null;
+          prolific_study_id: string | null;
+          prolific_session_id: string | null;
         }
       | undefined;
   }
@@ -778,6 +794,9 @@ export class SqlitePersistence implements Persistence {
     opponent_personality: string | null;
     excluded: number;
     test_data: number;
+    prolific_pid: string | null;
+    prolific_study_id: string | null;
+    prolific_session_id: string | null;
     flag_speeding: number;
     flag_short_prompt: number;
     flag_mobile: number;
@@ -804,6 +823,9 @@ export class SqlitePersistence implements Persistence {
            sp.excluded,
            sp.test_data,
            sp.experiment_mode,
+           sp.prolific_pid,
+           sp.prolific_study_id,
+           sp.prolific_session_id,
            s.outcome_type,
            s.outcome_terms_json,
            s.tokens_total,
@@ -883,6 +905,9 @@ export class SqlitePersistence implements Persistence {
       opponent_personality: string | null;
       excluded: number;
       test_data: number;
+      prolific_pid: string | null;
+      prolific_study_id: string | null;
+      prolific_session_id: string | null;
       flag_speeding: number;
       flag_short_prompt: number;
       flag_mobile: number;
@@ -1509,6 +1534,11 @@ export class SqlitePersistence implements Persistence {
         language: part["language"] ?? null,
         connection_type: part["connection_type"] ?? null,
         user_agent: part["user_agent"] ?? null,
+        // Prolific tokens — populated when the participant arrived via the
+        // Prolific URL pattern. nullable for direct-link / pilot participants.
+        prolific_pid:        p.prolific_pid,
+        prolific_study_id:   p.prolific_study_id,
+        prolific_session_id: p.prolific_session_id,
         // Quality flags
         flag_mobile: p.flag_mobile,
         flag_speeding: p.flag_speeding,

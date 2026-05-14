@@ -1631,7 +1631,10 @@ function renderTable(rows) {
     const selectedClass = selectedIds.has(p.id) ? " is-selected" : "";
     return `<tr data-pid="${escapeHtml(p.id)}" class="${selectedClass}">
       <td style="width:24px"><input type="checkbox" class="row-check" data-pid="${escapeHtml(p.id)}"${checked} aria-label="Select participant ${escapeHtml(p.id)}" /></td>
-      <td><button class="linklike pid-badge" onclick="openDetail('${p.id}')"><span class="pid-badge-mark" style="--pid-bg:${pidGradient(p.id)}"></span><span class="pid-badge-id">${escapeHtml(p.id)}</span></button></td>
+      <td>
+        <button class="linklike pid-badge" onclick="openDetail('${p.id}')"><span class="pid-badge-mark" style="--pid-bg:${pidGradient(p.id)}"></span><span class="pid-badge-id">${escapeHtml(p.id)}</span></button>
+        ${p.prolific_pid ? `<div style="font-family:ui-monospace,monospace;font-size:10px;color:var(--dim);margin-top:2px" title="Prolific ID">P: ${escapeHtml(p.prolific_pid)}</div>` : ""}
+      </td>
       <td>${p.role || "—"}</td>
       <td>${modeBadge}</td>
       <td>${personality}</td>
@@ -2194,8 +2197,13 @@ function renderDetail(id, d) {
   const modeLabel = expMode === "agent"
     ? "agent (delegated, /blx or /slx)"
     : `<strong>${expMode}</strong> (${expMode === 'human_buyer' ? '/bhx — human typed as buyer' : '/shx — human typed as seller'})`;
+  const prolificRows = [];
+  if (p.prolific_pid)        prolificRows.push(["Prolific PID", `<code style="font-family:ui-monospace,monospace;font-size:11px">${escapeHtml(p.prolific_pid)}</code>`]);
+  if (p.prolific_study_id)   prolificRows.push(["Prolific Study ID", `<code style="font-family:ui-monospace,monospace;font-size:11px">${escapeHtml(p.prolific_study_id)}</code>`]);
+  if (p.prolific_session_id) prolificRows.push(["Prolific Session ID", `<code style="font-family:ui-monospace,monospace;font-size:11px">${escapeHtml(p.prolific_session_id)}</code>`]);
   const meta = [
     ["id", p.id], ["role", p.role],
+    ...prolificRows,
     ["experiment mode", modeLabel],
     ["device", deviceLabel],
     ["browser / OS", browserOs],

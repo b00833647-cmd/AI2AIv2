@@ -1624,7 +1624,44 @@
 <main>
 
 <!-- ─── SCREEN 1 — pick role only ─── -->
-<section id="screen-1" class="screen active">
+<!-- ─── SCREEN 0 — Prolific ID gate ─────────────────────────────────────
+     New first page added 2026-05-14. When a participant arrives via a
+     Prolific listing the URL carries three substituted tokens:
+       /blx?PROLIFIC_PID=...&STUDY_ID=...&SESSION_ID=...
+     We surface the Prolific PID for confirmation (read-only when supplied
+     from the URL) and persist all three with the participant record on
+     /api/p/start. Direct visits without the URL params can leave the
+     field blank or type a placeholder for testing. -->
+<section id="screen-prolific" class="screen active">
+  <div class="panel center reading" style="max-width: 560px;">
+    <h2 style="font-size: 22px; margin-bottom: 6px;">Welcome — please confirm your Prolific ID</h2>
+    <p class="muted" style="margin-top: 0;">
+      We use this to credit your Prolific submission. It is automatically filled
+      from the link Prolific sent you. If anything looks wrong, please return to
+      Prolific and re-open the study link.
+    </p>
+
+    <div style="text-align: left; margin: 18px 0 14px;">
+      <label for="prolific-pid" style="display:block; font-weight:600; margin-bottom:4px;">
+        Prolific ID <span class="required-mark" aria-hidden="true">*</span>
+      </label>
+      <input type="text" id="prolific-pid"
+             autocomplete="off" spellcheck="false"
+             style="width:100%; box-sizing:border-box; padding:10px 12px; font-family:ui-monospace,monospace; font-size:14px;"
+             placeholder="e.g. 60a1b2c3d4e5f6a7b8c9d0e1" />
+      <div class="field-error" id="prolific-pid-error" style="margin-top:4px; min-height:1.1em;"></div>
+    </div>
+
+    <div id="prolific-meta" style="text-align: left; font-size: 12px; color: var(--dim); display: none; margin-bottom: 16px;">
+      <div>Study&nbsp;ID:&nbsp;<span id="prolific-study-id" style="font-family:ui-monospace,monospace;">—</span></div>
+      <div>Session&nbsp;ID:&nbsp;<span id="prolific-session-id" style="font-family:ui-monospace,monospace;">—</span></div>
+    </div>
+
+    <button class="btn-primary" id="btn-prolific-continue">Continue</button>
+  </div>
+</section>
+
+<section id="screen-1" class="screen">
   <div class="panel center reading">
     <h2 style="font-size: 24px;">Which side will you play?</h2>
     <p class="muted">In the real study, this is randomly assigned. For the demo, you choose.</p>
@@ -1698,15 +1735,16 @@
   </div>
 </section>
 <script>
-  // preset-role-active-swap: synchronously move .active from screen-1 to
-  // screen-2 during HTML parse (before paint) when the URL is /blx or /slx.
-  // Pairs with the html[data-preset-role] #screen-1 hide rule and the head
-  // script that sets the attribute. Result: zero flash, screen-2 is the
-  // first thing painted.
+  // preset-role-active-swap: synchronously make sure the Prolific gate is
+  // the first thing painted during HTML parse (before paint) when the URL
+  // is /blx, /slx, /bhx, or /shx. screen-prolific already starts with
+  // class="screen active" in markup, so this script just clears the
+  // legacy screen-1 active class if any later markup edit reintroduces it.
   if (document.documentElement.hasAttribute("data-preset-role")) {
     var s1 = document.getElementById("screen-1");
-    var s2 = document.getElementById("screen-2");
-    if (s1 && s2) { s1.classList.remove("active"); s2.classList.add("active"); }
+    var sp = document.getElementById("screen-prolific");
+    if (s1) s1.classList.remove("active");
+    if (sp) sp.classList.add("active");
   }
 </script>
 
@@ -2417,7 +2455,9 @@ const TOTAL_STEPS = 10;
 // ─── State ───────────────────────────────────────────────────────────────
 const state = {
   participantId: null,
-  step: 1,
+  // step 0 = the Prolific entry gate (see `<section id="screen-prolific">`).
+  // Real experiment screens are 1–10, set by show(N) on advance.
+  step: 0,
   role: null,
   /** 'agent' | 'human_buyer' | 'human_seller' — set by detectRoleFromPath. */
   mode: "agent",
@@ -2443,7 +2483,7 @@ const $ = (id) => document.getElementById(id);
 // on the server). Cross-tab continuity is intentionally out of scope —
 // closing the tab ends the session.
 const PID_KEY = "ai2ai_pid_v1";
-async function ensureParticipant() {
+async function ensureParticipant(prolific) {
   if (state.participantId) return;
   // Same-tab refresh: reuse the participantId we already enrolled.
   try {
@@ -2460,6 +2500,10 @@ async function ensureParticipant() {
       language: navigator.language,
       referrer: document.referrer || null,
       connectionType: conn ? conn.effectiveType : null,
+      // Prolific tokens — server will null-out unsubstituted templates.
+      prolificPid:       prolific && prolific.pid       ? prolific.pid       : null,
+      prolificStudyId:   prolific && prolific.studyId   ? prolific.studyId   : null,
+      prolificSessionId: prolific && prolific.sessionId ? prolific.sessionId : null,
     });
     state.participantId = r.participantId;
     try { sessionStorage.setItem(PID_KEY, r.participantId); } catch (e) {}
@@ -2468,6 +2512,31 @@ async function ensureParticipant() {
     alert("Couldn't start the study: " + err.message + "\nIs the server running on " + apiBase() + "?");
     throw err;
   }
+}
+
+// ─── Prolific URL param parsing ──────────────────────────────────────────
+//
+// Prolific links look like:
+//   /blx?PROLIFIC_PID=...&STUDY_ID=...&SESSION_ID=...
+// Templates that didn't get substituted (someone hit the URL outside
+// Prolific) are returned as the literal `{{%...%}}` string — we treat
+// those as missing on both client and server side (see sanitizeProlific).
+function readProlificFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const pick = (k) => {
+    const v = params.get(k);
+    if (!v) return null;
+    const trimmed = v.trim();
+    if (!trimmed) return null;
+    if (trimmed.includes("{{") || trimmed.includes("%PROLIFIC_PID%")
+        || trimmed.includes("%STUDY_ID%") || trimmed.includes("%SESSION_ID%")) return null;
+    return trimmed.slice(0, 64);
+  };
+  return {
+    pid:       pick("PROLIFIC_PID"),
+    studyId:   pick("STUDY_ID"),
+    sessionId: pick("SESSION_ID"),
+  };
 }
 
 // Read role + experiment mode from the URL path. Four supported routes:
@@ -2484,21 +2553,40 @@ function detectRoleFromPath() {
   return null;
 }
 
-// Boot sequence: create participant, set role + mode server-side, then jump
-// straight to consent. For human modes (/bhx, /shx) we'll skip screens 5 and
-// 6 later in the flow — the corresponding "continue" handlers route
-// directly to screen 7 instead of through the prompt screen.
-(async function boot() {
-  await ensureParticipant();
+// Boot sequence (v2 — Prolific-gated). The participant lands on the
+// Prolific entry screen first; we only call /api/p/start AFTER they
+// confirm the PID by clicking Continue. Same-tab refresh continues to
+// resume from the cached participantId without re-asking.
+//
+// Two paths:
+//   (a) Cached participantId in sessionStorage → reuse, skip prolific
+//       screen, jump straight to the resumed step (or consent).
+//   (b) Fresh visit → render the Prolific screen with auto-filled
+//       PID/STUDY/SESSION fields read from the URL, wait for the
+//       Continue click, then call /api/p/start with the prolific tokens.
+async function continueFromProlific() {
   const preset = detectRoleFromPath();
   if (!preset) return; // legacy /study fallback — leave screen 1 visible
+
   state.role = preset.role;
   state.mode = preset.mode;
-  // If we're resuming an in-flight session (same tab, same participantId),
-  // restore the saved state and skip ahead to the screen the participant
-  // was on when they reloaded. Cap resume at screen 7 — the live-negotiation
-  // run can't be resumed mid-stream, so a refresh past that lands the
-  // participant back on the listing/prompt for a clean restart.
+
+  // Read Prolific tokens from URL + (optionally) the participant-edited PID
+  // field on the form. The form value is the source of truth, so if the
+  // participant cleared/changed the field we honour that.
+  const urlProlific = readProlificFromUrl();
+  const fieldPid = (($("prolific-pid") || {}).value || "").trim();
+  const prolific = {
+    pid:       fieldPid || urlProlific.pid,
+    studyId:   urlProlific.studyId,
+    sessionId: urlProlific.sessionId,
+  };
+
+  await ensureParticipant(prolific);
+
+  // Resume support: if same-tab refresh and we have saved progress, jump
+  // to the screen they were on (capped at screen 6 — live negotiation
+  // can't be resumed mid-stream).
   const resume = loadResume();
   let targetStep = 2;
   if (resume && resume.participantId === state.participantId && resume.role === preset.role) {
@@ -2515,7 +2603,56 @@ function detectRoleFromPath() {
     show(targetStep);
   } catch (err) {
     console.error("[boot] preset role/mode failed:", err);
-    // Leave screen 1 visible so the participant can recover by clicking.
+  }
+}
+
+(async function boot() {
+  // Pre-fill the Prolific form from URL params (read-only-feel when present).
+  const urlProlific = readProlificFromUrl();
+  const pidInput = $("prolific-pid");
+  if (pidInput) {
+    if (urlProlific.pid) {
+      pidInput.value = urlProlific.pid;
+      pidInput.readOnly = true;          // legitimate Prolific arrival — lock the field
+      pidInput.style.background = "var(--panel-2, rgba(255,255,255,0.04))";
+      pidInput.style.cursor = "default";
+    } else {
+      pidInput.placeholder = "e.g. 60a1b2c3d4e5f6a7b8c9d0e1";
+    }
+  }
+  if (urlProlific.studyId || urlProlific.sessionId) {
+    const meta = $("prolific-meta");
+    if (meta) meta.style.display = "block";
+    if (urlProlific.studyId)   $("prolific-study-id").textContent   = urlProlific.studyId;
+    if (urlProlific.sessionId) $("prolific-session-id").textContent = urlProlific.sessionId;
+  }
+
+  // If the same tab already has a cached participantId, the participant has
+  // already passed through the Prolific gate this session — skip it.
+  let cached = null;
+  try { cached = sessionStorage.getItem(PID_KEY); } catch (e) { /* disabled */ }
+  if (cached) {
+    state.participantId = cached;
+    await continueFromProlific();
+    return;
+  }
+
+  // Fresh visit — wire the Continue button on the Prolific screen and let
+  // the participant proceed at their pace.
+  const btn = $("btn-prolific-continue");
+  if (btn) {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "Setting up…";
+      try {
+        await continueFromProlific();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "Continue";
+        const errEl = $("prolific-pid-error");
+        if (errEl) errEl.textContent = "Couldn't start the study. Please try again.";
+      }
+    });
   }
 })();
 

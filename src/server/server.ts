@@ -1024,6 +1024,14 @@ interface StartBody {
   language?: string;
   referrer?: string;
   connectionType?: string;
+  // Prolific tokens — present when the participant arrived via a Prolific
+  // listing using the parameter-substitution URL pattern:
+  //   https://airims.info/<route>?PROLIFIC_PID=...&STUDY_ID=...&SESSION_ID=...
+  // All three are nullable; participants who arrive from direct links or
+  // lab walkthroughs leave them undefined.
+  prolificPid?: string | null;
+  prolificStudyId?: string | null;
+  prolificSessionId?: string | null;
 }
 async function handleParticipantStart(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   // Per-IP rate limit — one new participant per IP per 24h. Prevents farming.
@@ -1062,9 +1070,29 @@ async function handleParticipantStart(req: http.IncomingMessage, res: http.Serve
       os,
       device_type: deviceType,
       connection_type: body.connectionType ?? null,
+      // Prolific tokens — null when not provided so historical participants
+      // and direct-link visits remain compatible.
+      prolific_pid:        sanitizeProlific(body.prolificPid),
+      prolific_study_id:   sanitizeProlific(body.prolificStudyId),
+      prolific_session_id: sanitizeProlific(body.prolificSessionId),
     } as Parameters<typeof db.updateStudyParticipant>[1]);
   });
   sendJson(res, 200, { participantId: id });
+}
+
+/** Trim + cap Prolific ID-like strings; null out unsubstituted templates. */
+function sanitizeProlific(v: string | null | undefined): string | null {
+  if (typeof v !== "string") return null;
+  const trimmed = v.trim();
+  if (trimmed.length === 0) return null;
+  // Prolific replaces `{{%PROLIFIC_PID%}}` etc. with the real value before
+  // sending the participant. If we receive the literal template (someone
+  // copy-pasted the URL or hit it outside Prolific), treat as missing.
+  if (trimmed.includes("{{") || trimmed.includes("%PROLIFIC_PID%")
+       || trimmed.includes("%STUDY_ID%") || trimmed.includes("%SESSION_ID%")) {
+    return null;
+  }
+  return trimmed.slice(0, 64);
 }
 
 /** Tiny user-agent parser — good enough for analysis grouping. */
