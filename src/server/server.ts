@@ -487,8 +487,28 @@ interface OfferBoard { buyer: number | null; seller: number | null; }
  */
 function extractTurnPrice(t: { toolCalls?: EngineToolCall[]; message?: string }): number | null {
   const proposal = (t.toolCalls || []).find((c) => c.name === "submit_proposal");
-  const input = proposal?.input as { issues?: Array<{ name: string; value: number }> } | undefined;
+  const input = proposal?.input as {
+    action?: "propose" | "counter" | "accept" | "reject";
+    issues?: Array<{ name: string; value: number }>;
+  } | undefined;
   if (!input || !Array.isArray(input.issues)) return null;
+
+  // CRITICAL — action gate: only `propose`, `counter`, and `accept` carry the
+  // SPEAKER'S OWN number in the price field. A `reject` action's price field
+  // identifies WHICH offer is being rejected (i.e. the OTHER side's last
+  // number) and must NOT update the rejecter's board.
+  //
+  // Real bug this guard addresses (session nF1LHvnuG95lW-SepDUAG, /blx,
+  // 2026-05-13): buyer rejected the seller's $23,800 with
+  //   { action: "reject", issues: [{ name: "price", value: 23800 }] }
+  // and the buyer board showed $23,800 instead of the buyer's actual last
+  // offer of $23,500 (made two turns earlier).
+  //
+  // For `accept`, we DO want the price to update the speaker's board — they
+  // are converging to the other side's number, and the board correctly
+  // reflects "what they've committed to right now".
+  if (input.action === "reject") return null;
+
   const priceIssue = input.issues.find((i) => i.name === "price");
   if (!priceIssue || !Number.isFinite(priceIssue.value)) return null;
   return Number(priceIssue.value);
