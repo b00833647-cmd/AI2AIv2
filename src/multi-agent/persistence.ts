@@ -1888,6 +1888,7 @@ export class SqlitePersistence implements Persistence {
         `SELECT
            p.session_id,
            sp.id AS participant_id,
+           sp.prolific_pid,
            p.participant_id AS agent,
            p.role,
            p.model,
@@ -1907,7 +1908,7 @@ export class SqlitePersistence implements Persistence {
   exportAllBehaviorPrompts(): Array<Record<string, unknown>> {
     return this.db
       .prepare(
-        `SELECT bp.participant_id, sp.role, bp.revision, bp.prompt_text,
+        `SELECT bp.participant_id, sp.prolific_pid, sp.role, bp.revision, bp.prompt_text,
                 bp.mapped_signals_json, bp.mapped_notes, bp.match_rating,
                 bp.correction_note, bp.submitted_at
          FROM behavior_prompts bp
