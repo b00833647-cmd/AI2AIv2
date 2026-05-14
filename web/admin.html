@@ -987,6 +987,21 @@
   <button class="btn" id="bulk-clear">Clear</button>
 </div>
 
+<!-- ─── Legacy detail/replay overlays (kept for backward compat with any
+     code that still references #detail/#replay; the side-panel above is
+     the new primary detail surface). MUST live INSIDE <main> so the CSS
+     grid puts them in the same row as the tab-pages — when openReplay
+     toggles them visible they take over the main content area instead
+     of falling through to the bottom of the body in default flow. -->
+<div id="detail" hidden>
+  <a class="back" onclick="closeDetail()">← back to overview</a>
+  <div id="detail-body"></div>
+</div>
+<div id="replay" hidden>
+  <a class="back" onclick="closeReplay()">← back</a>
+  <div id="replay-body"></div>
+</div>
+
 </main>
 
 <!-- ─── Live counters footer ──────────────────────────────────────────── -->
@@ -1030,18 +1045,6 @@
     <input class="cmd-palette-input" id="cmd-palette-input" type="text" placeholder="Type a command, participant ID, or section name…" autocomplete="off" />
     <div class="cmd-palette-list" id="cmd-palette-list"></div>
   </div>
-</div>
-
-<!-- ─── Legacy detail/replay overlays (kept for backward compat with any
-     code that still references #detail/#replay; the side-panel above is
-     the new primary detail surface). -->
-<div id="detail" hidden>
-  <a class="back" onclick="closeDetail()">← back to overview</a>
-  <div id="detail-body"></div>
-</div>
-<div id="replay" hidden>
-  <a class="back" onclick="closeReplay()">← back</a>
-  <div id="replay-body"></div>
 </div>
 
 <script>
