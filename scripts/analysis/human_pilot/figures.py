@@ -183,3 +183,70 @@ ALL_FIGURES = [
     ("fig5_interaction", fig_interaction),
     ("fig6_prompt_len", fig_prompt_len),
 ]
+
+
+# ─── Section 8 — qualitative figures ──────────────────────────────────
+from scripts.analysis.human_pilot.tables import (
+    theme_prevalence as _theme_prev, comment_sentiment as _csent,
+    linguistic_by_role as _ling, qual_cache_available as _qok,
+)
+
+
+def fig_theme_prevalence(con) -> Path:
+    apply_theme()
+    fig, ax = plt.subplots()
+    if _qok():
+        t = _theme_prev(con)
+        ax.barh(t["theme"], t["n"], color=MODE2_COLORS["AI-to-AI"])
+        ax.invert_yaxis()
+        ax.set_xlabel("prompts (of 20)")
+    else:
+        ax.text(0.5, 0.5, "qualitative coding not yet run",
+                ha="center", va="center"); ax.axis("off")
+    ax.set_title("Behaviour-prompt strategy themes")
+    return save(fig, "fig8a_themes", aspect=0.6)
+
+
+def fig_comment_sentiment(con) -> Path:
+    apply_theme()
+    fig, ax = plt.subplots()
+    if _qok():
+        c = _csent(con)
+        piv = c.pivot_table(index="topic", columns="valence",
+                            values="n", fill_value=0)
+        piv.plot(kind="barh", stacked=True, ax=ax,
+                 color={"positive": OUTCOME_COLORS["agreed"],
+                        "neutral": "#999999",
+                        "negative": OUTCOME_COLORS["rejected"]})
+        ax.set_xlabel("comments")
+    else:
+        ax.text(0.5, 0.5, "qualitative coding not yet run",
+                ha="center", va="center"); ax.axis("off")
+    ax.set_title("Study-comment sentiment × topic")
+    return save(fig, "fig8c_sentiment", aspect=0.5)
+
+
+def fig_linguistic(con) -> Path:
+    apply_theme()
+    g = _ling(con).set_index("role")
+    feats = ["politeness_mean", "hedges_mean", "questions_mean",
+             "concession_mean", "directness_mean"]
+    fig, ax = plt.subplots()
+    x = np.arange(len(feats))
+    for i, role in enumerate(g.index):
+        ax.bar(x + (i - 0.5) * 0.35, g.loc[role, feats].values, width=0.35,
+               label=role, color=ROLE_COLORS.get(role, "#999999"))
+    ax.set_xticks(x)
+    ax.set_xticklabels([f.replace("_mean", "") for f in feats],
+                       rotation=20, ha="right")
+    ax.set_ylabel("mean per turn")
+    ax.set_title("Human-turn linguistic features by role (8D, deterministic)")
+    ax.legend(fontsize=8)
+    return save(fig, "fig8d_linguistic", aspect=0.55)
+
+
+QUAL_FIGURES = [
+    ("fig8a_themes", fig_theme_prevalence),
+    ("fig8c_sentiment", fig_comment_sentiment),
+    ("fig8d_linguistic", fig_linguistic),
+]

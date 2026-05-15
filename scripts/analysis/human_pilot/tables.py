@@ -162,3 +162,102 @@ def variable_inventory(con) -> pd.DataFrame:
          "now": "NOT analysable (cells 2-4)",
          "when_n_grows": "3-way once ≥~15/cell"},
     ])
+
+
+# ─── Section 8 — qualitative ──────────────────────────────────────────
+import json as _json
+from pathlib import Path as _Path
+
+from scripts.analysis.human_pilot.qual_codebook import (
+    THEME_FLAGS as _THEMES, TAXONOMY as _TAX, CODER_RUN_DATE as _QDATE,
+)
+from scripts.analysis.human_pilot.linguistic import human_turn_features as _htf
+
+_QCACHE = _Path(f"data/qual-codes-{_QDATE}.json")
+
+
+def qual_cache_available() -> bool:
+    return _QCACHE.exists()
+
+
+def _qual_rows(kind: str):
+    if not _QCACHE.exists():
+        return []
+    data = _json.loads(_QCACHE.read_text())
+    return [r for r in data.get("rows", []) if r.get("kind") == kind]
+
+
+def theme_prevalence(con) -> pd.DataFrame:
+    rows = _qual_rows("prompt")
+    n = len(rows) or 1
+    out = []
+    for th in _THEMES:
+        k = sum(1 for r in rows if r.get(th) is True)
+        out.append({"theme": th, "n": k, "pct": round(100 * k / n, 1)})
+    return pd.DataFrame(out).sort_values("n", ascending=False).reset_index(drop=True)
+
+
+def taxonomy_by_role(con) -> pd.DataFrame:
+    rows = _qual_rows("prompt")
+    out = []
+    for dim, levels in _TAX.items():
+        for lvl in levels:
+            for role in ("buyer", "seller"):
+                k = sum(1 for r in rows
+                        if r.get("role") == role and r.get(dim) == lvl)
+                out.append({"dimension": dim, "level": lvl,
+                            "role": role, "n": k})
+    return pd.DataFrame(out)
+
+
+def comment_sentiment(con) -> pd.DataFrame:
+    rows = _qual_rows("comment")
+    if not rows:
+        return pd.DataFrame(columns=["valence", "topic", "n"])
+    df = pd.DataFrame(rows)
+    return (df.groupby(["valence", "topic"]).size()
+              .reset_index(name="n"))
+
+
+def linguistic_by_role(con) -> pd.DataFrame:
+    f = _htf(con)
+    g = f.groupby("role").agg(
+        n=("char_len", "size"),
+        char_len_med=("char_len", "median"),
+        politeness_mean=("politeness", "mean"),
+        hedges_mean=("hedges", "mean"),
+        questions_mean=("questions", "mean"),
+        concession_mean=("concession", "mean"),
+        directness_mean=("directness", "mean"),
+    ).round(2).reset_index()
+    return g
+
+
+def qual_quant_link(con) -> pd.DataFrame:
+    """8E — agreed price (agent modes) by taxonomy orientation + satisfaction
+    by comment sentiment. Descriptive medians, illustrative only."""
+    rows_p = _qual_rows("prompt")
+    out = []
+    if rows_p:
+        df = completers_frame(con)
+        agreed = df[df["outcome_type"] == "agreed"][["participant_id", "final_price"]]
+        codes = pd.DataFrame(rows_p)[["participant_id", "orientation"]]
+        m = codes.merge(agreed, on="participant_id", how="inner")
+        for ori, g in m.groupby("orientation"):
+            out.append({"link": "price~orientation", "group": ori,
+                        "n": len(g),
+                        "price_median": float(g["final_price"].median())
+                        if len(g) else None})
+    rows_c = _qual_rows("comment")
+    if rows_c:
+        s = survey_long(con)
+        sat = s[(s["key"] == "satisfaction") & s["value_int"].notna()][
+            ["participant_id", "value_int"]]
+        cc = pd.DataFrame(rows_c)[["participant_id", "valence"]]
+        m = cc.merge(sat, on="participant_id", how="inner")
+        for val, g in m.groupby("valence"):
+            out.append({"link": "satisfaction~comment_sentiment",
+                        "group": val, "n": len(g),
+                        "price_median": float(g["value_int"].median())
+                        if len(g) else None})
+    return pd.DataFrame(out)
