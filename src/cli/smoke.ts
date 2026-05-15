@@ -8,6 +8,7 @@
 //   - Memory rendering produces a non-empty context.
 
 import { loadScenarioPack, validateScenarioPack, ScenarioValidationError } from "../multi-agent/scenario-loader.ts";
+import { nextAssignment, STRATA } from "../server/assignment.ts";
 import { openPersistence } from "../multi-agent/persistence.ts";
 import { validateOrchestratorToolCall } from "../multi-agent/orchestrator.ts";
 import { pickNextRoundRobin } from "../multi-agent/fallback-protocol.ts";
@@ -397,6 +398,33 @@ async function main(): Promise<void> {
       check("P2 stored block index 1",
         p.getAssignment("P2")?.assignmentBlockIndex === 1);
     } finally { p.close(); }
+  }
+
+  console.log("\n# clean-design: nextAssignment generator\n");
+  {
+    check("12 strata", STRATA.length === 12);
+    const a = nextAssignment("seedX", 5);
+    const b = nextAssignment("seedX", 5);
+    check("deterministic", JSON.stringify(a) === JSON.stringify(b));
+    const cells = new Set<string>();
+    for (let i = 0; i < 12; i++) {
+      const r = nextAssignment("seedX", i);
+      cells.add(`${r.conditionMode}|${r.conditionRole}|${r.opponentBlock}`);
+      check(`pos ${i} block index 0`, r.assignmentBlockIndex === 0);
+    }
+    check("block 0 perfectly balanced (12 unique cells)", cells.size === 12);
+    const cells2 = new Set<string>();
+    for (let i = 12; i < 24; i++) {
+      const r = nextAssignment("seedX", i);
+      cells2.add(`${r.conditionMode}|${r.conditionRole}|${r.opponentBlock}`);
+      check(`pos ${i} block index 1`, r.assignmentBlockIndex === 1);
+    }
+    check("block 1 perfectly balanced", cells2.size === 12);
+    const order1 = Array.from({ length: 12 }, (_, i) =>
+      JSON.stringify(nextAssignment("seedX", i)));
+    const order2 = Array.from({ length: 12 }, (_, i) =>
+      JSON.stringify(nextAssignment("seedY", i)));
+    check("different seed reorders block", order1.join() !== order2.join());
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
