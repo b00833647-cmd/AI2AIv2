@@ -2512,11 +2512,11 @@ const $ = (id) => document.getElementById(id);
 // closing the tab ends the session.
 const PID_KEY = "ai2ai_pid_v1";
 async function ensureParticipant(prolific) {
-  if (state.participantId) return;
+  if (state.participantId) return null;
   // Same-tab refresh: reuse the participantId we already enrolled.
   try {
     const cached = sessionStorage.getItem(PID_KEY);
-    if (cached) { state.participantId = cached; track("screen_enter", { step: state.step }); return; }
+    if (cached) { state.participantId = cached; track("screen_enter", { step: state.step }); return null; }
   } catch (e) { /* sessionStorage may be disabled */ }
   try {
     const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -2537,6 +2537,9 @@ async function ensureParticipant(prolific) {
     state.participantId = r.participantId;
     try { sessionStorage.setItem(PID_KEY, r.participantId); } catch (e) {}
     track("screen_enter", { step: state.step });
+    // Return the full server response so callers can read the server-assigned
+    // condition (conditionRole, conditionMode) for the neutral research entry path.
+    return r;
   } catch (err) {
     alert("Couldn't start the study: " + err.message + "\nIs the server running on " + apiBase() + "?");
     throw err;
@@ -2642,11 +2645,6 @@ function applyConsentCopy(mode) {
 
 async function continueFromProlific() {
   const preset = detectRoleFromPath();
-  if (!preset) return; // legacy /study fallback — leave screen 1 visible
-
-  state.role = preset.role;
-  state.mode = preset.mode;
-  applyConsentCopy(preset.mode);
 
   // Read Prolific tokens from URL + (optionally) the participant-edited PID
   // field on the form. The form value is the source of truth, so if the
@@ -2658,6 +2656,64 @@ async function continueFromProlific() {
     studyId:   urlProlific.studyId,
     sessionId: urlProlific.sessionId,
   };
+
+  // Neutral research entry path (spec 3 §5): /study (and any path that
+  // detectRoleFromPath() does not recognise as a debug route) — the server
+  // assigns the condition via claimSeededAssignment and returns it in the
+  // /api/p/start response. We derive role + mode from the server assignment
+  // rather than from the URL, skip the role-pick screen, and proceed to
+  // consent (screen 2) just as the debug routes do.
+  if (!preset) {
+    const startResp = await ensureParticipant(prolific);
+    // startResp is non-null only when /api/p/start was actually called this
+    // load (fresh enrolment). On a same-tab resume ensureParticipant returns
+    // null — fall back to the saved resume snapshot which includes role+mode.
+    const resume = loadResume();
+    const condRole = startResp?.conditionRole
+      ?? (resume?.participantId === state.participantId ? resume?.role : null)
+      ?? null;
+    const condMode = startResp?.conditionMode ?? null;
+    // Convert server conditionMode → SPA mode string (mirrors recordAssignment).
+    // For resumes condMode may be null; derive mode from condRole via the resume
+    // snapshot if available (it was saved with the correct mode on first visit).
+    const spaMode = condMode
+      ? (condMode === "delegated" ? "agent" : "human_" + condRole)
+      : (resume?.participantId === state.participantId ? resume?.mode : null);
+    if (!condRole || !spaMode) {
+      // Assignment not yet available (e.g. very first cached resume with no
+      // prior /api/p/start response stored). Fall back to role-pick screen.
+      return;
+    }
+    state.role = condRole;
+    state.mode = spaMode;
+    applyConsentCopy(spaMode);
+    let targetStep = 2;
+    if (resume && resume.participantId === state.participantId && resume.role === condRole) {
+      if (resume.personalContext) state.personalContext = resume.personalContext;
+      if (resume.behaviorPrompt) state.behaviorPrompt = resume.behaviorPrompt;
+      if (resume.postRatings) state.postRatings = resume.postRatings;
+      if (typeof resume.step === "number" && resume.step >= 2 && resume.step <= 6) {
+        targetStep = resume.step;
+      }
+    }
+    // The DB already has role + experiment_mode set by claimSeededAssignment
+    // via recordAssignment. The /api/p/role and /api/p/mode POSTs are
+    // idempotent (they overwrite with the same values) and sync the SPA
+    // state to match — call them for consistency with the debug-route path.
+    try {
+      await api("/api/p/role", { participantId: state.participantId, role: condRole });
+      await api("/api/p/mode", { participantId: state.participantId, mode: spaMode });
+      show(targetStep);
+    } catch (err) {
+      console.error("[boot] neutral path role/mode sync failed:", err);
+    }
+    return;
+  }
+
+  // Debug/forced-condition routes (/blx, /slx, /bhx, /shx) — original path.
+  state.role = preset.role;
+  state.mode = preset.mode;
+  applyConsentCopy(preset.mode);
 
   await ensureParticipant(prolific);
 

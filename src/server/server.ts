@@ -85,7 +85,9 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/") {
-      res.writeHead(302, { Location: "/blx" });
+      // Spec 3 §5: bare domain redirects to the neutral research entry path.
+      // /study resolves to {kind:'research'} → claimSeededAssignment on /api/p/start.
+      res.writeHead(302, { Location: "/study" });
       res.end();
       return;
     }
@@ -1104,7 +1106,12 @@ async function handleParticipantStart(req: http.IncomingMessage, res: http.Serve
   if (cleanPid) {
     const existing = withDb((db) => db.getStudyParticipant(cleanPid));
     if (existing) {
-      sendJson(res, 200, { participantId: existing.id });
+      const existingAssignment = withDb((db) => db.getAssignment(cleanPid));
+      sendJson(res, 200, {
+        participantId: existing.id,
+        conditionRole: existingAssignment?.conditionRole ?? null,
+        conditionMode: existingAssignment?.conditionMode ?? null,
+      });
       return;
     }
     id = cleanPid;
@@ -1155,7 +1162,12 @@ async function handleParticipantStart(req: http.IncomingMessage, res: http.Serve
       claimSeededAssignment(db, id, seed);
     }
   });
-  sendJson(res, 200, { participantId: id });
+  const assignment = withDb((db) => db.getAssignment(id));
+  sendJson(res, 200, {
+    participantId: id,
+    conditionRole: assignment?.conditionRole ?? null,
+    conditionMode: assignment?.conditionMode ?? null,
+  });
 }
 
 /** Trim + cap Prolific ID-like strings; null out unsubstituted templates
