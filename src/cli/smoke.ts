@@ -244,7 +244,7 @@ async function main(): Promise<void> {
         assignedAt: "2026-05-15T00:00:00.000Z",
       });
       const sp = p.getStudyParticipant("P1")!;
-      check("condition_mode written", (sp as any).condition_mode === "delegated");
+      check("condition_mode written", sp.condition_mode === "delegated");
       check("dual-write experiment_mode=agent", sp.experiment_mode === "agent");
       check("dual-write role=buyer", sp.role === "buyer");
       const log = (p as any)["db"]
@@ -260,6 +260,15 @@ async function main(): Promise<void> {
       });
       const sp2 = p.getStudyParticipant("P2")!;
       check("dual-write experiment_mode=human_seller", sp2.experiment_mode === "human_seller");
+      p.createStudyParticipant({ id: "P3" });
+      p.recordAssignment("P3", {
+        conditionMode: "direct", conditionRole: "buyer",
+        opponentBlock: "easygoing", assignmentSeed: "S",
+        assignmentBlockIndex: 0, replicateId: 0,
+        assignedAt: "2026-05-15T00:00:00.000Z",
+      });
+      const sp3 = p.getStudyParticipant("P3")!;
+      check("dual-write experiment_mode=human_buyer", sp3.experiment_mode === "human_buyer");
     } finally { p.close(); }
   }
 
