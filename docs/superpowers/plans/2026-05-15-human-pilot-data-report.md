@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Produce a single Word `.docx` data report (figures + tables + per-block interpretation, no manuscript scaffolding) on the 40-completer real-human Prolific pilot, fully reproducible from a frozen SQLite snapshot.
+**Goal:** Produce a single Word `.docx` data report (figures + tables + per-block interpretation, no manuscript scaffolding) on the 40-completer real-human Prolific pilot — quantitative *and* a qualitative Section 8 (thematic, taxonomy, sentiment, linguistic, qual×quant link) — fully reproducible from a frozen SQLite snapshot.
 
-**Architecture:** A `scripts/analysis/human_pilot/` package: a SQLite loader produces tidy pandas frames restricted to the 40 completers; table builders emit CSVs; figure builders use plotnine (demographic + 4-group small-multiples) and seaborn 0.13/matplotlib (rainclouds, forest, diverging-Likert, interaction); a python-docx assembler stitches figure/table + interpretation blocks into the report. One orchestrator command rebuilds everything deterministically.
+**Architecture:** A `scripts/analysis/human_pilot/` package: a SQLite loader produces tidy pandas frames restricted to the 40 completers; table builders emit CSVs; figure builders use plotnine (demographic + 4-group small-multiples) and seaborn 0.13/matplotlib (rainclouds, forest, diverging-Likert, interaction); a python-docx assembler stitches figure/table + interpretation blocks into the report. Qualitative coding (8A–8C) runs **once** via a separate one-shot LLM coder that writes a cached, committed coding sheet; the report build itself stays deterministic + offline (8D linguistic is pure lexicon/regex, no LLM). One orchestrator command rebuilds everything deterministically from the snapshot + the cached coding sheet.
 
-**Tech Stack:** Python 3.12, pandas, scipy, statsmodels, pingouin, matplotlib, seaborn 0.13, **plotnine** (new), python-docx. Reuses `scripts/analysis/core/stats.py` (cliff_delta, bootstrap_ci, fdr_bh, mann_whitney, kruskal_wallis).
+**Tech Stack:** Python 3.12, pandas, scipy, statsmodels, pingouin, matplotlib, seaborn 0.13, **plotnine** (new), python-docx, **anthropic** (new — one-shot qual coder only, lazily imported; report build never imports it). Reuses `scripts/analysis/core/stats.py` (cliff_delta, bootstrap_ci, fdr_bh, mann_whitney, kruskal_wallis).
 
 **Spec:** `docs/superpowers/specs/2026-05-15-human-pilot-data-report-design.md` — do not relitigate scope/sample/posture.
 
@@ -1290,7 +1290,661 @@ git commit -m "analysis: human-pilot .docx assembler + orchestrator (end-to-end 
 
 ---
 
-### Task 8: Full-suite verification + final commit
+## Phase 5 — Qualitative (Section 8)
+
+### Task 8: Qualitative codebook + one-shot LLM coder (cached)
+
+**Files:**
+- Modify: `scripts/analysis/requirements.txt`
+- Create: `scripts/analysis/human_pilot/qual_codebook.py`
+- Create: `scripts/analysis/human_pilot/code_qualitative.py`
+
+- [ ] **Step 1: Add the anthropic SDK to requirements + install**
+
+Append to `scripts/analysis/requirements.txt`:
+
+```
+anthropic>=0.40
+```
+
+Run:
+```bash
+source .venv/bin/activate && pip install "anthropic>=0.40" && python -c "import anthropic; print('anthropic', anthropic.__version__)"
+```
+Expected: prints `anthropic 0.x` ≥ 0.40.
+
+- [ ] **Step 2: Implement the codebook (single source of truth, no LLM)**
+
+```python
+# scripts/analysis/human_pilot/qual_codebook.py
+"""The qualitative codebook. Shared by code_qualitative.py (LLM coding)
+and tables.py / figures.py (rendering). One source of truth."""
+from __future__ import annotations
+
+# 8A — inductive theme presence flags (boolean per prompt/context text).
+THEME_FLAGS = [
+    "anchor_high",          # instruct to open high / hold near asking
+    "concession_plan",      # explicit "if they offer X, do Y"
+    "walkaway_threshold",   # a stated floor/ceiling number
+    "relationship_tone",    # be polite/friendly/respectful
+    "urgency_framing",      # moving soon / quick sale / avoid desperation
+    "value_justification",  # point out condition / features / history
+    "toughness",            # firm / don't budge / aggressive
+    "flexibility",          # willing to negotiate / meet in the middle
+]
+
+# 8B — deductive taxonomy (one categorical value each).
+TAXONOMY = {
+    "orientation":          ["distributive", "integrative", "mixed"],
+    "anchor":               ["high", "moderate", "none"],
+    "threshold_stated":     ["yes", "no"],
+    "politeness_instructed": ["yes", "no"],
+    "info_strategy":        ["emphasize_value", "conceal", "neutral"],
+}
+
+# 8C — free-text study comment coding.
+COMMENT_VALENCE = ["positive", "neutral", "negative"]
+COMMENT_TOPIC = ["enjoyment", "ai_competence", "difficulty", "suggestion", "other"]
+
+MODEL = "claude-sonnet-4-6"
+CODER_RUN_DATE = "2026-05-15"
+```
+
+- [ ] **Step 3: Implement the one-shot LLM coder**
+
+```python
+# scripts/analysis/human_pilot/code_qualitative.py
+"""One-shot LLM-assisted qualitative coder. NOT called by the report
+build — run this once; it writes a cached coding sheet the build reads.
+
+Usage:
+  ANTHROPIC_API_KEY=... python -m scripts.analysis.human_pilot.code_qualitative
+  (add --force to recode even if the cache exists)
+
+Outputs:
+  data/qual-codes-2026-05-15.json                       (gitignored cache)
+  docs/reports/tables-human-pilot/qual_coding_sheet.csv (committed, checkable)
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+from scripts.analysis.human_pilot.data import (
+    load_db, completers_frame, behavior_prompts_frame, survey_long, SNAPSHOT,
+)
+from scripts.analysis.human_pilot.qual_codebook import (
+    THEME_FLAGS, TAXONOMY, COMMENT_VALENCE, COMMENT_TOPIC, MODEL, CODER_RUN_DATE,
+)
+
+CACHE = Path(f"data/qual-codes-{CODER_RUN_DATE}.json")
+SHEET = Path("docs/reports/tables-human-pilot/qual_coding_sheet.csv")
+
+_PROMPT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        **{f: {"type": "boolean"} for f in THEME_FLAGS},
+        **{k: {"type": "string", "enum": v} for k, v in TAXONOMY.items()},
+    },
+    "required": THEME_FLAGS + list(TAXONOMY.keys()),
+}
+_COMMENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "valence": {"type": "string", "enum": COMMENT_VALENCE},
+        "topic": {"type": "string", "enum": COMMENT_TOPIC},
+    },
+    "required": ["valence", "topic"],
+}
+
+_PROMPT_SYS = (
+    "You are a negotiation-research coder. You read ONE participant's "
+    "free-text instruction to their delegated AI car-negotiation agent "
+    "(or their personal-context note) and assign codes. THEME flags are "
+    "independent booleans (set true only if clearly present). TAXONOMY "
+    "fields each take exactly one value. Be conservative: absence of "
+    "evidence → false / 'none' / 'no' / 'neutral'. Call the report tool."
+)
+_COMMENT_SYS = (
+    "You are a survey-comment coder. You read ONE short open-ended study "
+    "comment and assign a valence and a single best topic. Call the "
+    "report tool."
+)
+
+
+def _client():
+    key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get(
+        "ORCHESTRATOR_ANTHROPIC_API_KEY")
+    if not key:
+        raise SystemExit(
+            "ANTHROPIC_API_KEY not set. Export it and re-run "
+            "(this is a one-shot; the report build does not need it)."
+        )
+    import anthropic
+    return anthropic.Anthropic(api_key=key)
+
+
+def _code_one(client, text, schema, system):
+    msg = client.messages.create(
+        model=MODEL, max_tokens=400, system=system,
+        tools=[{"name": "report", "description": "Return the codes.",
+                "input_schema": schema}],
+        tool_choice={"type": "tool", "name": "report"},
+        messages=[{"role": "user",
+                   "content": f'Text to code:\n"""\n{text}\n"""'}],
+    )
+    for block in msg.content:
+        if block.type == "tool_use":
+            return dict(block.input)
+    return {}
+
+
+def main(force: bool = False) -> None:
+    if CACHE.exists() and not force:
+        print(f"cache exists ({CACHE}); use --force to recode. Nothing to do.")
+        return
+    con = load_db(SNAPSHOT)
+    comp = completers_frame(con)[["participant_id", "experiment_mode", "role"]]
+    bp = behavior_prompts_frame(con)
+    sv = survey_long(con)
+    comments = sv[(sv["key"] == "free_text") & sv["value_text"].notna()]
+
+    client = _client()
+    rows = []
+
+    # 8A/8B — one row per agent-mode behaviour prompt.
+    for _, r in bp.iterrows():
+        txt = (r["prompt_text"] or "").strip()
+        if not txt:
+            continue
+        codes = _code_one(client, txt, _PROMPT_SCHEMA, _PROMPT_SYS)
+        rows.append({"participant_id": r["participant_id"], "kind": "prompt",
+                     "role": r["role"], "text": txt, **codes})
+
+    # 8C — one row per study comment.
+    for _, r in comments.iterrows():
+        txt = (r["value_text"] or "").strip()
+        if not txt:
+            continue
+        codes = _code_one(client, txt, _COMMENT_SCHEMA, _COMMENT_SYS)
+        rows.append({"participant_id": r["participant_id"], "kind": "comment",
+                     "text": txt, **codes})
+
+    payload = {
+        "_coded_at": CODER_RUN_DATE, "_model": MODEL,
+        "_n_prompts": int((bp["prompt_text"].fillna("").str.len() > 0).sum()),
+        "_n_comments": int(len(comments)),
+        "rows": rows,
+    }
+    CACHE.parent.mkdir(parents=True, exist_ok=True)
+    CACHE.write_text(json.dumps(payload, indent=2))
+    SHEET.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(SHEET, index=False)
+    print(f"wrote {CACHE} ({len(rows)} rows) + {SHEET}")
+
+
+if __name__ == "__main__":
+    main(force="--force" in sys.argv)
+```
+
+- [ ] **Step 4: Run the coder (needs `ANTHROPIC_API_KEY` in env)**
+
+```bash
+source .venv/bin/activate && python -m scripts.analysis.human_pilot.code_qualitative
+```
+Expected (if key present): `wrote data/qual-codes-2026-05-15.json (40 rows) + docs/reports/tables-human-pilot/qual_coding_sheet.csv`.
+If `ANTHROPIC_API_KEY` is not set: it exits with the clear instruction message — that is acceptable; the build (Task 11) handles a missing cache gracefully and this step is re-runnable later by the researcher.
+
+- [ ] **Step 5: Commit (the coder + codebook + the checkable sheet if produced)**
+
+```bash
+git add scripts/analysis/requirements.txt scripts/analysis/human_pilot/qual_codebook.py scripts/analysis/human_pilot/code_qualitative.py
+git add docs/reports/tables-human-pilot/qual_coding_sheet.csv 2>/dev/null || true
+git commit -m "analysis: qualitative codebook + one-shot LLM coder (cached, spot-checkable)"
+```
+
+---
+
+### Task 9: Deterministic linguistic analyzer (8D — no LLM)
+
+**Files:**
+- Create: `scripts/analysis/human_pilot/linguistic.py`
+- Test: `scripts/analysis/tests/test_human_pilot_linguistic.py`
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# scripts/analysis/tests/test_human_pilot_linguistic.py
+from scripts.analysis.human_pilot.linguistic import features, human_turn_features
+from scripts.analysis.human_pilot.data import load_db, SNAPSHOT
+
+def test_features_counts():
+    f = features("Please, I think maybe we could meet in the middle? Thanks!")
+    assert f["politeness"] >= 2          # please, thanks
+    assert f["hedges"] >= 2              # I think, maybe
+    assert f["questions"] == 1
+    assert f["concession"] >= 1          # meet in the middle
+    assert f["char_len"] > 0
+
+def test_features_empty():
+    f = features("")
+    assert f["char_len"] == 0 and f["politeness"] == 0
+
+def test_human_turn_features_role_split():
+    con = load_db(SNAPSHOT)
+    df = human_turn_features(con)
+    # Only human-mode participant turns; both roles present
+    assert set(df["role"]) <= {"buyer", "seller"}
+    assert len(df) > 50
+    assert {"politeness", "hedges", "questions", "concession", "char_len"} <= set(df.columns)
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+```bash
+source .venv/bin/activate && python -m pytest scripts/analysis/tests/test_human_pilot_linguistic.py -q
+```
+Expected: FAIL — ModuleNotFoundError.
+
+- [ ] **Step 3: Implement linguistic.py**
+
+```python
+# scripts/analysis/human_pilot/linguistic.py
+"""Deterministic lexicon/regex linguistic features for human negotiation
+turns (Section 8D). No LLM — fully reproducible."""
+from __future__ import annotations
+
+import re
+
+import pandas as pd
+
+from scripts.analysis.human_pilot.data import _completer_ids  # type: ignore
+
+_POLITE = re.compile(r"\b(please|thanks|thank you|appreciate|sorry|kindly)\b", re.I)
+_HEDGE = re.compile(r"\b(maybe|perhaps|i think|i guess|kind of|sort of|possibly|might)\b", re.I)
+_CONCESSION = re.compile(r"\b(meet (you )?in the middle|compromise|deal|i can do|i'?ll accept|fair|split the difference)\b", re.I)
+_IMPERATIVE = re.compile(r"\b(i (want|need)|give me|you (must|should|have to))\b", re.I)
+
+
+def features(text: str) -> dict:
+    t = text or ""
+    return {
+        "char_len": len(t),
+        "politeness": len(_POLITE.findall(t)),
+        "hedges": len(_HEDGE.findall(t)),
+        "questions": t.count("?"),
+        "concession": len(_CONCESSION.findall(t)),
+        "directness": len(_IMPERATIVE.findall(t)),
+    }
+
+
+def human_turn_features(con) -> pd.DataFrame:
+    """One row per human-mode participant turn with linguistic features.
+
+    In /bhx the human is the buyer; in /shx the human is the seller. We
+    keep only the turn rows emitted by the human side.
+    """
+    ids = _completer_ids(con)
+    qm = ",".join("?" * len(ids))
+    rows = pd.read_sql_query(
+        f"""SELECT sp.experiment_mode, sp.role, t.emitter_id, t.message
+              FROM turns t
+              JOIN study_participants sp ON sp.session_id = t.session_id
+             WHERE sp.id IN ({qm})
+               AND sp.experiment_mode IN ('human_buyer','human_seller')""",
+        con, params=ids,
+    )
+    # The human's own turns: emitter_id == the participant's role.
+    rows = rows[rows["emitter_id"] == rows["role"]].copy()
+    feats = rows["message"].fillna("").map(features).apply(pd.Series)
+    out = pd.concat([rows[["role"]].reset_index(drop=True),
+                     feats.reset_index(drop=True)], axis=1)
+    return out
+```
+
+- [ ] **Step 4: Run the test**
+
+```bash
+source .venv/bin/activate && python -m pytest scripts/analysis/tests/test_human_pilot_linguistic.py -q
+```
+Expected: 3 passed.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add scripts/analysis/human_pilot/linguistic.py scripts/analysis/tests/test_human_pilot_linguistic.py
+git commit -m "analysis: deterministic linguistic features for human turns (8D)"
+```
+
+---
+
+### Task 10: Qualitative tables + figures (8A–8E)
+
+**Files:**
+- Modify: `scripts/analysis/human_pilot/tables.py` (append qual table builders)
+- Modify: `scripts/analysis/human_pilot/figures.py` (append qual figure builders)
+
+- [ ] **Step 1: Append qual builders to tables.py**
+
+Add at the end of `scripts/analysis/human_pilot/tables.py`:
+
+```python
+# ─── Section 8 — qualitative ──────────────────────────────────────────
+import json as _json
+from pathlib import Path as _Path
+
+from scripts.analysis.human_pilot.qual_codebook import (
+    THEME_FLAGS as _THEMES, TAXONOMY as _TAX, CODER_RUN_DATE as _QDATE,
+)
+from scripts.analysis.human_pilot.linguistic import human_turn_features as _htf
+
+_QCACHE = _Path(f"data/qual-codes-{_QDATE}.json")
+
+
+def qual_cache_available() -> bool:
+    return _QCACHE.exists()
+
+
+def _qual_rows(kind: str):
+    if not _QCACHE.exists():
+        return []
+    data = _json.loads(_QCACHE.read_text())
+    return [r for r in data.get("rows", []) if r.get("kind") == kind]
+
+
+def theme_prevalence(con) -> pd.DataFrame:
+    rows = _qual_rows("prompt")
+    n = len(rows) or 1
+    out = []
+    for th in _THEMES:
+        k = sum(1 for r in rows if r.get(th) is True)
+        out.append({"theme": th, "n": k, "pct": round(100 * k / n, 1)})
+    return pd.DataFrame(out).sort_values("n", ascending=False).reset_index(drop=True)
+
+
+def taxonomy_by_role(con) -> pd.DataFrame:
+    rows = _qual_rows("prompt")
+    out = []
+    for dim, levels in _TAX.items():
+        for lvl in levels:
+            for role in ("buyer", "seller"):
+                k = sum(1 for r in rows
+                        if r.get("role") == role and r.get(dim) == lvl)
+                out.append({"dimension": dim, "level": lvl,
+                            "role": role, "n": k})
+    return pd.DataFrame(out)
+
+
+def comment_sentiment(con) -> pd.DataFrame:
+    rows = _qual_rows("comment")
+    if not rows:
+        return pd.DataFrame(columns=["valence", "topic", "n"])
+    df = pd.DataFrame(rows)
+    return (df.groupby(["valence", "topic"]).size()
+              .reset_index(name="n"))
+
+
+def linguistic_by_role(con) -> pd.DataFrame:
+    f = _htf(con)
+    g = f.groupby("role").agg(
+        n=("char_len", "size"),
+        char_len_med=("char_len", "median"),
+        politeness_mean=("politeness", "mean"),
+        hedges_mean=("hedges", "mean"),
+        questions_mean=("questions", "mean"),
+        concession_mean=("concession", "mean"),
+        directness_mean=("directness", "mean"),
+    ).round(2).reset_index()
+    return g
+
+
+def qual_quant_link(con) -> pd.DataFrame:
+    """8E — agreed price (agent modes) by taxonomy orientation + satisfaction
+    by comment sentiment. Descriptive medians, illustrative only."""
+    rows_p = _qual_rows("prompt")
+    out = []
+    if rows_p:
+        df = completers_frame(con)
+        agreed = df[df["outcome_type"] == "agreed"][["participant_id", "final_price"]]
+        codes = pd.DataFrame(rows_p)[["participant_id", "orientation"]]
+        m = codes.merge(agreed, on="participant_id", how="inner")
+        for ori, g in m.groupby("orientation"):
+            out.append({"link": "price~orientation", "group": ori,
+                        "n": len(g),
+                        "price_median": float(g["final_price"].median())
+                        if len(g) else None})
+    rows_c = _qual_rows("comment")
+    if rows_c:
+        s = survey_long(con)
+        sat = s[(s["key"] == "satisfaction") & s["value_int"].notna()][
+            ["participant_id", "value_int"]]
+        cc = pd.DataFrame(rows_c)[["participant_id", "valence"]]
+        m = cc.merge(sat, on="participant_id", how="inner")
+        for val, g in m.groupby("valence"):
+            out.append({"link": "satisfaction~comment_sentiment",
+                        "group": val, "n": len(g),
+                        "price_median": float(g["value_int"].median())
+                        if len(g) else None})
+    return pd.DataFrame(out)
+```
+
+- [ ] **Step 2: Append qual figures to figures.py**
+
+Add at the end of `scripts/analysis/human_pilot/figures.py`:
+
+```python
+# ─── Section 8 — qualitative figures ──────────────────────────────────
+from scripts.analysis.human_pilot.tables import (
+    theme_prevalence as _theme_prev, comment_sentiment as _csent,
+    linguistic_by_role as _ling, qual_cache_available as _qok,
+)
+
+
+def fig_theme_prevalence(con) -> Path:
+    apply_theme()
+    fig, ax = plt.subplots()
+    if _qok():
+        t = _theme_prev(con)
+        ax.barh(t["theme"], t["n"], color=MODE2_COLORS["AI-to-AI"])
+        ax.invert_yaxis()
+        ax.set_xlabel("prompts (of 20)")
+    else:
+        ax.text(0.5, 0.5, "qualitative coding not yet run",
+                ha="center", va="center"); ax.axis("off")
+    ax.set_title("Behaviour-prompt strategy themes")
+    return save(fig, "fig8a_themes", aspect=0.6)
+
+
+def fig_comment_sentiment(con) -> Path:
+    apply_theme()
+    fig, ax = plt.subplots()
+    if _qok():
+        c = _csent(con)
+        piv = c.pivot_table(index="topic", columns="valence",
+                            values="n", fill_value=0)
+        piv.plot(kind="barh", stacked=True, ax=ax,
+                 color={"positive": OUTCOME_COLORS["agreed"],
+                        "neutral": "#999999",
+                        "negative": OUTCOME_COLORS["rejected"]})
+        ax.set_xlabel("comments")
+    else:
+        ax.text(0.5, 0.5, "qualitative coding not yet run",
+                ha="center", va="center"); ax.axis("off")
+    ax.set_title("Study-comment sentiment × topic")
+    return save(fig, "fig8c_sentiment", aspect=0.5)
+
+
+def fig_linguistic(con) -> Path:
+    apply_theme()
+    g = _ling(con).set_index("role")
+    feats = ["politeness_mean", "hedges_mean", "questions_mean",
+             "concession_mean", "directness_mean"]
+    fig, ax = plt.subplots()
+    x = np.arange(len(feats))
+    for i, role in enumerate(g.index):
+        ax.bar(x + (i - 0.5) * 0.35, g.loc[role, feats].values, width=0.35,
+               label=role, color=ROLE_COLORS.get(role, "#999999"))
+    ax.set_xticks(x)
+    ax.set_xticklabels([f.replace("_mean", "") for f in feats],
+                       rotation=20, ha="right")
+    ax.set_ylabel("mean per turn")
+    ax.set_title("Human-turn linguistic features by role (8D, deterministic)")
+    ax.legend(fontsize=8)
+    return save(fig, "fig8d_linguistic", aspect=0.55)
+
+
+QUAL_FIGURES = [
+    ("fig8a_themes", fig_theme_prevalence),
+    ("fig8c_sentiment", fig_comment_sentiment),
+    ("fig8d_linguistic", fig_linguistic),
+]
+```
+
+- [ ] **Step 3: Smoke-test qual figures (works with OR without the cache)**
+
+```bash
+source .venv/bin/activate && python -c "
+from scripts.analysis.human_pilot.data import load_db, SNAPSHOT
+from scripts.analysis.human_pilot.figures import QUAL_FIGURES
+con = load_db(SNAPSHOT)
+for name, fn in QUAL_FIGURES:
+    p = fn(con); assert p.exists() and p.stat().st_size > 800, name
+    print('OK', name)
+"
+```
+Expected: `OK` for fig8a_themes, fig8c_sentiment, fig8d_linguistic (8D always renders real data; 8A/8C render real data if cache present, else the 'not yet run' placeholder — either way the file exists).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/analysis/human_pilot/tables.py scripts/analysis/human_pilot/figures.py
+git commit -m "analysis: Section 8 qualitative tables + figures (8A-8E, cache-aware)"
+```
+
+---
+
+### Task 11: Wire Section 8 into the report
+
+**Files:**
+- Modify: `scripts/analysis/human_pilot/report.py`
+
+- [ ] **Step 1: Add Section 8 to the build (insert before `OUT.parent.mkdir`)**
+
+In `scripts/analysis/human_pilot/report.py`, add these imports near the top:
+
+```python
+from scripts.analysis.human_pilot.tables import (
+    theme_prevalence, taxonomy_by_role, comment_sentiment,
+    linguistic_by_role, qual_quant_link, qual_cache_available,
+)
+from scripts.analysis.human_pilot.qual_codebook import MODEL as QMODEL, CODER_RUN_DATE as QDATE
+```
+
+Then, immediately before `OUT.parent.mkdir(parents=True, exist_ok=True)`:
+
+```python
+    # ── Section 8 — Qualitative ──
+    h1(doc, "8. Qualitative analysis")
+    if qual_cache_available():
+        para(doc, f"LLM-assisted coding disclosure: themes, taxonomy and "
+                  f"comment sentiment were coded once on {QDATE} with "
+                  f"{QMODEL} against the fixed codebook. n=20 behaviour "
+                  f"prompts / 20 comments. Codes are illustrative and "
+                  f"hypothesis-generating, NOT theoretically saturated; no "
+                  f"inter-rater reliability. The full coding sheet "
+                  f"(qual_coding_sheet.csv) is committed for spot-checking.",
+             italic=True)
+    else:
+        para(doc, "Qualitative LLM coding has not been run yet — sections "
+                  "8A/8B/8C/8E show placeholders. Run "
+                  "`python -m scripts.analysis.human_pilot.code_qualitative` "
+                  "with ANTHROPIC_API_KEY set, then rebuild. Section 8D "
+                  "(linguistic) is deterministic and shown below regardless.",
+             italic=True)
+
+    h2(doc, "8A — Strategy themes (behaviour prompts, inductive)")
+    figure(doc, F.fig_theme_prevalence(con),
+           "Figure 8A.1 — Theme prevalence across 20 agent-mode prompts.",
+           "How often each negotiation-strategy theme appears in "
+           "participants' instructions to their delegated agent. "
+           "Illustrative; n=20.")
+    if qual_cache_available():
+        tp = theme_prevalence(con); _csv(tp, "tbl8a_themes")
+        table(doc, tp, "Table 8A.1 — Theme prevalence (count, %).",
+              "Most-instructed strategies first.")
+
+    h2(doc, "8B — Strategy taxonomy (deductive)")
+    if qual_cache_available():
+        tx = taxonomy_by_role(con); _csv(tx, "tbl8b_taxonomy")
+        table(doc, tx, "Table 8B.1 — Taxonomy frequencies by role.",
+              "Distributive vs integrative orientation, anchor strength, "
+              "threshold/politeness/info-strategy — buyer vs seller counts. "
+              "Descriptive; no test (n=20).")
+    else:
+        para(doc, "(8B table pending qualitative coding.)", italic=True)
+
+    h2(doc, "8C — Study-comment sentiment")
+    figure(doc, F.fig_comment_sentiment(con),
+           "Figure 8C.1 — Comment valence × topic (n=20, all non-blank).",
+           "Tone and focus of the open-ended study comments.")
+
+    h2(doc, "8D — Human-turn language (deterministic)")
+    figure(doc, F.fig_linguistic(con),
+           "Figure 8D.1 — Linguistic features, buyer vs seller (human modes).",
+           "Politeness, hedging, questions, concession and directness per "
+           "typed turn. Lexicon-based, fully reproducible, no LLM.")
+    tl = linguistic_by_role(con); _csv(tl, "tbl8d_linguistic")
+    table(doc, tl, "Table 8D.1 — Linguistic feature means by role.",
+          "Per-turn means for human-mode participants.")
+
+    h2(doc, "8E — Qualitative × quantitative link")
+    if qual_cache_available():
+        ql = qual_quant_link(con); _csv(ql, "tbl8e_link")
+        table(doc, ql, "Table 8E.1 — Outcomes by strategy / sentiment.",
+              "Agreed-price median by prompt orientation; satisfaction "
+              "median by comment sentiment. Descriptive, illustrative, "
+              "hypothesis-generating only — n is small.")
+    else:
+        para(doc, "(8E link pending qualitative coding.)", italic=True)
+```
+
+- [ ] **Step 2: Rebuild the report end-to-end**
+
+```bash
+source .venv/bin/activate && python -m scripts.analysis.human_pilot.report
+```
+Expected: `wrote docs/reports/2026-05-15-human-pilot-data-report.docx (… bytes)`, no traceback (works with or without the qual cache).
+
+- [ ] **Step 3: Verify Section 8 present**
+
+```bash
+source .venv/bin/activate && python -c "
+from docx import Document
+d = Document('docs/reports/2026-05-15-human-pilot-data-report.docx')
+txt = '\n'.join(p.text for p in d.paragraphs)
+for s in ['8. Qualitative analysis','8A','8B','8C','8D','8E']:
+    assert s in txt, s
+imgs = sum(1 for r in d.part.rels.values() if 'image' in r.reltype)
+print('Section 8 OK; total images:', imgs, 'tables:', len(d.tables))
+assert imgs >= 12
+"
+```
+Expected: `Section 8 OK; total images: ≥12 …`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/analysis/human_pilot/report.py docs/reports/2026-05-15-human-pilot-data-report.docx docs/reports/figures-human-pilot docs/reports/tables-human-pilot
+git commit -m "report: Section 8 qualitative wired into the .docx (cache-aware, disclosure note)"
+```
+
+---
+
+### Task 12: Full-suite verification + final commit
 
 - [ ] **Step 1: Run the whole test suite**
 
@@ -1309,6 +1963,9 @@ txt = '\n'.join(p.text for p in d.paragraphs)
 assert 'Human Pilot' in txt
 assert 'exploratory' in txt.lower() or 'descriptive' in txt.lower()
 assert 'What you can do with this data' in txt
+assert '8. Qualitative analysis' in txt
+for s in ['8A','8B','8C','8D','8E']:
+    assert s in txt, s
 assert 'Abstract' not in txt and 'Introduction' not in txt  # no manuscript scaffolding
 print('acceptance OK')
 "
@@ -1342,14 +1999,19 @@ git commit -m "report: human-pilot data report .docx + figures + tables (build o
 | §4 S7 inventory | Task 5 variable_inventory |
 | §5 statistical posture | Tasks 5/6 — descriptive S1-4, Fisher+δ+FDR S5A/B, no pairwise, interpretations carry "exploratory" |
 | §6 viz stack | Task 1 plotnine, Task 4 figbase, Task 6 |
-| §7 deliverables | Task 7 paths, Task 8 final commit |
-| §9 acceptance criteria | Task 8 explicit checks |
+| §7 deliverables | Task 7 paths, Task 12 final commit |
+| §9 acceptance criteria | Task 12 explicit checks |
+| §4 S8 qualitative (8A–8E) | Task 8 codebook+coder, Task 9 linguistic (8D), Task 10 qual tables+figures, Task 11 wire into report |
+| §4 S8 coding mechanics / cache / disclosure | Task 8 (cache JSON + committed sheet), Task 11 (disclosure note + graceful no-cache) |
+| §9 acceptance 8/9/10 (qual) | Task 11 Step 3 + Task 12 Step 2 |
 
 Gap noted + resolved: spec §4 "5C — 4 groups small-multiples" — covered descriptively by the by-cell `fig_outcomes` + `outcome_descriptives` table rather than a separate small-multiples figure (KW omnibus is low-value at n=10 and the by-cell stacked bar already shows all four groups). This is a deliberate simplification consistent with the "descriptive only for 5C" posture; no separate task needed.
 
-**2. Placeholder scan:** No "TBD/TODO/handle edge cases". Every code step shows complete code; every run step shows the exact command + expected output. The only conditional (`tokens/cost if present`) is handled by `data_quality()` reading columns that exist in the snapshot — verified present in the comprehensive read (sessions.tokens_total exists).
+**2. Placeholder scan:** No "TBD/TODO/handle edge cases". Every code step shows complete code; every run step shows the exact command + expected output. Two graceful conditionals, both fully specified: (a) `tokens/cost if present` — `data_quality()` reads `sessions.tokens_total`, verified present in the comprehensive read; (b) the qualitative cache — `qual_cache_available()` gates 8A/8B/8C/8E with an explicit committed-in-code placeholder path; 8D never depends on it. Neither is a "TODO" — both branches are written out.
 
-**3. Type consistency:** `load_db` returns `sqlite3.Connection` used uniformly by every `*_frame`/table/figure function. `completers_frame` columns (`participant_id`, `mode2`, `experiment_mode`, `role`, `outcome_type`, `final_price`, `turns_count`, `session_time_sec`) are referenced consistently in tables.py and figures.py. `comparison_mode/role` return a DataFrame with `.attrs["fisher"]` consumed in report.py. `V2_SURVEY_KEYS` defined once in data.py, imported everywhere. PNG `Path` return type consistent across all `fig_*` builders and `save`/`save_plotnine`.
+**3. Type consistency:** `load_db` returns `sqlite3.Connection` used uniformly by every `*_frame`/table/figure/qual function. `completers_frame` columns (`participant_id`, `mode2`, `experiment_mode`, `role`, `outcome_type`, `final_price`, `turns_count`, `session_time_sec`) referenced consistently in tables.py/figures.py/report.py. `comparison_mode/role` return a DataFrame with `.attrs["fisher"]` consumed in report.py. `V2_SURVEY_KEYS` defined once in data.py. Qualitative: `THEME_FLAGS`, `TAXONOMY`, `COMMENT_VALENCE/TOPIC`, `MODEL`, `CODER_RUN_DATE` defined once in `qual_codebook.py` and imported by `code_qualitative.py`, `tables.py`, `report.py` — the cache path `data/qual-codes-{CODER_RUN_DATE}.json` is derived from the single `CODER_RUN_DATE` constant everywhere (coder writes it, `qual_cache_available()` reads it — no string drift). `_completer_ids` reused from data.py by linguistic.py. PNG `Path` return type consistent across all `fig_*` (incl. `QUAL_FIGURES`) and `save`/`save_plotnine`.
+
+**4. Reproducibility isolation (qual):** the report build (`report.py`) imports only `tables`/`figures`/`docx_report` — none import `anthropic`. The Anthropic SDK is imported lazily *inside* `code_qualitative._client()` only, so `python -m scripts.analysis.human_pilot.report` has zero network/LLM dependency even if `anthropic` is uninstalled. Verified by the import graph: `report → tables → {data, stats_ext, linguistic, qual_codebook}`; none of those import `anthropic`.
 
 ---
 

@@ -134,6 +134,70 @@ Discussion scaffolding.
 - One-page table: every analysable variable, current N, and what it
   supports now (descriptive) vs. when N grows (inferential ≥ ~35/cell).
 
+### Section 8 — Qualitative analysis
+
+Qualitative data is rich here (unlike the synthetic pilot): behaviour
+prompts (n=20, agent modes, 50–735 chars), personal-context free-text
+(n=20, agent modes), study free-text comments (n=20, **all non-blank**),
+and human-typed negotiation turns (~100 msgs, human modes). All five
+methods discussed in brainstorming are included.
+
+**8A — Thematic analysis (inductive, Braun & Clarke style).** Behaviour
+prompts + personal context coded into emergent strategy themes (seed
+codebook: anchor-high, concession-plan, walk-away-threshold, relationship
+tone, urgency framing, value-justification, toughness, flexibility — each
+a presence flag, codebook may grow during coding).
+- **Tbl 8A.1** Theme prevalence (count + % of the 20 prompts) overall and
+  by role.
+- **Box 8A.1** 2–3 verbatim exemplar quotes per top theme.
+
+**8B — Negotiation-strategy taxonomy (deductive content analysis).** Each
+prompt coded against an a-priori categorical scheme: orientation
+(distributive / integrative / mixed), anchor (high / moderate / none),
+threshold-stated (yes/no), politeness-instructed (yes/no), info-strategy
+(emphasise-value / conceal / neutral).
+- **Tbl 8B.1** Taxonomy frequencies by role (buyer vs seller). Descriptive
+  counts only — no test (n=20).
+
+**8C — Free-text sentiment + topic.** The 20 study comments coded for
+valence (positive / neutral / negative) × topic (enjoyment / AI-competence
+/ difficulty / suggestion / other).
+- **Fig 8C.1** Stacked bar: valence × topic.
+- **Box 8C.1** Representative comments per valence.
+
+**8D — Linguistic analysis of human negotiation turns (deterministic,
+no LLM).** Human-mode turns only. Per turn: politeness markers, hedges,
+directness/imperatives, question marks, concession words, message length.
+Aggregated by role (buyer vs seller).
+- **Fig 8D.1** Linguistic-feature comparison, buyer vs seller (human modes).
+- **Tbl 8D.1** Feature means/medians by role.
+
+**8E — Mixed-methods integration.** Link the per-participant qualitative
+codes (8A theme flags, 8B taxonomy) back to quantitative outcomes:
+- **Tbl 8E.1** Agreed price (agent modes) by dominant strategy theme /
+  taxonomy orientation — descriptive medians, illustrative only.
+- **Tbl 8E.2** Satisfaction & would-use-again by comment sentiment.
+- Explicitly flagged: n is small, this is a hypothesis-generating link,
+  not a tested relationship.
+
+**Coding mechanics + reproducibility.** 8A/8B/8C use **LLM-assisted
+coding** (Anthropic Python SDK, Claude). To keep the report build
+deterministic and offline:
+
+1. A one-shot script `code_qualitative.py` reads the snapshot, sends each
+   text to Claude with a structured codebook, and writes a **cached
+   coding sheet** `data/qual-codes-2026-05-15.json` (gitignored — derived
+   data) **plus** a human-checkable `docs/reports/tables-human-pilot/
+   qual_coding_sheet.csv` (committed: every text + its assigned codes, so
+   the researcher can spot-check / correct).
+2. The report build reads the cache. It never calls the LLM. If the cache
+   is missing, 8A/8B/8C/8E render a clear "qualitative coding not yet run
+   — execute code_qualitative.py" note; **8D still renders** (no LLM).
+3. A disclosure paragraph in Section 8 states: codes are LLM-assisted,
+   generated once on 2026-05-15 with the named model + codebook, n=20,
+   themes illustrative not theoretically saturated, no inter-rater
+   reliability unless a second coder re-codes the sheet.
+
 ---
 
 ## 5. Statistical posture (locked)
@@ -144,10 +208,12 @@ Discussion scaffolding.
 | Section 5A / 5B (20 vs 20) | Exploratory: Mann-Whitney U, Cliff's δ + 95 % bootstrap CI, BH-FDR across the 9 survey items per contrast. Agreement rate via Fisher's exact (2×2 — fully valid). |
 | Section 5C (4 × 10) | Descriptive + Kruskal-Wallis omnibus only. No pairwise tests. |
 | Section 5D (2×2) | Descriptive interaction pattern + cell means. Interaction not tested. |
+| Section 8 (qualitative) | Interpretive / illustrative. 8A–8C LLM-assisted coding (disclosed, cached, spot-checkable), 8D deterministic linguistic features, 8E descriptive qual×quant cross-tabs. No hypothesis tests; explicitly hypothesis-generating. n=20. |
 
 Every test-bearing figure/table caption states **"exploratory; small
 sample"**. No confirmatory language anywhere. No three-way analyses
-(mode × role × personality cells drop to 2–4).
+(mode × role × personality cells drop to 2–4). Qualitative findings are
+framed as illustrative/hypothesis-generating, never as evidence.
 
 ---
 
@@ -165,6 +231,10 @@ sample"**. No confirmatory language anywhere. No three-way analyses
   consistent across every figure. Condition→colour mapping fixed so the
   same colour means the same group in every figure.
 - All figures exported as 300-dpi PNG (embedded in `.docx`) + SVG.
+- **Qualitative coding:** Anthropic Python SDK (`anthropic` package) in
+  the one-shot `code_qualitative.py` only. The report build itself has
+  **no LLM dependency** — it reads the cached coding sheet. Linguistic
+  features (8D) use deterministic lexicons/regex, no SDK.
 
 ---
 
@@ -175,11 +245,19 @@ sample"**. No confirmatory language anywhere. No three-way analyses
 | `docs/reports/2026-05-15-human-pilot-data-report.docx` | The report |
 | `docs/reports/figures-human-pilot/*.png` / `.svg` | Every figure |
 | `docs/reports/tables-human-pilot/*.csv` | Every table |
-| `scripts/analysis/human_pilot/` | Analytic package (loader for the SQLite snapshot, sections, figure builders, docx assembler) |
+| `docs/reports/tables-human-pilot/qual_coding_sheet.csv` | Committed, human-checkable: every coded text + its codes |
+| `scripts/analysis/human_pilot/` | Analytic package (loader, tables, figures, qual coder, docx assembler) |
+| `scripts/analysis/human_pilot/code_qualitative.py` | One-shot LLM coder → cached coding sheet |
 | `data/ai2ai-human-pilot-2026-05-15.db` | Frozen snapshot (gitignored, sha in §3) |
+| `data/qual-codes-2026-05-15.json` | Cached LLM coding output (gitignored, derived) |
 
-Single command `python -m scripts.analysis.human_pilot.report` rebuilds
-the entire `.docx` deterministically from the snapshot.
+Two commands:
+- `python -m scripts.analysis.human_pilot.code_qualitative` — one-shot,
+  needs `ANTHROPIC_API_KEY`; writes the cached coding sheet. Idempotent
+  (skips if cache exists unless `--force`).
+- `python -m scripts.analysis.human_pilot.report` — rebuilds the entire
+  `.docx` deterministically + offline from the snapshot + the cached
+  coding sheet.
 
 ---
 
@@ -208,18 +286,33 @@ the entire `.docx` deterministically from the snapshot.
    Fisher's exact.
 6. No manuscript scaffolding (no Abstract/Intro/Method/Discussion).
 7. Section 7 inventory present and accurate.
+8. Section 8 present with 8A–8E. 8D renders deterministically with no
+   LLM. 8A/8B/8C/8E render from the cached coding sheet, or — if the
+   cache is absent — show the explicit "coding not yet run" note (build
+   never crashes on a missing cache).
+9. `qual_coding_sheet.csv` is committed (every coded text + its codes,
+   spot-checkable). The LLM-coding disclosure paragraph is present in
+   Section 8.
+10. The report build has zero LLM/network dependency; only
+    `code_qualitative.py` calls the Anthropic SDK.
 
 ---
 
 ## 10. Self-review pass
 
-- **Placeholders:** none. Every section + figure/table enumerated. The
-  only "if present" is tokens/cost in §4 Section 6 — handled gracefully
-  (omit the block if the snapshot lacks token columns).
+- **Placeholders:** none. Every section + figure/table enumerated. Two
+  graceful conditionals: tokens/cost in §4 S6 (omit if absent — column
+  verified present), and the qual cache in §4 S8 (explicit note if
+  absent; 8D unaffected).
 - **Internal consistency:** sample = 40 everywhere; outcome counts
   (27/9/3/1) consistent §2 ↔ §4 Section 3. Contrast Ns (20 vs 20 in
-  5A/5B, 10×4 in 5C) consistent with the §2 grid.
-- **Scope:** single `.docx`, one analytic package, one snapshot. Not
-  decomposable further.
+  5A/5B, 10×4 in 5C) consistent with the §2 grid. Qual n=20 (agent-mode
+  prompts) / 20 (all comments) consistent with the verified data read.
+- **Scope:** single `.docx`, one analytic package, one snapshot, plus a
+  separate one-shot qual coder whose output is cached + committed. The
+  qual coder is the only LLM/network surface; cleanly isolated so the
+  report build stays deterministic. Not decomposable further.
 - **Ambiguity:** "completed" pinned to completion_code non-null in §2.
   "Exploratory only" pinned in §5. Visualisation libraries pinned in §6.
+  Qual reproducibility model (one-shot cache + deterministic build)
+  pinned in §4 S8 + §7 + §9.
