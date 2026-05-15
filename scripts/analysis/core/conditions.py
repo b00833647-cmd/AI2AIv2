@@ -34,13 +34,24 @@ _MAIN_ONLY = [
 ]
 
 
+def _table_columns(con: sqlite3.Connection, table: str) -> set[str]:
+    """Return the set of column names present in *table*."""
+    return {r[1] for r in con.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
 def resolve_conditions(con: sqlite3.Connection) -> pd.DataFrame:
+    # Build SELECT dynamically: columns that don't exist in the schema are
+    # substituted with NULL so the same code handles both the legacy pilot DB
+    # (no condition_* / assignment_* / excl_* columns) and the main-study DB.
+    _new_cols = [
+        "condition_mode", "condition_role", "opponent_block",
+    ] + _MAIN_ONLY
+    present = _table_columns(con, "study_participants")
+    new_col_sql = ", ".join(
+        col if col in present else f"NULL AS {col}" for col in _new_cols
+    )
     sp = pd.read_sql_query(
-        """SELECT id AS participant_id, role, experiment_mode,
-                  condition_mode, condition_role, opponent_block,
-                  assignment_seed, assignment_block_index, replicate_id,
-                  manipulation_check_pass, excl_attention, excl_manipulation,
-                  excl_speeding, excl_comprehension, excl_noncompletion
+        f"""SELECT id AS participant_id, role, experiment_mode, {new_col_sql}
              FROM study_participants
             WHERE completion_code IS NOT NULL AND completion_code != ''""",
         con,

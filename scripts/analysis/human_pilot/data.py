@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from scripts.analysis.core.conditions import resolve_conditions
+
 SNAPSHOT = "data/ai2ai-human-pilot-2026-05-15.db"
 N_COMPLETERS_EXPECTED = 40
 
@@ -51,22 +53,16 @@ def completers_frame(con: sqlite3.Connection) -> pd.DataFrame:
     )
     sess = pd.read_sql_query("SELECT * FROM sessions", con)
 
-    pers = pd.read_sql_query(
-        f"""SELECT participant_id, value_text AS opponent_personality
-              FROM participant_responses
-             WHERE screen='engine' AND key='opponent_personality'
-               AND participant_id IN ({qmarks})""",
-        con, params=ids,
-    )
-
     df = sp.merge(
         sess[["id", "outcome_type", "outcome_terms_json", "turns_consumed",
               "started_at", "ended_at", "tokens_total"]],
         left_on="session_id", right_on="id", how="left", suffixes=("", "_sess"),
-    ).merge(pers, left_on="id", right_on="participant_id", how="left")
+    )
 
     df["participant_id"] = df["id"]
-    df["mode2"] = df["experiment_mode"].map(_MODE2)
+    _cond = resolve_conditions(con).rename(
+        columns={"opponent_block": "opponent_personality"})
+    df = df.merge(_cond, on="participant_id", how="left")
 
     def _price(j):
         try:
