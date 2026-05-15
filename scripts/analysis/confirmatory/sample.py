@@ -6,6 +6,7 @@ Consumes the canonical 4a reader (scripts.analysis.core.conditions).
 from __future__ import annotations
 
 import json
+import sqlite3
 
 import pandas as pd
 
@@ -26,12 +27,18 @@ _STRATA = [(m, r, o) for m in ("delegated", "direct")
 def _price(j):
     try:
         v = json.loads(j or "{}").get("price")
-        return float(v) if isinstance(v, (int, float)) else None
+        if isinstance(v, bool):
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        if isinstance(v, str):
+            return float(v)
+        return None
     except Exception:
         return None
 
 
-def analyzable(con):
+def analyzable(con: sqlite3.Connection) -> tuple[pd.DataFrame, pd.DataFrame, bool]:
     """Return (frame, exclusions_audit, clean).
 
     frame: one row per ANALYZABLE completer — condition columns (4a) +
@@ -68,8 +75,10 @@ def analyzable(con):
     audit_rows = []
     keep = pd.Series(True, index=df.index)
     for col in _EXCL_COLS:
-        flagged = df[col].fillna(0).astype("float") == 1 if col in df else \
-                  pd.Series(False, index=df.index)
+        if col not in df.columns:
+            audit_rows.append({"reason": col, "n": None})  # screening not applied
+            continue
+        flagged = df[col].fillna(0).astype("float") == 1
         audit_rows.append({"reason": col, "n": int(flagged.sum())})
         keep &= ~flagged
     mc = (df["manipulation_check_pass"] if "manipulation_check_pass" in df
@@ -85,8 +94,7 @@ def analyzable(con):
     excl_present = all(out[c].notna().all() for c in _EXCL_COLS if c in out) \
         and ("manipulation_check_pass" in out
              and out["manipulation_check_pass"].notna().all())
-    present = {(r.condition_mode, r.condition_role, r.opponent_block)
-               for r in out.itertuples(index=False)}
+    present = set(zip(out["condition_mode"], out["condition_role"], out["opponent_block"]))
     balanced = all(s in present for s in _STRATA)
     clean = bool(all_main and excl_present and balanced)
 

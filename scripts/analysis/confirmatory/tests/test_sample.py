@@ -1,6 +1,6 @@
 import sqlite3
 import pandas as pd
-from scripts.analysis.confirmatory.sample import analyzable
+from scripts.analysis.confirmatory.sample import analyzable, _EXCL_COLS
 
 DDL = """
 CREATE TABLE study_participants (
@@ -58,7 +58,9 @@ def test_main_excludes_flagged_and_is_clean_when_balanced():
     assert df.loc[df["participant_id"] == "M1", "satisfaction"].iloc[0] == 5
     assert df.loc[df["participant_id"] == "M1", "outcome_type"].iloc[0] == "agreed"
     assert df.loc[df["participant_id"] == "M1", "final_price"].iloc[0] == 23000
-    assert clean in (True, False)
+    # clean True-path is asserted in Task 3's battery test; not asserted here
+    _ = clean
+    assert list(audit["reason"]) == _EXCL_COLS + ["manipulation_check_fail"]
 
 
 def test_legacy_is_not_clean_and_keeps_completers():
