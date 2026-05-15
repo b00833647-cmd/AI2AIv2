@@ -300,10 +300,10 @@ async function main(): Promise<void> {
       p.createStudyParticipant({ id: "P1" });
       p.setManipulationCheck("P1", true);
       check("manip pass=1",
-        (p.getStudyParticipant("P1") as any).manipulation_check_pass === 1);
+        p.getStudyParticipant("P1")!.manipulation_check_pass === 1);
       p.setManipulationCheck("P1", false);
       check("manip pass=0",
-        (p.getStudyParticipant("P1") as any).manipulation_check_pass === 0);
+        p.getStudyParticipant("P1")!.manipulation_check_pass === 0);
     } finally { p.close(); }
   }
 

@@ -553,6 +553,7 @@ export class SqlitePersistence implements Persistence {
     assignment_seed: string | null;
     assignment_block_index: number | null;
     replicate_id: number | null;
+    manipulation_check_pass: number | null;
   } | undefined {
     return this.db
       .prepare(
@@ -597,6 +598,7 @@ export class SqlitePersistence implements Persistence {
           assignment_seed: string | null;
           assignment_block_index: number | null;
           replicate_id: number | null;
+          manipulation_check_pass: number | null;
         }
       | undefined;
   }
