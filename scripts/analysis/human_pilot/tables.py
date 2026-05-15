@@ -56,80 +56,62 @@ def outcome_descriptives(con) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def survey_descriptives(con) -> pd.DataFrame:
-    s = survey_long(con)
-    s = s[s["key"].isin(V2_SURVEY_KEYS) & s["value_int"].notna()]
-    rows = []
-    for (item, mode2), g in s.groupby(["key", "mode2"]):
-        v = g["value_int"].astype(float)
-        rows.append({
-            "item": item, "mode2": mode2, "n": len(v),
-            "M": round(v.mean(), 2), "SD": round(v.std(), 2),
-            "Mdn": float(v.median()),
-            "IQR": f"{v.quantile(.25):.0f}-{v.quantile(.75):.0f}",
-        })
-    return pd.DataFrame(rows).sort_values(["item", "mode2"]).reset_index(drop=True)
-
-
-def _delta_ci(a, b, n_boot: int = 1000, seed: int = 42):
-    """Two-sample percentile bootstrap CI for Cliff's delta: resample
-    each group independently with replacement, recompute delta."""
-    rng = np.random.default_rng(seed)
-    A = np.asarray(a, dtype=float)
-    B = np.asarray(b, dtype=float)
-    boots = [
-        cliff_delta(rng.choice(A, A.size, replace=True),
-                    rng.choice(B, B.size, replace=True))
-        for _ in range(n_boot)
-    ]
-    return float(np.percentile(boots, 2.5)), float(np.percentile(boots, 97.5))
-
-
-def _two_group_survey(con, group_col: str, a_label, b_label) -> pd.DataFrame:
+def dv_group_descriptives(con) -> pd.DataFrame:
     s = survey_long(con)
     s = s[s["key"].isin(V2_SURVEY_KEYS) & s["value_int"].notna()].copy()
+    s["value_int"] = s["value_int"].astype(float)
+    prio = set(V2_SURVEY_KEYS[:4])
+    order = {k: i for i, k in enumerate(V2_SURVEY_KEYS)}
+    rows = []
+    for dv in V2_SURVEY_KEYS:
+        sub = s[s["key"] == dv]
+        for (m2, role), g in sub.groupby(["mode2", "role"]):
+            v = g["value_int"]
+            rows.append({
+                "dv": dv, "priority": dv in prio, "mode2": m2, "role": role,
+                "n": int(len(v)), "M": round(float(v.mean()), 2),
+                "SD": round(float(v.std()), 2), "Mdn": float(v.median()),
+                "IQR": f"{v.quantile(.25):.0f}-{v.quantile(.75):.0f}",
+            })
+    df = pd.DataFrame(rows)
+    df["_o"] = df["dv"].map(order)
+    return (df.sort_values(["_o", "mode2", "role"])
+              .drop(columns="_o").reset_index(drop=True))
+
+
+def srh_results(con) -> pd.DataFrame:
+    from scripts.analysis.human_pilot.stats_ext import scheirer_ray_hare
+    s = survey_long(con)
+    s = s[s["key"].isin(V2_SURVEY_KEYS) & s["value_int"].notna()].copy()
+    s["value_int"] = s["value_int"].astype(float)
+    prio = set(V2_SURVEY_KEYS[:4])
     out = []
-    for item in V2_SURVEY_KEYS:
-        sub = s[s["key"] == item]
-        a = sub[sub[group_col] == a_label]["value_int"].astype(float).tolist()
-        b = sub[sub[group_col] == b_label]["value_int"].astype(float).tolist()
-        if len(a) < 3 or len(b) < 3:
-            continue
-        d = cliff_delta(a, b)
-        lo, hi = _delta_ci(a, b)
-        mw = mann_whitney(a, b)
-        out.append({"item": item, "n_a": len(a), "n_b": len(b),
-                    "delta": d, "ci_lo": lo, "ci_hi": hi, "p_mw": mw["p"]})
-    df = pd.DataFrame(out)
-    if not df.empty:
-        df["q_bh"] = fdr_bh(df["p_mw"].tolist())
-    return df
+    for dv in V2_SURVEY_KEYS:
+        r = scheirer_ray_hare(s[s["key"] == dv], "value_int", "mode2", "role")
+        out.append({
+            "dv": dv, "priority": dv in prio,
+            "mode_H": round(r["A"]["H"], 3), "mode_p": round(r["A"]["p"], 4),
+            "mode_eta2": round(r["A"]["eta2"], 3),
+            "role_H": round(r["B"]["H"], 3), "role_p": round(r["B"]["p"], 4),
+            "role_eta2": round(r["B"]["eta2"], 3),
+            "inter_H": round(r["AB"]["H"], 3), "inter_p": round(r["AB"]["p"], 4),
+            "inter_eta2": round(r["AB"]["eta2"], 3), "N": r["N"],
+        })
+    return pd.DataFrame(out)
 
 
-def comparison_mode(con) -> pd.DataFrame:
+def agreement_2x2(con) -> dict:
     df = completers_frame(con)
-    ai = df[df["mode2"] == "AI-to-AI"]
-    hu = df[df["mode2"] == "Human-to-AI"]
-    fisher = fisher_2x2(
-        success_a=int((ai["outcome_type"] == "agreed").sum()), n_a=len(ai),
-        success_b=int((hu["outcome_type"] == "agreed").sum()), n_b=len(hu),
-    )
-    items = _two_group_survey(con, "mode2", "AI-to-AI", "Human-to-AI")
-    items.attrs["fisher"] = fisher
-    return items
 
+    def _f(col, la, lb):
+        ga = df[df[col] == la]
+        gb = df[df[col] == lb]
+        return fisher_2x2(
+            success_a=int((ga["outcome_type"] == "agreed").sum()), n_a=len(ga),
+            success_b=int((gb["outcome_type"] == "agreed").sum()), n_b=len(gb))
 
-def comparison_role(con) -> pd.DataFrame:
-    df = completers_frame(con)
-    bu = df[df["role"] == "buyer"]
-    se = df[df["role"] == "seller"]
-    fisher = fisher_2x2(
-        success_a=int((bu["outcome_type"] == "agreed").sum()), n_a=len(bu),
-        success_b=int((se["outcome_type"] == "agreed").sum()), n_b=len(se),
-    )
-    items = _two_group_survey(con, "role", "buyer", "seller")
-    items.attrs["fisher"] = fisher
-    return items
+    return {"by_mode": _f("mode2", "AI-to-AI", "Human-to-AI"),
+            "by_role": _f("role", "buyer", "seller")}
 
 
 def data_quality(con) -> pd.DataFrame:

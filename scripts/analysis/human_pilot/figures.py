@@ -15,7 +15,6 @@ from scripts.analysis.human_pilot.palette import (
     MODE2_COLORS, ROLE_COLORS, CELL_COLORS, OUTCOME_COLORS,
 )
 from scripts.analysis.human_pilot.figbase import apply_theme, save, save_plotnine
-from scripts.analysis.human_pilot.tables import comparison_mode, comparison_role
 
 
 def fig_funnel(con) -> Path:
@@ -98,52 +97,6 @@ def fig_price(con) -> Path:
     return save(fig, "fig3_price", aspect=0.6)
 
 
-def fig_survey_forest(con) -> Path:
-    apply_theme()
-    s = survey_long(con)
-    s = s[s["key"].isin(V2_SURVEY_KEYS) & s["value_int"].notna()]
-    agg = (s.groupby(["key", "mode2"])["value_int"]
-             .agg(["mean", "count", "std"]).reset_index())
-    agg["se"] = agg["std"] / np.sqrt(agg["count"])
-    fig, ax = plt.subplots()
-    items = V2_SURVEY_KEYS
-    y = np.arange(len(items))
-    for i, m2 in enumerate(["AI-to-AI", "Human-to-AI"]):
-        sub = agg[agg["mode2"] == m2].set_index("key").reindex(items)
-        off = (i - 0.5) * 0.25
-        ax.errorbar(sub["mean"], y + off, xerr=1.96 * sub["se"],
-                    fmt="o", color=MODE2_COLORS[m2], label=m2, capsize=2)
-    ax.set_yticks(y); ax.set_yticklabels(items, fontsize=8)
-    ax.set_xlim(1, 7); ax.invert_yaxis()
-    ax.set_xlabel("mean (1–7) ± 95% CI")
-    ax.set_title("Survey items by mode")
-    ax.legend(fontsize=8)
-    return save(fig, "fig4_survey_forest", aspect=0.75)
-
-
-def fig_comparison_delta(con, which: str) -> Path:
-    apply_theme()
-    tbl = comparison_mode(con) if which == "mode" else comparison_role(con)
-    tbl = tbl.sort_values("delta")
-    fig, ax = plt.subplots()
-    y = np.arange(len(tbl))
-    colors = ["#000000" if q < 0.05 else "#999999" for q in tbl["q_bh"]]
-    err_lo = np.maximum(0, tbl["delta"].values - tbl["ci_lo"].values)
-    err_hi = np.maximum(0, tbl["ci_hi"].values - tbl["delta"].values)
-    deltas = tbl["delta"].values
-    items_list = tbl["item"].tolist()
-    for i, (xi, elo, ehi, col) in enumerate(zip(deltas, err_lo, err_hi, colors)):
-        ax.errorbar(xi, y[i], xerr=[[elo], [ehi]],
-                    fmt="o", ecolor=col, mfc=col, mec=col, capsize=2, lw=1)
-    ax.axvline(0, ls="--", color="grey", lw=0.6)
-    ax.set_yticks(y); ax.set_yticklabels(tbl["item"], fontsize=8)
-    ax.set_xlim(-1, 1)
-    label = "AI-to-AI vs Human-to-AI" if which == "mode" else "Buyer vs Seller"
-    ax.set_xlabel("Cliff's δ (95% bootstrap CI)")
-    ax.set_title(f"Per-item effect — {label}\n(black = q<.05 BH-FDR; exploratory, small N)")
-    return save(fig, f"fig5_delta_{which}", aspect=0.7)
-
-
 def fig_interaction(con) -> Path:
     apply_theme()
     df = completers_frame(con)
@@ -177,9 +130,6 @@ ALL_FIGURES = [
     ("fig2_age", fig_age),
     ("fig3_outcomes", fig_outcomes),
     ("fig3_price", fig_price),
-    ("fig4_survey_forest", fig_survey_forest),
-    ("fig5_delta_mode", lambda c: fig_comparison_delta(c, "mode")),
-    ("fig5_delta_role", lambda c: fig_comparison_delta(c, "role")),
     ("fig5_interaction", fig_interaction),
     ("fig6_prompt_len", fig_prompt_len),
 ]

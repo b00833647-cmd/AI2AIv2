@@ -22,19 +22,6 @@ def test_outcome_descriptives_four_cells():
     assert "agreement_rate" in t.columns
     assert len(t) == 4
 
-def test_survey_descriptives_nine_items():
-    t = T.survey_descriptives(m_con())
-    assert t["item"].nunique() == 9
-
-def test_comparison_mode_has_fisher_attr():
-    t = T.comparison_mode(m_con())
-    assert "fisher" in t.attrs
-    assert "p" in t.attrs["fisher"]
-
-def test_comparison_role_has_fisher_attr():
-    t = T.comparison_role(m_con())
-    assert "fisher" in t.attrs
-
 def test_variable_inventory_nonempty():
     t = T.variable_inventory(m_con())
     assert len(t) >= 5 and {"variable", "n"} <= set(t.columns)
@@ -42,3 +29,31 @@ def test_variable_inventory_nonempty():
 def test_data_quality_nonempty():
     t = T.data_quality(m_con())
     assert len(t) >= 1 and {"metric", "value"} <= set(t.columns)
+
+
+def test_dv_group_descriptives_shape():
+    t = T.dv_group_descriptives(m_con())
+    assert len(t) == 36  # 9 DVs × 4 cells
+    assert set(["dv", "priority", "mode2", "role", "n", "M", "SD", "Mdn", "IQR"]) <= set(t.columns)
+    assert t["n"].tolist() == [10] * 36
+    assert t[t["priority"]]["dv"].nunique() == 4
+
+
+def test_srh_results_shape():
+    t = T.srh_results(m_con())
+    assert len(t) == 9
+    cols = {"dv", "priority", "mode_H", "mode_p", "mode_eta2", "role_H",
+            "role_p", "role_eta2", "inter_H", "inter_p", "inter_eta2", "N"}
+    assert cols <= set(t.columns)
+    for c in ("mode_p", "role_p", "inter_p"):
+        assert ((t[c] >= 0) & (t[c] <= 1)).all()
+    assert (t["N"] == 40).all()
+    assert t["priority"].sum() == 4
+
+
+def test_agreement_2x2_dict():
+    a = T.agreement_2x2(m_con())
+    assert set(a) == {"by_mode", "by_role"}
+    for k in ("by_mode", "by_role"):
+        assert {"odds_ratio", "p", "rate_a", "rate_b"} <= set(a[k])
+        assert 0.0 <= a[k]["p"] <= 1.0
