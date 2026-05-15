@@ -15,8 +15,8 @@ from scripts.analysis.core.stats import (
 )
 
 SECONDARY_SURVEY = [
-    "would_use_again", "agent_represented", "control", "emot_pleasant",
-    "emot_anxious", "effort_invested", "engage_engaged", "outfair_share",
+    "would_use_again", "control", "emot_pleasant", "emot_anxious",
+    "effort_invested", "engage_engaged", "outfair_share",
 ]
 
 
@@ -27,6 +27,7 @@ def _mode_split(df: pd.DataFrame, dv: str):
 
 
 def _cliffs_ci(a, b, n_boot: int = 1000, seed: int = 42):
+    """Two-sample percentile bootstrap CI for Cliff's δ. core.bootstrap_ci is single-sample only, so a joint two-array resample is done here."""
     rng = np.random.default_rng(seed)
     A = pd.Series(a, dtype=float).dropna().to_numpy()
     B = pd.Series(b, dtype=float).dropna().to_numpy()
@@ -59,13 +60,12 @@ def run_battery(sample: pd.DataFrame) -> dict:
         row = {"dv": dv, "test": "mann_whitney_two_sided", "p": m["p"],
                "cliffs_delta": float(cliff_delta(x, y)),
                "n_a": m["n_a"], "n_b": m["n_b"]}
-        if dv == "agent_represented":
-            row["caveat"] = "delegated-only (not comparable in direct)"
         fam.append(row)
     px, py = _mode_split(sample, "final_price")
     pm = mann_whitney(px, py, alternative="two-sided")
     fam.append({"dv": "final_price", "test": "mann_whitney_two_sided",
-                "p": pm["p"], "n_a": pm["n_a"], "n_b": pm["n_b"]})
+                "p": pm["p"], "cliffs_delta": float(cliff_delta(px, py)),
+                "n_a": pm["n_a"], "n_b": pm["n_b"]})
     deleg = sample[sample["condition_mode"] == "delegated"]
     direct = sample[sample["condition_mode"] == "direct"]
     fr = fisher_2x2(int((deleg["outcome_type"] == "agreed").sum()), len(deleg),
@@ -84,6 +84,18 @@ def run_battery(sample: pd.DataFrame) -> dict:
                "note": "controlled covariate, not a factor of interest",
                **opp}
 
+    ar = sample.loc[sample["condition_mode"] == "delegated",
+                    "agent_represented"].astype(float).dropna()
+    delegated_only = {
+        "dv": "agent_represented",
+        "caveat": "delegated-only (not comparable in direct); reported "
+                  "descriptively, excluded from the BH secondary family",
+        "n": int(ar.size),
+        "mean": float(ar.mean()) if ar.size else float("nan"),
+        "median": float(ar.median()) if ar.size else float("nan"),
+    }
+
     return {"primary": primary, "srh": srh, "secondary": fam,
             "opponent_sensitivity": opp_out,
+            "delegated_only": delegated_only,
             "exploratory": {"label": "exploratory, uncorrected", "items": []}}

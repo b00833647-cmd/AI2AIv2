@@ -17,7 +17,7 @@ def _clean_sample(seed=1):
                         "opponent_block": o, "condition_source": "main",
                         "mode2": "AI-to-AI" if m == "delegated" else "Human-to-AI",
                         "outcome_type": "agreed" if rng.random() < 0.6 else "rejected",
-                        "final_price": 23000.0,
+                        "final_price": float(rng.normal(23000, 500)),
                         "satisfaction": float(np.clip(round(sat), 1, 7)),
                         "would_use_again": float(rng.integers(1, 8)),
                         "agent_represented": float(rng.integers(1, 8)),
@@ -47,9 +47,14 @@ def test_battery_structure_and_primary_detects_injected_effect():
                for r in fam)
     assert res["opponent_sensitivity"]["test"] == "kruskal_wallis"
     assert res["exploratory"]["label"] == "exploratory, uncorrected"
+    assert "agent_represented" not in {r["dv"] for r in res["secondary"]}
 
 
-def test_battery_marks_agent_represented_delegated_only():
+def test_agent_represented_is_delegated_only_not_in_bh_family():
     res = run_battery(_clean_sample())
-    ar = [r for r in res["secondary"] if r["dv"] == "agent_represented"][0]
-    assert ar.get("caveat") == "delegated-only (not comparable in direct)"
+    fam_dvs = {r["dv"] for r in res["secondary"]}
+    assert "agent_represented" not in fam_dvs          # excluded from BH family
+    do = res["delegated_only"]
+    assert do["dv"] == "agent_represented"
+    assert "delegated-only" in do["caveat"]
+    assert do["n"] > 0 and 1.0 <= do["mean"] <= 7.0
