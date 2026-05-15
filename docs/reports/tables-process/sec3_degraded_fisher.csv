@@ -1,0 +1,3 @@
+contrast,succ_a,n_a,rate_a,succ_b,n_b,rate_b,odds_ratio,p
+Mode (AI-to-AI vs Human-to-AI),0,20,0.0,2,20,0.1,0.0,0.4872
+Role (buyer vs seller),0,20,0.0,2,20,0.1,0.0,0.4872

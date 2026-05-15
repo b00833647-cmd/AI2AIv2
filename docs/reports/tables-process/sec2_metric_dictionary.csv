@@ -1,0 +1,8 @@
+name,definition,source,type
+median_latency_ms,"session median of per-turn latency_ms (think+type for humans, model time for agents)",turns.latency_ms,continuous
+mean_latency_ms,session mean of per-turn latency_ms,turns.latency_ms,continuous
+negotiation_duration_s,"sessions.ended_at - started_at, in seconds",sessions timestamps,continuous
+time_to_deal_s,seconds from first turn to the closing accept (NaN if no deal),turns timestamps,continuous
+tokens_total,total LLM tokens consumed in the session,sessions.tokens_total,count
+orch_token_share,tokens_orchestrator / tokens_total (referee overhead share),sessions token fields,"ratio [0,1]"
+tokens_per_turn,tokens_total / turns_consumed,sessions fields,continuous

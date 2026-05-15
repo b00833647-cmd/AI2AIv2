@@ -1,0 +1,10 @@
+name,definition,source,type
+opening_spread,seller_open - buyer_open: distance between the two sides' first priced proposals,turns.tool_calls_json (submit_proposal),continuous
+anchor_distance,|own opening price - own scenario target|: how far the opener anchored from its brief target,turns + fixed Camry scenario brief,continuous
+n_concessions,count of the focal side's own moves in the conceding direction across proposal rounds,ordered proposal stream,count
+mean_concession,mean |price step| of the focal side's conceding moves (USD),ordered proposal stream,continuous
+concession_rate,focal side's total concession / number of proposal rounds (USD per round),ordered proposal stream,continuous
+buyer_share_concession,buyer total concession / (buyer + seller total concession),ordered proposal stream,"ratio [0,1]"
+n_proposal_rounds,count of priced submit_proposal calls in the session,turns.tool_calls_json,count
+turns_to_deal,turn number of the accept that closed an agreed session (NaN if no deal),turns.tool_calls_json (accept),count
+n_final_offers,count of proposals flagged is_final=true,turns.tool_calls_json,count

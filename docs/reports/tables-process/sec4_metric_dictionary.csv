@@ -1,0 +1,11 @@
+name,definition,source,type
+total_active_s,sum of screen_exit.dwellMs over all screens (seconds),participant_events (screen_exit),continuous
+engine_dwell_s,screen_exit.dwellMs summed on the live-negotiation screen (seconds),participant_events (screen_exit),continuous
+total_idle_s,sum of idle_end.idleMs (seconds of detected inactivity),participant_events (idle_end),continuous
+n_tab_away,count of visibility_change events with hidden=true,participant_events (visibility_change),count
+n_thumbnail_views,count of listing_thumbnail_view events,participant_events,count
+n_zoom_opens,count of listing_zoom_open events,participant_events,count
+n_clicks,count of click events,participant_events,count
+mean_scroll_pct,mean of per-screen max scroll.maxPct,participant_events (scroll),continuous
+mean_compose_s,mean seconds from human_turn_input_enabled to the following human_turn_submitted (Human-to-AI only),participant_events,continuous
+mean_charcount,mean charCount of human_turn_submitted (Human-to-AI only),participant_events,continuous

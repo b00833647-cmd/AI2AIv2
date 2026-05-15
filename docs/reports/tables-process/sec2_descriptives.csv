@@ -1,0 +1,5 @@
+cell,median_latency_ms,mean_latency_ms,negotiation_duration_s,time_to_deal_s,tokens_total,orch_token_share,tokens_per_turn
+AI-to-AI · buyer,7039.5,7383.9409,150.4195,136.367,85634.5,0.729,5787.5412
+AI-to-AI · seller,7625.75,7477.4062,163.6255,150.8195,95908.5,0.7414,6147.3346
+Human-to-AI · buyer,21865.5,35940.0,388.8565,325.345,27775.5,0.8465,3086.1667
+Human-to-AI · seller,10023.0,30057.325,349.4945,300.144,21790.5,0.8438,2555.9167

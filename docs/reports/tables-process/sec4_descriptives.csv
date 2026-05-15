@@ -1,0 +1,5 @@
+cell,total_active_s,engine_dwell_s,total_idle_s,n_tab_away,n_thumbnail_views,n_zoom_opens,n_clicks,mean_scroll_pct
+AI-to-AI · buyer,635.187,156.9435,176.289,0.0,2.5,0.0,42.5,96.8571
+AI-to-AI · seller,681.8565,173.1255,184.755,0.0,0.0,0.0,39.0,95.4832
+Human-to-AI · buyer,629.831,393.705,92.316,0.0,3.5,0.0,52.5,97.5784
+Human-to-AI · seller,504.1685,353.525,71.593,0.0,0.0,0.0,41.0,100.0

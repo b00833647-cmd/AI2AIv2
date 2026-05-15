@@ -1,0 +1,5 @@
+cell,alternation_rate,longest_same_streak,declare_turn,declare_latency_s,rationale_len,orch_tokens_per_turn
+AI-to-AI · buyer,0.8516,2.0,14.5,4.888,323.0,4322.7941
+AI-to-AI · seller,0.9349,2.0,17.0,4.865,365.0,4611.2279
+Human-to-AI · buyer,1.0,1.0,10.0,4.229,363.5,2609.5222
+Human-to-AI · seller,1.0,1.0,10.5,4.183,247.0,2173.6875

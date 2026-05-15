@@ -1,0 +1,8 @@
+name,definition,source,type
+alternation_rate,fraction of consecutive request_turn routes that switch side,orchestrator_decisions (request_turn),"ratio [0,1]"
+longest_same_streak,longest run of consecutive routes to the same side,orchestrator_decisions (request_turn),count
+declare_turn,turn_number at the declare_outcome decision,orchestrator_decisions (declare_outcome),count
+declare_latency_s,seconds between the last turn and the declare_outcome decision,orchestrator_decisions + turns ts,continuous
+rationale_len,character length of the declare_outcome rationale text,orchestrator_decisions.rationale,count
+orch_tokens_per_turn,tokens_orchestrator / turns_consumed (per-turn referee cost),sessions fields,continuous
+degraded,session-level degraded flag (binary; Fisher 2x2),sessions.degraded,binary
