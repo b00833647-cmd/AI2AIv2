@@ -499,6 +499,38 @@ async function main(): Promise<void> {
       modeOverrideAllowed({ condition_mode: null, test_data: 0 }) === true);
   }
 
+  console.log("\n# clean-design: end-to-end balance\n");
+  {
+    const d = mkdtempSync(path.join(tmpdir(), "ai2ai-cd-"));
+    const p = openPersistence(path.join(d, "cd.db"));
+    try {
+      // 24 research claims = 2 full blocks ⇒ each of 12 strata exactly twice.
+      for (let i = 0; i < 24; i++) {
+        p.createStudyParticipant({ id: `R${i}` });
+        claimSeededAssignment(p, `R${i}`, "studySeed");
+      }
+      // 1 debug participant must NOT perturb the sequence/counts.
+      p.createStudyParticipant({ id: "D1" });
+      p.setTestData("D1", true);
+      p.recordAssignment("D1", {
+        conditionMode: "delegated", conditionRole: "buyer",
+        opponentBlock: "moderate", assignmentSeed: "debug:studySeed",
+        assignmentBlockIndex: -1, replicateId: -1,
+        assignedAt: "2026-05-15T00:00:00.000Z",
+      });
+      const counts = (p as any)["db"].prepare(
+        `SELECT sp.condition_mode m, sp.condition_role r, sp.opponent_block o,
+                COUNT(*) n
+           FROM study_participants sp
+          WHERE sp.test_data = 0 AND sp.condition_mode IS NOT NULL
+          GROUP BY m, r, o`).all() as Array<{ n: number }>;
+      check("12 research cells populated", counts.length === 12);
+      check("every cell has exactly 2", counts.every((c) => c.n === 2));
+      check("net position back-computes to 24",
+        p.netResearchAssignmentPosition() === 24);
+    } finally { p.close(); }
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }
