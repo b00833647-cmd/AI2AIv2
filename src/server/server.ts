@@ -1114,6 +1114,9 @@ async function handleParticipantStart(req: http.IncomingMessage, res: http.Serve
 
   const ua = body.userAgent ?? "";
   const { browser, os, deviceType } = parseUserAgent(ua);
+  const entry = resolveEntry(typeof body.entry === "string" ? body.entry : "/");
+  // boot's validateBootEnv() already fails fast if this is unset, so this never throws here — it just reads the canonical trimmed seed.
+  const seed = requireAssignmentSeed(process.env["AI2AI_ASSIGNMENT_SEED"]);
   withDb((db) => {
     db.createStudyParticipant({ id, userAgent: ua });
     db.updateStudyParticipant(id, {
@@ -1137,10 +1140,6 @@ async function handleParticipantStart(req: http.IncomingMessage, res: http.Serve
       prolific_study_id:   cleanStudyId,
       prolific_session_id: cleanSessionId,
     } as Parameters<typeof db.updateStudyParticipant>[1]);
-  });
-  const entry = resolveEntry(typeof body.entry === "string" ? body.entry : "/");
-  const seed = requireAssignmentSeed(process.env["AI2AI_ASSIGNMENT_SEED"]);
-  withDb((db) => {
     if (entry.kind === "debug") {
       db.setTestData(id, true);
       db.recordAssignment(id, {

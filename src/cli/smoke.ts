@@ -468,6 +468,10 @@ async function main(): Promise<void> {
       === JSON.stringify({ kind: "debug", conditionMode: "delegated", conditionRole: "buyer" }));
     check("/shx → debug direct seller", JSON.stringify(resolveEntry("/shx"))
       === JSON.stringify({ kind: "debug", conditionMode: "direct", conditionRole: "seller" }));
+    check("/slx → debug delegated seller", JSON.stringify(resolveEntry("/slx"))
+      === JSON.stringify({ kind: "debug", conditionMode: "delegated", conditionRole: "seller" }));
+    check("/bhx → debug direct buyer", JSON.stringify(resolveEntry("/bhx"))
+      === JSON.stringify({ kind: "debug", conditionMode: "direct", conditionRole: "buyer" }));
     check("/ (neutral) → research", resolveEntry("/")?.kind === "research");
     check("/study → research", resolveEntry("/study")?.kind === "research");
   }
