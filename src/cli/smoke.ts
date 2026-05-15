@@ -8,7 +8,7 @@
 //   - Memory rendering produces a non-empty context.
 
 import { loadScenarioPack, validateScenarioPack, ScenarioValidationError } from "../multi-agent/scenario-loader.ts";
-import { nextAssignment, STRATA } from "../server/assignment.ts";
+import { nextAssignment, STRATA, claimSeededAssignment } from "../server/assignment.ts";
 import { openPersistence } from "../multi-agent/persistence.ts";
 import { validateOrchestratorToolCall } from "../multi-agent/orchestrator.ts";
 import { pickNextRoundRobin } from "../multi-agent/fallback-protocol.ts";
@@ -425,6 +425,29 @@ async function main(): Promise<void> {
     const order2 = Array.from({ length: 12 }, (_, i) =>
       JSON.stringify(nextAssignment("seedY", i)));
     check("different seed reorders block", order1.join() !== order2.join());
+  }
+
+  console.log("\n# clean-design: claimSeededAssignment\n");
+  {
+    const d = mkdtempSync(path.join(tmpdir(), "ai2ai-cd-"));
+    const p = openPersistence(path.join(d, "cd.db"));
+    try {
+      p.createStudyParticipant({ id: "P1" });
+      p.createStudyParticipant({ id: "P2" });
+      const a1 = claimSeededAssignment(p, "P1", "seedX");
+      const a2 = claimSeededAssignment(p, "P2", "seedX");
+      check("P1 = nextAssignment(seedX,0)",
+        JSON.stringify({ m: a1.conditionMode, r: a1.conditionRole, o: a1.opponentBlock })
+        === JSON.stringify({
+          m: nextAssignment("seedX", 0).conditionMode,
+          r: nextAssignment("seedX", 0).conditionRole,
+          o: nextAssignment("seedX", 0).opponentBlock }));
+      check("P2 consumed position 1",
+        p.getAssignment("P2")?.assignmentBlockIndex ===
+        nextAssignment("seedX", 1).assignmentBlockIndex);
+      check("seed persisted on row",
+        p.getAssignment("P1")?.assignmentSeed === "seedX");
+    } finally { p.close(); }
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

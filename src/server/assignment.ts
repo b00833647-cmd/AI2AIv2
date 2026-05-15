@@ -1,3 +1,5 @@
+import type { SqlitePersistence } from "../multi-agent/persistence.ts";
+
 // Seeded, deterministic permuted-block assignment over the 12 strata
 // (Mode × Role × Opponent). Pure: no I/O, no Date, no globals. Same
 // (seed, position) ⇒ identical output. Every block of 12 consecutive
@@ -79,4 +81,26 @@ export function nextAssignment(seed: string, position: number): Assignment {
     assignmentBlockIndex: blockIndex,
     replicateId: blockIndex, // each stratum appears once per block
   };
+}
+
+/** Atomically claim the next seeded assignment for a participant and
+ *  persist it. Randomization policy lives here; the storage layer only
+ *  provides the atomic read-position→write primitive. */
+export function claimSeededAssignment(
+  db: SqlitePersistence,
+  participantId: string,
+  seed: string,
+): Assignment {
+  return db.claimAssignment(participantId, (position) => {
+    const a = nextAssignment(seed, position);
+    return {
+      conditionMode: a.conditionMode,
+      conditionRole: a.conditionRole,
+      opponentBlock: a.opponentBlock,
+      assignmentSeed: seed,
+      assignmentBlockIndex: a.assignmentBlockIndex,
+      replicateId: a.replicateId,
+      assignedAt: new Date().toISOString(),
+    };
+  }) as unknown as Assignment;
 }
