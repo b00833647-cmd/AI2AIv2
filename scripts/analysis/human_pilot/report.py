@@ -135,9 +135,9 @@ def build():
     h1(doc, "7. What you can do with this data")
     t = T.variable_inventory(con); _csv(t, "tbl7_inventory")
     table(doc, t, "Table 7.1 — Analysable variables: now vs. when N grows.",
-          "At current N the report supports descriptives + the two 20-vs-20 "
-          "exploratory contrasts. Powered cell-level and 3-way analyses "
-          "require a larger sample.")
+          "At current N the report supports descriptives + per-DV "
+          "Scheirer–Ray–Hare 2×2 (exploratory). Powered cell-level and 3-way "
+          "analyses require a larger sample.")
 
     # ── Section 8 — Qualitative ──
     h1(doc, "8. Qualitative analysis")
