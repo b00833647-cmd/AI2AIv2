@@ -1496,6 +1496,52 @@ export class SqlitePersistence implements Persistence {
       );
   }
 
+  /** Net research slots consumed = (#'assigned') − (#'voided'|'replaced'),
+   *  counting only non-test_data participants. This is the next
+   *  permuted-block position. */
+  netResearchAssignmentPosition(): number {
+    const row = this.db
+      .prepare(
+        `SELECT
+           SUM(CASE WHEN al.event_type='assigned' THEN 1 ELSE 0 END) -
+           SUM(CASE WHEN al.event_type IN ('voided','replaced') THEN 1 ELSE 0 END)
+             AS pos
+         FROM assignment_log al
+         JOIN study_participants sp ON sp.id = al.participant_id
+        WHERE sp.test_data = 0`,
+      )
+      .get() as { pos: number | null };
+    return row.pos ?? 0;
+  }
+
+  getAssignment(participantId: string): {
+    conditionMode: string; conditionRole: string; opponentBlock: string;
+    assignmentSeed: string; assignmentBlockIndex: number; replicateId: number;
+  } | null {
+    const r = this.db
+      .prepare(
+        `SELECT condition_mode, condition_role, opponent_block,
+                assignment_seed, assignment_block_index, replicate_id
+           FROM study_participants WHERE id = ?`,
+      )
+      .get(participantId) as Record<string, unknown> | undefined;
+    if (!r || r["condition_mode"] == null) return null;
+    return {
+      conditionMode: r["condition_mode"] as string,
+      conditionRole: r["condition_role"] as string,
+      opponentBlock: r["opponent_block"] as string,
+      assignmentSeed: r["assignment_seed"] as string,
+      assignmentBlockIndex: r["assignment_block_index"] as number,
+      replicateId: r["replicate_id"] as number,
+    };
+  }
+
+  getAssignmentLog(participantId: string): Array<Record<string, unknown>> {
+    return this.db
+      .prepare(`SELECT * FROM assignment_log WHERE participant_id = ? ORDER BY id`)
+      .all(participantId) as Array<Record<string, unknown>>;
+  }
+
   /**
    * IRREVERSIBLY delete a participant and ALL their associated data:
    * - participant_responses, participant_events, behavior_prompts (auto-cascade

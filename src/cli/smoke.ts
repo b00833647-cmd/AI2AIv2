@@ -339,6 +339,41 @@ async function main(): Promise<void> {
     } finally { p.close(); }
   }
 
+  console.log("\n# clean-design: assignment readers\n");
+  {
+    const d = mkdtempSync(path.join(tmpdir(), "ai2ai-cd-"));
+    const p = openPersistence(path.join(d, "cd.db"));
+    try {
+      check("empty net position = 0", p.netResearchAssignmentPosition() === 0);
+      p.createStudyParticipant({ id: "P1" });
+      p.recordAssignment("P1", {
+        conditionMode: "delegated", conditionRole: "buyer",
+        opponentBlock: "moderate", assignmentSeed: "S",
+        assignmentBlockIndex: 0, replicateId: 0,
+        assignedAt: "2026-05-15T00:00:00.000Z",
+      });
+      check("net position = 1 after one assign",
+        p.netResearchAssignmentPosition() === 1);
+      check("getAssignment returns it",
+        p.getAssignment("P1")?.conditionMode === "delegated");
+      check("getAssignmentLog has 1 row",
+        p.getAssignmentLog("P1").length === 1);
+      p.createStudyParticipant({ id: "PT" });
+      p.setTestData("PT", true);
+      p.recordAssignment("PT", {
+        conditionMode: "direct", conditionRole: "seller",
+        opponentBlock: "tough", assignmentSeed: "S",
+        assignmentBlockIndex: 0, replicateId: 0,
+        assignedAt: "2026-05-15T00:00:00.000Z",
+      });
+      check("test_data excluded from position",
+        p.netResearchAssignmentPosition() === 1);
+      p.recordAssignmentEvent("P1", "voided", "x");
+      check("void decrements net position",
+        p.netResearchAssignmentPosition() === 0);
+    } finally { p.close(); }
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }
