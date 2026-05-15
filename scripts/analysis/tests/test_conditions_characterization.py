@@ -8,7 +8,7 @@ from scripts.analysis.process_report.db import connect as pr_connect, completers
 def _hp_condition_view():
     df = completers_frame(load_db(SNAPSHOT))
     keep = ["participant_id", "experiment_mode", "role", "mode2", "opponent_personality"]
-    return (df[keep].sort_values("participant_id").reset_index(drop=True))
+    return df[keep].sort_values("participant_id").reset_index(drop=True)
 
 
 def test_human_pilot_condition_snapshot():
@@ -17,6 +17,7 @@ def test_human_pilot_condition_snapshot():
     assert v["mode2"].value_counts().to_dict() == {"AI-to-AI": 20, "Human-to-AI": 20}
     assert set(v["experiment_mode"]) == {"agent", "human_buyer", "human_seller"}
     assert set(v["role"]) == {"buyer", "seller"}
+    # subset, not completeness: not all three personalities need be present
     assert set(v["opponent_personality"].dropna()) <= {"easygoing", "moderate", "tough"}
     assert v.groupby(["experiment_mode", "role"]).size().to_dict() == {
         ("agent", "buyer"): 10, ("agent", "seller"): 10,
@@ -46,3 +47,8 @@ def test_process_report_condition_snapshot():
         for r in c.itertuples(index=False)
     )
     assert len(snap) == 40
+    snap2 = sorted(
+        (r.participant_id, r.experiment_mode, r.role, r.mode2, r.cell)
+        for r in pr_completers(pr_connect()).itertuples(index=False)
+    )
+    assert snap == snap2
