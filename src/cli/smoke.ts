@@ -222,11 +222,14 @@ async function main(): Promise<void> {
       check("assignment_log table exists", !!t);
       const cols = (p as any)["db"]
         .prepare("PRAGMA table_info(assignment_log)")
-        .all().map((r: any) => r.name as string);
-      for (const c of ["id","participant_id","event_type","condition_mode",
-        "condition_role","opponent_block","assignment_seed",
-        "assignment_block_index","replicate_id","void_reason",
-        "assigned_at","server_ts"]) {
+        .all()
+        .map((r: any) => r.name as string);
+      for (const c of [
+        "id", "participant_id", "event_type", "condition_mode",
+        "condition_role", "opponent_block", "assignment_seed",
+        "assignment_block_index", "replicate_id", "void_reason",
+        "assigned_at", "server_ts",
+      ]) {
         check(`assignment_log.${c} exists`, cols.includes(c));
       }
     } finally { p.close(); }
@@ -357,6 +360,10 @@ async function main(): Promise<void> {
         p.netResearchAssignmentPosition() === 1);
       check("getAssignment returns it",
         p.getAssignment("P1")?.conditionMode === "delegated");
+      check("getAssignment maps role/opponent/seed too",
+        p.getAssignment("P1")?.conditionRole === "buyer" &&
+        p.getAssignment("P1")?.opponentBlock === "moderate" &&
+        p.getAssignment("P1")?.assignmentSeed === "S");
       check("getAssignmentLog has 1 row",
         p.getAssignmentLog("P1").length === 1);
       p.createStudyParticipant({ id: "PT" });

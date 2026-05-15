@@ -1479,6 +1479,10 @@ export class SqlitePersistence implements Persistence {
           assignment_block_index: number | null; replicate_id: number | null;
         }
       | undefined;
+    // One timestamp for both columns: a void/replace is a single logical
+    // event, so its assigned_at and server_ts must be identical (unlike
+    // recordAssignment, where assigned_at is the caller's logical time).
+    const now = new Date().toISOString();
     this.db
       .prepare(
         `INSERT INTO assignment_log
@@ -1492,7 +1496,7 @@ export class SqlitePersistence implements Persistence {
         sp?.condition_role ?? null, sp?.opponent_block ?? null,
         sp?.assignment_seed ?? null, sp?.assignment_block_index ?? null,
         sp?.replicate_id ?? null, voidReason,
-        new Date().toISOString(), new Date().toISOString(),
+        now, now,
       );
   }
 
