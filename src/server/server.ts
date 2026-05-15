@@ -24,7 +24,7 @@ import {
   type Role,
 } from "../multi-agent/pack-builder.ts";
 import { openPersistence, type SqlitePersistence } from "../multi-agent/persistence.ts";
-import { requireAssignmentSeed, resolveEntry, claimSeededAssignment } from "./assignment.ts";
+import { requireAssignmentSeed, resolveEntry, claimSeededAssignment, modeOverrideAllowed } from "./assignment.ts";
 
 const PORT = Number(process.env["AI2AI_PORT"] ?? 3737);
 const WEB_ROOT = path.resolve("web");
@@ -1303,7 +1303,12 @@ async function handleParticipantMode(req: http.IncomingMessage, res: http.Server
   if (!require400(res, typeof body.participantId === "string", "participantId required")) return;
   const allowed = ["agent", "human_buyer", "human_seller"];
   if (!require400(res, allowed.includes(body.mode), "mode must be agent | human_buyer | human_seller")) return;
-  withDb((db) => db.updateStudyParticipant(body.participantId, { experiment_mode: body.mode }));
+  withDb((db) => {
+    const sp = db.getStudyParticipant(body.participantId);
+    if (sp && modeOverrideAllowed({ condition_mode: sp.condition_mode ?? null, test_data: sp.test_data })) {
+      db.updateStudyParticipant(body.participantId, { experiment_mode: body.mode });
+    }
+  });
   sendJson(res, 200, { ok: true });
 }
 

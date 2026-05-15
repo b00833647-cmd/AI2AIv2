@@ -8,7 +8,7 @@
 //   - Memory rendering produces a non-empty context.
 
 import { loadScenarioPack, validateScenarioPack, ScenarioValidationError } from "../multi-agent/scenario-loader.ts";
-import { nextAssignment, STRATA, claimSeededAssignment, requireAssignmentSeed, resolveEntry } from "../server/assignment.ts";
+import { nextAssignment, STRATA, claimSeededAssignment, requireAssignmentSeed, resolveEntry, modeOverrideAllowed } from "../server/assignment.ts";
 import { openPersistence } from "../multi-agent/persistence.ts";
 import { validateOrchestratorToolCall } from "../multi-agent/orchestrator.ts";
 import { pickNextRoundRobin } from "../multi-agent/fallback-protocol.ts";
@@ -487,6 +487,16 @@ async function main(): Promise<void> {
       check("persisted opponent is a valid block",
         ["easygoing","moderate","tough"].includes(opp as string));
     } finally { p.close(); }
+  }
+
+  console.log("\n# clean-design: /api/p/mode guard\n");
+  {
+    check("research participant blocks override",
+      modeOverrideAllowed({ condition_mode: "delegated", test_data: 0 }) === false);
+    check("debug/test_data participant allows override",
+      modeOverrideAllowed({ condition_mode: "delegated", test_data: 1 }) === true);
+    check("legacy (no condition) allows override",
+      modeOverrideAllowed({ condition_mode: null, test_data: 0 }) === true);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

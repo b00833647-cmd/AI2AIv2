@@ -138,3 +138,13 @@ export function claimSeededAssignment(
   // them from the public return type.
   return result as Assignment;
 }
+
+/** /api/p/mode may only mutate experiment_mode for legacy rows (no
+ *  first-class condition) or debug/test_data participants. A research
+ *  participant's mode is fixed by the seeded assignment. */
+export function modeOverrideAllowed(
+  sp: { condition_mode: string | null; test_data: number },
+): boolean {
+  if (sp.test_data === 1) return true;
+  return sp.condition_mode == null;
+}
