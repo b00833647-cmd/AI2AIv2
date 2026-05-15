@@ -148,3 +148,49 @@ def anova_one_way(*groups) -> dict:
     eta2 = ss_between / ss_total if ss_total > 0 else float("nan")
     return {"F": float(F), "p": float(p), "eta2": float(eta2),
             "ns": [int(a.size) for a in arrs]}
+
+
+def scheirer_ray_hare(df, dv: str, a: str, b: str) -> dict:
+    """Rank-based 2x2 omnibus (Scheirer–Ray–Hare). Per term: H, p (chi2
+    df=1), eta2; plus N. Canonical copy; behavior-identical to the vetted
+    process_report clean-room implementation (parity-tested)."""
+    d = df[[dv, a, b]].dropna().copy()
+    R = scistats.rankdata(d[dv].to_numpy(float))
+    N = int(R.size)
+    d["_R"] = R
+    grand = float(R.mean())
+    SS_total = float(((R - grand) ** 2).sum())
+
+    def _ssm(col):
+        return float(sum(len(g) * (float(g["_R"].mean()) - grand) ** 2
+                         for _, g in d.groupby(col, observed=True)))
+
+    SS_A = _ssm(a)
+    SS_B = _ssm(b)
+    ma = d.groupby(a, observed=True)["_R"].mean()
+    mb = d.groupby(b, observed=True)["_R"].mean()
+    SS_AB = float(sum(
+        len(g) * (float(g["_R"].mean()) - float(ma[la]) - float(mb[lb])
+                  + grand) ** 2
+        for (la, lb), g in d.groupby([a, b], observed=True)))
+    MS_total = SS_total / (N - 1) if N > 1 else float("nan")
+
+    def _term(ss):
+        H = ss / MS_total if MS_total and MS_total == MS_total else float("nan")
+        ok = H == H and np.isfinite(H)
+        return {"H": float(H),
+                "p": float(scistats.chi2.sf(H, 1)) if ok else float("nan"),
+                "eta2": float(ss / SS_total) if SS_total else float("nan"),
+                "df": 1}
+
+    return {"A": _term(SS_A), "B": _term(SS_B), "AB": _term(SS_AB), "N": N}
+
+
+def fisher_2x2(succ_a: int, n_a: int, succ_b: int, n_b: int) -> dict:
+    """Fisher's exact on a 2x2 (success/failure x group). Odds ratio + p."""
+    odds, p = scistats.fisher_exact([[succ_a, n_a - succ_a],
+                                     [succ_b, n_b - succ_b]])
+    return {"odds_ratio": float(odds), "p": float(p),
+            "rate_a": succ_a / n_a if n_a else float("nan"),
+            "rate_b": succ_b / n_b if n_b else float("nan"),
+            "n_a": n_a, "n_b": n_b}
