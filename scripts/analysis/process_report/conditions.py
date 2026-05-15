@@ -41,7 +41,7 @@ _MAIN_ONLY = [
 
 def _table_columns(con: sqlite3.Connection, table: str) -> set[str]:
     """Return the set of column names present in *table*."""
-    return {r[1] for r in con.execute(f"PRAGMA table_info({table})").fetchall()}
+    return {r[1] for r in con.execute(f"PRAGMA table_info([{table}])").fetchall()}
 
 
 def resolve_conditions(con: sqlite3.Connection) -> pd.DataFrame:
@@ -53,7 +53,7 @@ def resolve_conditions(con: sqlite3.Connection) -> pd.DataFrame:
     ] + _MAIN_ONLY
     present = _table_columns(con, "study_participants")
     new_col_sql = ", ".join(
-        col if col in present else f"NULL AS {col}" for col in _new_cols
+        col if col in present else f"NULL AS [{col}]" for col in _new_cols
     )
     sp = pd.read_sql_query(
         f"""SELECT id AS participant_id, role, experiment_mode, {new_col_sql}
