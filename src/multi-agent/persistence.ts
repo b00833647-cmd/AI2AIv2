@@ -180,6 +180,24 @@ CREATE TABLE IF NOT EXISTS participant_events (
 );
 CREATE INDEX IF NOT EXISTS events_by_participant ON participant_events(participant_id, client_ts);
 CREATE INDEX IF NOT EXISTS events_by_type ON participant_events(participant_id, event_type);
+
+CREATE TABLE IF NOT EXISTS assignment_log (
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  participant_id         TEXT NOT NULL,
+  event_type             TEXT NOT NULL,
+  condition_mode         TEXT,
+  condition_role         TEXT,
+  opponent_block         TEXT,
+  assignment_seed        TEXT,
+  assignment_block_index INTEGER,
+  replicate_id           INTEGER,
+  void_reason            TEXT,
+  assigned_at            TEXT NOT NULL,
+  server_ts              TEXT NOT NULL,
+  FOREIGN KEY (participant_id) REFERENCES study_participants(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS assignment_log_by_participant ON assignment_log(participant_id);
+CREATE INDEX IF NOT EXISTS assignment_log_by_cell ON assignment_log(condition_mode, condition_role, opponent_block);
 `;
 
 // Idempotent migration — adds columns to existing tables when the SCHEMA's

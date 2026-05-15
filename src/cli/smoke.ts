@@ -210,6 +210,27 @@ async function main(): Promise<void> {
     } finally { p.close(); }
   }
 
+  console.log("\n# clean-design schema: assignment_log\n");
+  {
+    const d = mkdtempSync(path.join(tmpdir(), "ai2ai-cd-"));
+    const p = openPersistence(path.join(d, "cd.db"));
+    try {
+      const t = (p as any)["db"]
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='assignment_log'")
+        .get();
+      check("assignment_log table exists", !!t);
+      const cols = (p as any)["db"]
+        .prepare("PRAGMA table_info(assignment_log)")
+        .all().map((r: any) => r.name as string);
+      for (const c of ["id","participant_id","event_type","condition_mode",
+        "condition_role","opponent_block","assignment_seed",
+        "assignment_block_index","replicate_id","void_reason",
+        "assigned_at","server_ts"]) {
+        check(`assignment_log.${c} exists`, cols.includes(c));
+      }
+    } finally { p.close(); }
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }
