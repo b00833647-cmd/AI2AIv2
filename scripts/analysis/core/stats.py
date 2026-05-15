@@ -187,7 +187,10 @@ def scheirer_ray_hare(df, dv: str, a: str, b: str) -> dict:
 
 
 def fisher_2x2(succ_a: int, n_a: int, succ_b: int, n_b: int) -> dict:
-    """Fisher's exact on a 2x2 (success/failure x group). Odds ratio + p."""
+    """Fisher's exact on a 2x2 (success/failure x group). Odds ratio + p.
+
+    Canonical copy; behavior-identical to the vetted process_report
+    clean-room implementation (parity-tested)."""
     odds, p = scistats.fisher_exact([[succ_a, n_a - succ_a],
                                      [succ_b, n_b - succ_b]])
     return {"odds_ratio": float(odds), "p": float(p),
