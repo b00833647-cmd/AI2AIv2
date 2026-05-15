@@ -1466,9 +1466,13 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
   // sessions.scenario_pack_json so we can always recover what the
   // participant faced. We also write a participant_responses row keyed
   // 'opponent_personality' for easier admin querying.
+  // getAssignment returns opponentBlock as string (DB layer untyped); only OpponentBlock literals are ever written via claimSeededAssignment.
   const opponentPersonality = withDb((db) => db.getAssignment(body.participantId))
     ?.opponentBlock as ("easygoing" | "moderate" | "tough");
-  if (!opponentPersonality) throw new Error("no assignment for participant");
+  if (!opponentPersonality) {
+    sendJson(res, 409, { error: "no assignment for participant" });
+    return;
+  }
   withDb((db) => {
     db.insertParticipantResponses(body.participantId, "engine", [
       { key: "opponent_personality", valueText: opponentPersonality },
