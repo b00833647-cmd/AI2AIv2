@@ -91,7 +91,7 @@ export function claimSeededAssignment(
   participantId: string,
   seed: string,
 ): Assignment {
-  return db.claimAssignment(participantId, (position) => {
+  const result = db.claimAssignment(participantId, (position) => {
     const a = nextAssignment(seed, position);
     return {
       conditionMode: a.conditionMode,
@@ -102,5 +102,9 @@ export function claimSeededAssignment(
       replicateId: a.replicateId,
       assignedAt: new Date().toISOString(),
     };
-  }) as unknown as Assignment;
+  });
+  // result structurally satisfies Assignment; the extra fields
+  // (assignmentSeed, assignedAt) are benign — narrowing cast only sheds
+  // them from the public return type.
+  return result as Assignment;
 }
