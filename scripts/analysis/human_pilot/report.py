@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.analysis.human_pilot.data import load_db, SNAPSHOT
+from scripts.analysis.human_pilot.data import load_db, SNAPSHOT, V2_SURVEY_KEYS
 from scripts.analysis.human_pilot import tables as T
 from scripts.analysis.human_pilot import figures as F
 from scripts.analysis.human_pilot.docx_report import (
@@ -75,50 +75,53 @@ def build():
     table(doc, t, "Table 3.1 — Outcome descriptives by cell.",
           "Agreement rate, price/turns/time medians per mode×role. No "
           "p-values in this section by design.")
-
-    h1(doc, "4. Post-experience survey (9 items)")
-    figure(doc, F.fig_survey_forest(con),
-           "Figure 4.1 — Item means ± 95% CI by mode.",
-           "Item-level means with 95% CIs. CIs are wide at this N; overlap "
-           "is the norm. Items reported individually (no subscales).")
-    t = T.survey_descriptives(con); _csv(t, "tbl4_1_survey")
-    table(doc, t, "Table 4.1 — Per-item descriptives by mode.",
-          "M, SD, median, IQR for each of the 9 v2 items, split AI vs Human.")
-
-    h1(doc, "5. Group comparisons (exploratory)")
-    h2(doc, "5A — Human-to-AI vs AI-to-AI (20 vs 20)")
-    cm = T.comparison_mode(con); _csv(cm, "tbl5a_mode_items")
-    f = cm.attrs["fisher"]
-    para(doc, f"Agreement rate: AI-to-AI {f['rate_a']:.0%} vs Human-to-AI "
-              f"{f['rate_b']:.0%}; Fisher's exact p = {f['p']:.3f} "
-              f"(OR = {f['odds_ratio']:.2f}). Exploratory; small sample.")
-    figure(doc, F.fig_comparison_delta(con, "mode"),
-           "Figure 5A.1 — Per-item Cliff's δ, AI vs Human (BH-FDR).",
-           "Black points survive BH-FDR at q<.05; grey do not. Interpret as "
-           "exploratory signal, not confirmation, given 20 per arm.")
-    table(doc, cm.round(3),
-          "Table 5A.1 — Per-item δ, 95% CI, MW p, BH-FDR q.",
-          "Effect direction: positive δ ⇒ higher under AI-to-AI.")
-
-    h2(doc, "5B — Buyer vs Seller (20 vs 20)")
-    cr = T.comparison_role(con); _csv(cr, "tbl5b_role_items")
-    fr = cr.attrs["fisher"]
-    para(doc, f"Agreement rate: buyer {fr['rate_a']:.0%} vs seller "
-              f"{fr['rate_b']:.0%}; Fisher's exact p = {fr['p']:.3f} "
-              f"(OR = {fr['odds_ratio']:.2f}). Exploratory; small sample.")
-    figure(doc, F.fig_comparison_delta(con, "role"),
-           "Figure 5B.1 — Per-item Cliff's δ, Buyer vs Seller (BH-FDR).",
-           "Same format as 5A.1. Positive δ ⇒ higher under buyer role.")
-    table(doc, cr.round(3),
-          "Table 5B.1 — Per-item δ, 95% CI, MW p, BH-FDR q.",
-          "Role-based item differences, exploratory.")
-
-    h2(doc, "5C/5D — 4 groups & Mode×Role interaction")
+    ag = T.agreement_2x2(con)
+    bm, br = ag["by_mode"], ag["by_role"]
+    para(doc, f"Agreement rate — by mode: AI-to-AI {bm['rate_a']:.0%} vs "
+              f"Human-to-AI {bm['rate_b']:.0%} (Fisher's exact p={bm['p']:.3f}, "
+              f"OR={bm['odds_ratio']:.2f}); by role: buyer {br['rate_a']:.0%} "
+              f"vs seller {br['rate_b']:.0%} (p={br['p']:.3f}, "
+              f"OR={br['odds_ratio']:.2f}). Exploratory; 20 per side.")
     figure(doc, F.fig_interaction(con),
-           "Figure 5D.1 — Mode × Role on median agreed price.",
-           "Descriptive interaction pattern only — the interaction is NOT "
-           "tested (n≈7 agreed per cell). Main effects are the 20-vs-20 "
-           "contrasts in 5A/5B.")
+           "Figure 3.3 — Mode × Role on median agreed price (descriptive).",
+           "Interaction pattern on the negotiation outcome; not tested "
+           "(n≈7 agreed per cell).")
+
+    h1(doc, "4. Post-experience survey — the 9 DVs across the 4 groups")
+    para(doc, "Each survey item is a dependent variable. The 2×2 design "
+              "(Mode × Role) yields four cells of n=10. Figures show every "
+              "data point; statistics are exploratory (Scheirer–Ray–Hare "
+              "per DV, no multiplicity correction, no pairwise post-hoc).",
+         italic=True)
+    figure(doc, F.fig_dv_heatmap(con),
+           "Figure 4.1 — Mean (1–7) per DV × group; priority DVs above the rule.",
+           "All nine DV means across the four cells at a glance; diverging "
+           "scale centered at the 1–7 midpoint.")
+    for i, dv in enumerate(V2_SURVEY_KEYS[:4]):
+        figure(doc, F.fig_dv_raincloud(con, dv),
+               f"Figure 4.{i + 2} — {dv}: distribution by Mode × Role.",
+               "Violin + box + all 10 raw points per cell; SRH in the "
+               "subtitle. Exploratory.")
+    figure(doc, F.fig_dv_panel5(con),
+           "Figure 4.6 — Secondary DVs (5) across the four groups.",
+           "Same raincloud-style; flat 4-group view.")
+    t = T.dv_group_descriptives(con); _csv(t, "tbl4_dv_descriptives")
+    table(doc, t,
+          "Table 4.1 — Descriptives per DV × group (n, M, SD, Mdn, IQR).",
+          "All nine DVs × four cells; priority DVs first.")
+
+    h1(doc, "5. Mode × Role effects on the DVs (exploratory)")
+    para(doc, "Per-DV nonparametric two-way (Scheirer–Ray–Hare): rank-based "
+              "Mode, Role and Mode×Role tests. Strictly exploratory — "
+              "n=10/cell, p uncorrected, no pairwise post-hoc.", italic=True)
+    for i, dv in enumerate(V2_SURVEY_KEYS[:4]):
+        figure(doc, F.fig_dv_interaction(con, dv),
+               f"Figure 5.{i + 1} — {dv}: Mode × Role (mean ± 95% CI).",
+               "Lines = Role; x = Mode. Descriptive; exploratory.")
+    t = T.srh_results(con); _csv(t, "tbl5_srh")
+    table(doc, t, "Table 5.1 — Scheirer–Ray–Hare per DV (H, p, η²).",
+          "Mode / Role / Mode×Role rank-based omnibus per DV. p uncorrected, "
+          "exploratory; η² = share of rank variance. Priority DVs first.")
 
     h1(doc, "6. Data quality & operational")
     t = T.data_quality(con); _csv(t, "tbl6_quality")
