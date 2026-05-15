@@ -96,6 +96,23 @@ export function requireAssignmentSeed(raw: string | undefined): string {
   return s;
 }
 
+export type Entry =
+  | { kind: "research" }
+  | { kind: "debug"; conditionMode: ConditionMode; conditionRole: ConditionRole };
+
+const DEBUG_ROUTES: Record<string, { conditionMode: ConditionMode; conditionRole: ConditionRole }> = {
+  "/blx": { conditionMode: "delegated", conditionRole: "buyer" },
+  "/slx": { conditionMode: "delegated", conditionRole: "seller" },
+  "/bhx": { conditionMode: "direct", conditionRole: "buyer" },
+  "/shx": { conditionMode: "direct", conditionRole: "seller" },
+};
+
+/** Map the SPA entry path to research (seeded) vs debug (forced) assignment. */
+export function resolveEntry(pathname: string): Entry {
+  const d = DEBUG_ROUTES[pathname];
+  return d ? { kind: "debug", ...d } : { kind: "research" };
+}
+
 /** Atomically claim the next seeded assignment for a participant and
  *  persist it. Randomization policy lives here; the storage layer only
  *  provides the atomic read-position→write primitive. */

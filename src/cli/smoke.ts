@@ -8,7 +8,7 @@
 //   - Memory rendering produces a non-empty context.
 
 import { loadScenarioPack, validateScenarioPack, ScenarioValidationError } from "../multi-agent/scenario-loader.ts";
-import { nextAssignment, STRATA, claimSeededAssignment, requireAssignmentSeed } from "../server/assignment.ts";
+import { nextAssignment, STRATA, claimSeededAssignment, requireAssignmentSeed, resolveEntry } from "../server/assignment.ts";
 import { openPersistence } from "../multi-agent/persistence.ts";
 import { validateOrchestratorToolCall } from "../multi-agent/orchestrator.ts";
 import { pickNextRoundRobin } from "../multi-agent/fallback-protocol.ts";
@@ -460,6 +460,16 @@ async function main(): Promise<void> {
     let threwEmpty = false;
     try { requireAssignmentSeed("   "); } catch { threwEmpty = true; }
     check("throws on blank seed", threwEmpty);
+  }
+
+  console.log("\n# clean-design: resolveEntry\n");
+  {
+    check("/blx → debug delegated buyer", JSON.stringify(resolveEntry("/blx"))
+      === JSON.stringify({ kind: "debug", conditionMode: "delegated", conditionRole: "buyer" }));
+    check("/shx → debug direct seller", JSON.stringify(resolveEntry("/shx"))
+      === JSON.stringify({ kind: "debug", conditionMode: "direct", conditionRole: "seller" }));
+    check("/ (neutral) → research", resolveEntry("/")?.kind === "research");
+    check("/study → research", resolveEntry("/study")?.kind === "research");
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

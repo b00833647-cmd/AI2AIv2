@@ -24,7 +24,7 @@ import {
   type Role,
 } from "../multi-agent/pack-builder.ts";
 import { openPersistence, type SqlitePersistence } from "../multi-agent/persistence.ts";
-import { requireAssignmentSeed } from "./assignment.ts";
+import { requireAssignmentSeed, resolveEntry, claimSeededAssignment } from "./assignment.ts";
 
 const PORT = Number(process.env["AI2AI_PORT"] ?? 3737);
 const WEB_ROOT = path.resolve("web");
@@ -1057,6 +1057,7 @@ interface StartBody {
   prolificPid?: string | null;
   prolificStudyId?: string | null;
   prolificSessionId?: string | null;
+  entry?: string;
 }
 async function handleParticipantStart(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   // Per-IP rate limit — one new participant per IP per 24h. Prevents farming.
@@ -1136,6 +1137,24 @@ async function handleParticipantStart(req: http.IncomingMessage, res: http.Serve
       prolific_study_id:   cleanStudyId,
       prolific_session_id: cleanSessionId,
     } as Parameters<typeof db.updateStudyParticipant>[1]);
+  });
+  const entry = resolveEntry(typeof body.entry === "string" ? body.entry : "/");
+  const seed = requireAssignmentSeed(process.env["AI2AI_ASSIGNMENT_SEED"]);
+  withDb((db) => {
+    if (entry.kind === "debug") {
+      db.setTestData(id, true);
+      db.recordAssignment(id, {
+        conditionMode: entry.conditionMode,
+        conditionRole: entry.conditionRole,
+        opponentBlock: "moderate",
+        assignmentSeed: `debug:${seed}`,
+        assignmentBlockIndex: -1,
+        replicateId: -1,
+        assignedAt: new Date().toISOString(),
+      });
+    } else {
+      claimSeededAssignment(db, id, seed);
+    }
   });
   sendJson(res, 200, { participantId: id });
 }

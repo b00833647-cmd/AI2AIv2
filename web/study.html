@@ -2528,6 +2528,7 @@ async function ensureParticipant(prolific) {
       language: navigator.language,
       referrer: document.referrer || null,
       connectionType: conn ? conn.effectiveType : null,
+      entry: location.pathname,
       // Prolific tokens — server will null-out unsubstituted templates.
       prolificPid:       prolific && prolific.pid       ? prolific.pid       : null,
       prolificStudyId:   prolific && prolific.studyId   ? prolific.studyId   : null,
