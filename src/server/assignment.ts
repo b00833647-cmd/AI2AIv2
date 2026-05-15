@@ -83,6 +83,19 @@ export function nextAssignment(seed: string, position: number): Assignment {
   };
 }
 
+/** Returns the trimmed seed or throws. The server calls this at boot so a
+ *  study can never run unseeded (an unseeded study is unreproducible). */
+export function requireAssignmentSeed(raw: string | undefined): string {
+  const s = (raw ?? "").trim();
+  if (s === "") {
+    throw new Error(
+      "AI2AI_ASSIGNMENT_SEED is unset. Set a fixed non-empty value " +
+      "(any stable string) so condition assignment is reproducible.",
+    );
+  }
+  return s;
+}
+
 /** Atomically claim the next seeded assignment for a participant and
  *  persist it. Randomization policy lives here; the storage layer only
  *  provides the atomic read-position→write primitive. */

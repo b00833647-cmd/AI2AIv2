@@ -8,7 +8,7 @@
 //   - Memory rendering produces a non-empty context.
 
 import { loadScenarioPack, validateScenarioPack, ScenarioValidationError } from "../multi-agent/scenario-loader.ts";
-import { nextAssignment, STRATA, claimSeededAssignment } from "../server/assignment.ts";
+import { nextAssignment, STRATA, claimSeededAssignment, requireAssignmentSeed } from "../server/assignment.ts";
 import { openPersistence } from "../multi-agent/persistence.ts";
 import { validateOrchestratorToolCall } from "../multi-agent/orchestrator.ts";
 import { pickNextRoundRobin } from "../multi-agent/fallback-protocol.ts";
@@ -448,6 +448,18 @@ async function main(): Promise<void> {
       check("seed persisted on row",
         p.getAssignment("P1")?.assignmentSeed === "seedX");
     } finally { p.close(); }
+  }
+
+  console.log("\n# clean-design: requireAssignmentSeed\n");
+  {
+    let threw = false;
+    try { requireAssignmentSeed(undefined); } catch { threw = true; }
+    check("throws when seed unset", threw);
+    check("returns seed when set",
+      requireAssignmentSeed("abc") === "abc");
+    let threwEmpty = false;
+    try { requireAssignmentSeed("   "); } catch { threwEmpty = true; }
+    check("throws on blank seed", threwEmpty);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

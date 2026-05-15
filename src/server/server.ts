@@ -24,6 +24,7 @@ import {
   type Role,
 } from "../multi-agent/pack-builder.ts";
 import { openPersistence, type SqlitePersistence } from "../multi-agent/persistence.ts";
+import { requireAssignmentSeed } from "./assignment.ts";
 
 const PORT = Number(process.env["AI2AI_PORT"] ?? 3737);
 const WEB_ROOT = path.resolve("web");
@@ -399,6 +400,12 @@ function validateBootEnv(): void {
   }
   if (!process.env["AI2AI_DB_PATH"]) {
     console.warn("[boot] ⚠ AI2AI_DB_PATH not set — using ./data/sessions.db (mount a volume for persistence in production).");
+  }
+  try {
+    requireAssignmentSeed(process.env["AI2AI_ASSIGNMENT_SEED"]);
+  } catch (e) {
+    console.error(`[boot] ${(e as Error).message}`);
+    process.exit(1);
   }
 }
 validateBootEnv();
