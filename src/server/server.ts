@@ -1461,12 +1461,14 @@ async function handleParticipantRun(req: http.IncomingMessage, res: http.ServerR
     userBehaviorPrompt: promptRow ? promptRow.prompt_text : "",
   };
 
-  // Pick the opponent's personality once per session — uniform over the three
-  // pre-written profiles (easygoing | moderate | tough). The pack is persisted
-  // to sessions.scenario_pack_json so we can always recover what the
+  // Pick the opponent's personality from the persisted assignment (set during
+  // onboarding by claimSeededAssignment). The pack is persisted to
+  // sessions.scenario_pack_json so we can always recover what the
   // participant faced. We also write a participant_responses row keyed
   // 'opponent_personality' for easier admin querying.
-  const opponentPersonality = pickOpponentPersonality();
+  const opponentPersonality = withDb((db) => db.getAssignment(body.participantId))
+    ?.opponentBlock as ("easygoing" | "moderate" | "tough");
+  if (!opponentPersonality) throw new Error("no assignment for participant");
   withDb((db) => {
     db.insertParticipantResponses(body.participantId, "engine", [
       { key: "opponent_personality", valueText: opponentPersonality },

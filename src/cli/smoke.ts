@@ -476,6 +476,19 @@ async function main(): Promise<void> {
     check("/study → research", resolveEntry("/study")?.kind === "research");
   }
 
+  console.log("\n# clean-design: opponent seam source\n");
+  {
+    const d = mkdtempSync(path.join(tmpdir(), "ai2ai-cd-"));
+    const p = openPersistence(path.join(d, "cd.db"));
+    try {
+      p.createStudyParticipant({ id: "P1" });
+      claimSeededAssignment(p, "P1", "seedX");
+      const opp = p.getAssignment("P1")?.opponentBlock;
+      check("persisted opponent is a valid block",
+        ["easygoing","moderate","tough"].includes(opp as string));
+    } finally { p.close(); }
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }
