@@ -266,7 +266,7 @@ Parsers (pure, no DB inside the unit-tested fns except where noted):
 - `parse_proposals(tool_calls_json: str) -> list[dict]` → for each `submit_proposal`: `{"action","price","is_final","message"}` (price = the `issues` entry with `name=="price"` value, float; is_final → bool, None→False). `send_message` ignored here.
 - `count_tools(tool_calls_json) -> dict` → `{"send_message": k, "submit_proposal": m}`.
 - `parse_ts(s) -> datetime|None` → ISO-8601 `...Z` (use `datetime.fromisoformat(s.replace("Z","+00:00"))`).
-- `extract_reservations(con) -> dict` → parse every completer session's `sessions.scenario_pack_json`; from `pack["participants"]` find buyer & seller `brief`; regex buyer `target purchase price:\s*\$?([\d,]+)` and `WALK-?AWAY[^$]*\$?([\d,]+)`; seller analogous (`target`/floor — see Step 3 regex). Build per-session dict `{session_id: {"buyer_target","buyer_walkaway","seller_target","seller_floor"}}` (ints, commas stripped). **Verify uniformity:** if the distinct tuple across sessions > 1, `raise ValueError` listing the distinct tuples. Return the per-session map (uniform values repeated).
+- `extract_reservations(con) -> dict` → for every completer session's `sessions.scenario_pack_json`, read `pack["participants"]`, take each participant's **structured `brief` dict** (verified: `brief` is a dict, not prose). Map `buyer_target=brief["targetPrice"]`, `buyer_walkaway=brief["maxBudget"]`, `seller_target=brief["listingPrice"]`, `seller_floor=brief["minimumAcceptablePrice"]` (all bare ints; verified uniform `(21500,23500,25500,22500)` across all 40). Build `{session_id: {"buyer_target","buyer_walkaway","seller_target","seller_floor"}}`. **Verify uniformity:** if the distinct tuple across sessions > 1, or any value is None, `raise ValueError` listing the distinct tuples. (No regex/prose — the prose lives in `systemPromptTemplate` which is empty for the human side in 20/40 sessions; the structured `brief` is populated in all 40.)
 - `event_payload(row) -> dict` → `json.loads(payload_json or "{}")`.
 
 - [ ] **Step 1: failing tests** — `tests/test_extract.py`:
@@ -321,7 +321,7 @@ def test_reservations_raise_on_nonuniform(monkeypatch):
         rows = list(rows)
         if rows:
             sid, pack = rows[0]
-            pack2 = pack.replace("21,500", "19,999")
+            pack2 = pack.replace("21500", "19999")  # perturb buyer targetPrice
             rows[0] = (sid, pack2)
         return rows
 
@@ -339,12 +339,7 @@ def test_reservations_raise_on_nonuniform(monkeypatch):
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime
-
-import pandas as pd
-
-_NUM = r"\$?\s*([0-9][0-9,]{2,})"
 
 
 def parse_proposals(tool_calls_json) -> list:
@@ -398,16 +393,15 @@ def _packs_for_completers(con):
     return [(r[0], r[1]) for r in cur.fetchall()]
 
 
-def _int(m):
-    return int(m.group(1).replace(",", "")) if m else None
-
-
-def _briefs(pack_json: str):
+def _briefs(pack_json: str) -> dict:
+    """role -> structured brief dict from the scenario pack participants."""
     d = json.loads(pack_json)
     by = {}
     for p in d.get("participants", []):
         role = (p.get("role") or p.get("id") or "").lower()
-        by[role] = json.dumps(p)  # brief text lives inside the participant blob
+        br = p.get("brief")
+        if isinstance(br, dict):
+            by[role] = br
     return by
 
 
@@ -415,19 +409,16 @@ def extract_reservations(con) -> dict:
     res = {}
     for sid, pj in _packs_for_completers(con):
         b = _briefs(pj)
-        buyer = b.get("buyer", "")
-        seller = b.get("seller", "")
+        buyer = b.get("buyer", {})
+        seller = b.get("seller", {})
         rec = {
-            "buyer_target": _int(re.search(
-                r"target purchase price:\s*" + _NUM, buyer, re.I)),
-            "buyer_walkaway": _int(re.search(
-                r"WALK-?AWAY[^0-9$]{0,40}" + _NUM, buyer, re.I)),
-            "seller_target": _int(re.search(
-                r"target (?:sale |selling )?price:\s*" + _NUM, seller, re.I)),
-            "seller_floor": _int(re.search(
-                r"(?:WALK-?AWAY|do NOT go below|absolute (?:floor|minimum)|"
-                r"lowest)[^0-9$]{0,40}" + _NUM, seller, re.I)),
+            "buyer_target": buyer.get("targetPrice"),
+            "buyer_walkaway": buyer.get("maxBudget"),
+            "seller_target": seller.get("listingPrice"),
+            "seller_floor": seller.get("minimumAcceptablePrice"),
         }
+        rec = {k: (int(v) if v is not None else None)
+               for k, v in rec.items()}
         res[sid] = rec
     sigs = {tuple(sorted(v.items())) for v in res.values()}
     if len(sigs) != 1:
@@ -439,7 +430,12 @@ def extract_reservations(con) -> dict:
     return res
 ```
 
-If `test_reservations_uniform_and_values` fails because a seller regex misses, ADJUST the seller regexes minimally to the actual brief wording (read one pack: `python -c "import json,sqlite3;c=sqlite3.connect('data/ai2ai-human-pilot-2026-05-15.db');import json;p=json.loads([r[0] for r in c.execute('select scenario_pack_json from sessions where scenario_pack_json is not null limit 1')][0]);print([x.get('brief') for x in p['participants']])"`) — keep the buyer asserts (`21500`/`23500`) intact; they are ground truth. Do NOT weaken the uniformity/raise logic.
+Verified ground truth (all 40 completer packs, single uniform signature):
+`buyer_target=21500, buyer_walkaway=23500, seller_target=25500, seller_floor=22500`
+(seller's `listingPrice` is its asking/target, `minimumAcceptablePrice` its
+floor; `seller_target > seller_floor`). The structured `brief` dict is
+populated in **all 40** sessions — no prose/regex, no missing-side problem.
+Do NOT weaken the uniformity/None `raise` logic.
 
 - [ ] **Step 4: run, expect pass** (4 tests).
 - [ ] **Step 5: commit** — `git add scripts/analysis/process_report && git commit -m "process-report: stream/reservation/timestamp parsers (uniformity-guarded)\n\nCo-Authored-By: RuFlo <ruv@ruv.net>"`
