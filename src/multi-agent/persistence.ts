@@ -547,6 +547,12 @@ export class SqlitePersistence implements Persistence {
     prolific_pid: string | null;
     prolific_study_id: string | null;
     prolific_session_id: string | null;
+    condition_mode: string | null;
+    condition_role: string | null;
+    opponent_block: string | null;
+    assignment_seed: string | null;
+    assignment_block_index: number | null;
+    replicate_id: number | null;
   } | undefined {
     return this.db
       .prepare(
@@ -554,7 +560,9 @@ export class SqlitePersistence implements Persistence {
                 experience, ai_familiarity, attention_check_pass, session_id,
                 completion_code, device_type, browser, os, user_agent,
                 experiment_mode, excluded, excluded_reason, test_data,
-                prolific_pid, prolific_study_id, prolific_session_id
+                prolific_pid, prolific_study_id, prolific_session_id,
+                condition_mode, condition_role, opponent_block,
+                assignment_seed, assignment_block_index, replicate_id
            FROM study_participants WHERE id = ?`,
       )
       .get(id) as
@@ -582,6 +590,12 @@ export class SqlitePersistence implements Persistence {
           prolific_pid: string | null;
           prolific_study_id: string | null;
           prolific_session_id: string | null;
+          condition_mode: string | null;
+          condition_role: string | null;
+          opponent_block: string | null;
+          assignment_seed: string | null;
+          assignment_block_index: number | null;
+          replicate_id: number | null;
         }
       | undefined;
   }
@@ -1313,6 +1327,57 @@ export class SqlitePersistence implements Persistence {
     this.db
       .prepare(`UPDATE study_participants SET test_data = ? WHERE id = ?`)
       .run(testData ? 1 : 0, participantId);
+  }
+
+  /**
+   * Persist a resolved condition assignment: writes the first-class
+   * condition_* columns, dual-writes legacy experiment_mode/role (for the
+   * admin dashboard + Prolific-code lookup), and appends one append-only
+   * 'assigned' row to assignment_log. Atomic.
+   */
+  recordAssignment(
+    participantId: string,
+    a: {
+      conditionMode: "delegated" | "direct";
+      conditionRole: "buyer" | "seller";
+      opponentBlock: "easygoing" | "moderate" | "tough";
+      assignmentSeed: string;
+      assignmentBlockIndex: number;
+      replicateId: number;
+      assignedAt: string;
+    },
+  ): void {
+    const experimentMode =
+      a.conditionMode === "delegated" ? "agent" : `human_${a.conditionRole}`;
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE study_participants
+              SET condition_mode = ?, condition_role = ?, opponent_block = ?,
+                  assignment_seed = ?, assignment_block_index = ?,
+                  replicate_id = ?, experiment_mode = ?, role = ?
+            WHERE id = ?`,
+        )
+        .run(
+          a.conditionMode, a.conditionRole, a.opponentBlock,
+          a.assignmentSeed, a.assignmentBlockIndex, a.replicateId,
+          experimentMode, a.conditionRole, participantId,
+        );
+      this.db
+        .prepare(
+          `INSERT INTO assignment_log
+             (participant_id, event_type, condition_mode, condition_role,
+              opponent_block, assignment_seed, assignment_block_index,
+              replicate_id, void_reason, assigned_at, server_ts)
+           VALUES (?, 'assigned', ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+        )
+        .run(
+          participantId, a.conditionMode, a.conditionRole, a.opponentBlock,
+          a.assignmentSeed, a.assignmentBlockIndex, a.replicateId,
+          a.assignedAt, new Date().toISOString(),
+        );
+    });
+    tx();
   }
 
   /**

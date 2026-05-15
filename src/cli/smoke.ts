@@ -231,6 +231,38 @@ async function main(): Promise<void> {
     } finally { p.close(); }
   }
 
+  console.log("\n# clean-design: recordAssignment\n");
+  {
+    const d = mkdtempSync(path.join(tmpdir(), "ai2ai-cd-"));
+    const p = openPersistence(path.join(d, "cd.db"));
+    try {
+      p.createStudyParticipant({ id: "P1" });
+      p.recordAssignment("P1", {
+        conditionMode: "delegated", conditionRole: "buyer",
+        opponentBlock: "moderate", assignmentSeed: "S",
+        assignmentBlockIndex: 0, replicateId: 0,
+        assignedAt: "2026-05-15T00:00:00.000Z",
+      });
+      const sp = p.getStudyParticipant("P1")!;
+      check("condition_mode written", (sp as any).condition_mode === "delegated");
+      check("dual-write experiment_mode=agent", sp.experiment_mode === "agent");
+      check("dual-write role=buyer", sp.role === "buyer");
+      const log = (p as any)["db"]
+        .prepare("SELECT * FROM assignment_log WHERE participant_id='P1'").all();
+      check("one assigned row", log.length === 1 && log[0].event_type === "assigned");
+      check("log carries seed", log[0].assignment_seed === "S");
+      p.createStudyParticipant({ id: "P2" });
+      p.recordAssignment("P2", {
+        conditionMode: "direct", conditionRole: "seller",
+        opponentBlock: "tough", assignmentSeed: "S",
+        assignmentBlockIndex: 0, replicateId: 0,
+        assignedAt: "2026-05-15T00:00:00.000Z",
+      });
+      const sp2 = p.getStudyParticipant("P2")!;
+      check("dual-write experiment_mode=human_seller", sp2.experiment_mode === "human_seller");
+    } finally { p.close(); }
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }
