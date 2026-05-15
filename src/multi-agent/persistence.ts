@@ -1378,24 +1378,31 @@ export class SqlitePersistence implements Persistence {
       const row = this.db
         .prepare(
           `SELECT excl_attention, excl_manipulation, excl_speeding,
-                  excl_comprehension, excl_noncompletion
+                  excl_comprehension, excl_noncompletion, excluded_reason
              FROM study_participants WHERE id = ?`,
         )
-        .get(participantId) as Record<string, number | null> | undefined;
+        .get(participantId) as
+          | (Record<string, number | null> & { excluded_reason: string | null })
+          | undefined;
       const set = Object.entries(row ?? {})
-        .filter(([, v]) => v === 1)
+        .filter(([c, v]) => c.startsWith("excl_") && v === 1)
         .map(([c]) => c.replace("excl_", ""));
-      this.db
-        .prepare(
-          `UPDATE study_participants
-              SET excluded = ?, excluded_reason = ?
-            WHERE id = ?`,
-        )
-        .run(
-          set.length > 0 ? 1 : 0,
-          set.length > 0 ? `auto: ${set.join(", ")}` : null,
-          participantId,
-        );
+      const manual =
+        typeof row?.excluded_reason === "string" &&
+        row.excluded_reason.startsWith("manually");
+      if (!manual) {
+        this.db
+          .prepare(
+            `UPDATE study_participants
+                SET excluded = ?, excluded_reason = ?
+              WHERE id = ?`,
+          )
+          .run(
+            set.length > 0 ? 1 : 0,
+            set.length > 0 ? `auto: ${set.join(", ")}` : null,
+            participantId,
+          );
+      }
     });
     tx();
   }

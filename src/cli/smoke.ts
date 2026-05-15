@@ -324,8 +324,18 @@ async function main(): Promise<void> {
         sp.excluded_reason.includes("attention") &&
         sp.excluded_reason.includes("speeding"));
       p.setExclusionFlags("P1", { attention: false, speeding: false });
-      check("rollup clears when none set",
-        p.getStudyParticipant("P1")!.excluded === 0);
+      {
+        const cleared = p.getStudyParticipant("P1")!;
+        check("rollup clears when none set",
+          cleared.excluded === 0 && cleared.excluded_reason === null);
+      }
+      p.createStudyParticipant({ id: "PM" });
+      p.setExcluded("PM", true);
+      p.setExclusionFlags("PM", { speeding: true });
+      check("manual exclusion preserved after setExclusionFlags",
+        p.getStudyParticipant("PM")!.excluded === 1 &&
+        p.getStudyParticipant("PM")!.excluded_reason!.startsWith("manually") &&
+        p.getStudyParticipant("PM")!.excl_speeding === 1);
     } finally { p.close(); }
   }
 
