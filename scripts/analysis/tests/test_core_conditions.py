@@ -1,3 +1,4 @@
+"""Unit tests for core.conditions.resolve_conditions() — legacy and main branches."""
 import sqlite3
 import pandas as pd
 from scripts.analysis.core.conditions import resolve_conditions

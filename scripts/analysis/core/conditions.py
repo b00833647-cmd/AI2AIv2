@@ -20,6 +20,8 @@ participant_responses(screen='engine', key='opponent_personality').
 """
 from __future__ import annotations
 
+import sqlite3
+
 import pandas as pd
 
 _LEGACY_MODE = {"agent": "delegated", "human_buyer": "direct", "human_seller": "direct"}
@@ -32,7 +34,7 @@ _MAIN_ONLY = [
 ]
 
 
-def resolve_conditions(con) -> pd.DataFrame:
+def resolve_conditions(con: sqlite3.Connection) -> pd.DataFrame:
     sp = pd.read_sql_query(
         """SELECT id AS participant_id, role, experiment_mode,
                   condition_mode, condition_role, opponent_block,
@@ -59,6 +61,7 @@ def resolve_conditions(con) -> pd.DataFrame:
     df["condition_role"] = df["condition_role"].where(is_main, df["role"])
     df["opponent_block"] = df["opponent_block"].where(is_main, df["legacy_opponent"])
 
+    # legacy rows get pd.NA here; integer columns consequently surface as float/object — expected given the dual-branch schema (callers must not assume int dtype).
     for col in _MAIN_ONLY:
         df[col] = df[col].where(is_main, other=pd.NA)
 
