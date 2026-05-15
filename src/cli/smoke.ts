@@ -292,6 +292,21 @@ async function main(): Promise<void> {
     } finally { p.close(); }
   }
 
+  console.log("\n# clean-design: setManipulationCheck\n");
+  {
+    const d = mkdtempSync(path.join(tmpdir(), "ai2ai-cd-"));
+    const p = openPersistence(path.join(d, "cd.db"));
+    try {
+      p.createStudyParticipant({ id: "P1" });
+      p.setManipulationCheck("P1", true);
+      check("manip pass=1",
+        (p.getStudyParticipant("P1") as any).manipulation_check_pass === 1);
+      p.setManipulationCheck("P1", false);
+      check("manip pass=0",
+        (p.getStudyParticipant("P1") as any).manipulation_check_pass === 0);
+    } finally { p.close(); }
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }

@@ -562,7 +562,8 @@ export class SqlitePersistence implements Persistence {
                 experiment_mode, excluded, excluded_reason, test_data,
                 prolific_pid, prolific_study_id, prolific_session_id,
                 condition_mode, condition_role, opponent_block,
-                assignment_seed, assignment_block_index, replicate_id
+                assignment_seed, assignment_block_index, replicate_id,
+                manipulation_check_pass
            FROM study_participants WHERE id = ?`,
       )
       .get(id) as
@@ -1327,6 +1328,15 @@ export class SqlitePersistence implements Persistence {
     this.db
       .prepare(`UPDATE study_participants SET test_data = ? WHERE id = ?`)
       .run(testData ? 1 : 0, participantId);
+  }
+
+  /** Set the derived delegation manipulation-check pass flag (mirrors the
+   *  existing attention_check_pass). The raw response is stored separately
+   *  via the existing participant_responses path. */
+  setManipulationCheck(participantId: string, pass: boolean): void {
+    this.db
+      .prepare(`UPDATE study_participants SET manipulation_check_pass = ? WHERE id = ?`)
+      .run(pass ? 1 : 0, participantId);
   }
 
   /**
