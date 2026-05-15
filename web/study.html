@@ -2676,6 +2676,8 @@ async function continueFromProlific() {
     // Convert server conditionMode → SPA mode string (mirrors recordAssignment).
     // For resumes condMode may be null; derive mode from condRole via the resume
     // snapshot if available (it was saved with the correct mode on first visit).
+    // condRole and spaMode both come from the same atomic localStorage snapshot,
+    // so they are always consistent with each other on resume.
     const spaMode = condMode
       ? (condMode === "delegated" ? "agent" : "human_" + condRole)
       : (resume?.participantId === state.participantId ? resume?.mode : null);
@@ -2825,10 +2827,12 @@ function timeOnScreen() { return Date.now() - state.screenStartTs; }
 // out steps that were skipped for the current route.
 
 function computeVisibleSteps() {
-  const presetRole = document.documentElement.hasAttribute("data-preset-role");
+  // step 1 (role pick) is skipped on debug preset routes AND on the neutral
+  // research path where the server already assigned state.role
+  const skipRolePick = document.documentElement.hasAttribute("data-preset-role") || !!state.role;
   const isHumanMode = state.mode === "human_buyer" || state.mode === "human_seller";
   let steps = [1,2,3,4,5,6,7,8,9,10];
-  if (presetRole) steps = steps.filter((s) => s !== 1);    // role-pick skipped
+  if (skipRolePick) steps = steps.filter((s) => s !== 1);  // role-pick skipped
   if (isHumanMode) steps = steps.filter((s) => s !== 5 && s !== 6); // no agent prompt
   return steps;
 }

@@ -59,9 +59,11 @@ const server = http.createServer(async (req, res) => {
     // Public study URLs:
     //   /blx → buyer condition (SPA reads the path and skips role pick)
     //   /slx → seller condition (same)
-    //   /   → 302 redirect to /blx (default for anyone who hits the bare
-    //         domain; researchers should distribute /blx and /slx directly)
-    //   /study, /study.html → kept as backward-compat aliases
+    //   /bhx → human-buyer condition (direct chat, no agent prompt screens)
+    //   /shx → human-seller condition (same)
+    //   /study, /study.html → neutral research entry; condition assigned server-side
+    //   /   → 302 redirect to /study (neutral research entry — condition is
+    //         assigned server-side; /blx /slx /bhx /shx are debug/pilot only)
     if (
       req.method === "GET" &&
       (url.pathname === "/blx" ||
