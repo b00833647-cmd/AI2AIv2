@@ -1,4 +1,8 @@
-"""Standalone snapshot access for the process report. No project imports."""
+"""Snapshot access for the process report.
+
+Clean-room: no cross-package imports (nothing from core/ or human_pilot/);
+only intra-process_report imports are allowed.
+"""
 from __future__ import annotations
 
 import sqlite3
@@ -33,7 +37,7 @@ def completers(con) -> pd.DataFrame:
         """SELECT id AS participant_id, session_id, role, experiment_mode,
                   completion_code
              FROM study_participants
-            WHERE completion_code IS NOT NULL""", con)
+            WHERE completion_code IS NOT NULL AND completion_code != ''""", con)
     cond = resolve_conditions(con)[["participant_id", "mode2"]]
     df = df.merge(cond, on="participant_id", how="left")
     df["cell"] = df["mode2"] + " · " + df["role"]
