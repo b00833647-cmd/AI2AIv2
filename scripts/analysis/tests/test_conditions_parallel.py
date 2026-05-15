@@ -22,6 +22,7 @@ CREATE TABLE participant_responses (
 ROWS = [
     ("L1","buyer","CC","agent",None,None,None,None,None,None,None,None,None,None,None,None),
     ("L2","seller","CC","human_seller",None,None,None,None,None,None,None,None,None,None,None,None),
+    ("L3","buyer","CC","agent",None,None,None,None,None,None,None,None,None,None,None,None),
     ("M1","buyer","CC","agent","direct","seller","easygoing","S",2,2,1,0,0,1,0,0),
     ("X","buyer",None,"agent",None,None,None,None,None,None,None,None,None,None,None,None),
 ]
@@ -40,7 +41,7 @@ def test_core_and_process_report_readers_are_identical():
     a = core_resolve(_con()).sort_values("participant_id").reset_index(drop=True)
     b = pr_resolve(_con()).sort_values("participant_id").reset_index(drop=True)
     pd.testing.assert_frame_equal(a, b, check_dtype=False)
-    assert list(a["participant_id"]) == ["L1", "L2", "M1"]  # 'X' (no code) excluded
+    assert list(a["participant_id"]) == ["L1", "L2", "L3", "M1"]  # 'X' (no code) excluded
     ai = a.set_index("participant_id")
     assert ai.loc["M1","condition_source"] == "main"
     assert ai.loc["L1","condition_source"] == "legacy"
@@ -55,6 +56,10 @@ def test_core_and_process_report_readers_are_identical():
     assert int(ai.loc["M1","manipulation_check_pass"]) == 1
     assert int(ai.loc["M1","excl_speeding"]) == 1
     assert int(ai.loc["M1","excl_manipulation"]) == 0
+    assert int(ai.loc["M1","excl_attention"]) == 0
     # legacy row main-only cols are NA in BOTH readers
     bi = b.set_index("participant_id")
     assert pd.isna(ai.loc["L1","assignment_seed"]) and pd.isna(bi.loc["L1","assignment_seed"])
+    # L3 is a legacy row with no participant_responses entry — proves both readers
+    # handle the legacy left-join miss → NaN opponent_block identically.
+    assert pd.isna(ai.loc["L3","opponent_block"]) and pd.isna(bi.loc["L3","opponent_block"])
