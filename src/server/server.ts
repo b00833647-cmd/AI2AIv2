@@ -1303,12 +1303,11 @@ async function handleParticipantMode(req: http.IncomingMessage, res: http.Server
   if (!require400(res, typeof body.participantId === "string", "participantId required")) return;
   const allowed = ["agent", "human_buyer", "human_seller"];
   if (!require400(res, allowed.includes(body.mode), "mode must be agent | human_buyer | human_seller")) return;
-  withDb((db) => {
-    const sp = db.getStudyParticipant(body.participantId);
-    if (sp && modeOverrideAllowed({ condition_mode: sp.condition_mode ?? null, test_data: sp.test_data })) {
-      db.updateStudyParticipant(body.participantId, { experiment_mode: body.mode });
-    }
-  });
+  const sp = withDb((db) => db.getStudyParticipant(body.participantId));
+  if (!sp) { sendJson(res, 404, { error: "unknown participantId" }); return; }
+  if (modeOverrideAllowed({ condition_mode: sp.condition_mode ?? null, test_data: sp.test_data })) {
+    withDb((db) => db.updateStudyParticipant(body.participantId, { experiment_mode: body.mode }));
+  }
   sendJson(res, 200, { ok: true });
 }
 
