@@ -1380,6 +1380,44 @@ export class SqlitePersistence implements Persistence {
     tx();
   }
 
+  /** Append a 'voided' or 'replaced' assignment_log row (audit + frees the
+   *  stratum so the next claimant re-fills it). Copies the participant's
+   *  current condition so the log row is self-describing. */
+  recordAssignmentEvent(
+    participantId: string,
+    eventType: "voided" | "replaced",
+    voidReason: string,
+  ): void {
+    const sp = this.db
+      .prepare(
+        `SELECT condition_mode, condition_role, opponent_block,
+                assignment_seed, assignment_block_index, replicate_id
+           FROM study_participants WHERE id = ?`,
+      )
+      .get(participantId) as
+      | {
+          condition_mode: string | null; condition_role: string | null;
+          opponent_block: string | null; assignment_seed: string | null;
+          assignment_block_index: number | null; replicate_id: number | null;
+        }
+      | undefined;
+    this.db
+      .prepare(
+        `INSERT INTO assignment_log
+           (participant_id, event_type, condition_mode, condition_role,
+            opponent_block, assignment_seed, assignment_block_index,
+            replicate_id, void_reason, assigned_at, server_ts)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        participantId, eventType, sp?.condition_mode ?? null,
+        sp?.condition_role ?? null, sp?.opponent_block ?? null,
+        sp?.assignment_seed ?? null, sp?.assignment_block_index ?? null,
+        sp?.replicate_id ?? null, voidReason,
+        new Date().toISOString(), new Date().toISOString(),
+      );
+  }
+
   /**
    * IRREVERSIBLY delete a participant and ALL their associated data:
    * - participant_responses, participant_events, behavior_prompts (auto-cascade

@@ -272,6 +272,26 @@ async function main(): Promise<void> {
     } finally { p.close(); }
   }
 
+  console.log("\n# clean-design: recordAssignmentEvent\n");
+  {
+    const d = mkdtempSync(path.join(tmpdir(), "ai2ai-cd-"));
+    const p = openPersistence(path.join(d, "cd.db"));
+    try {
+      p.createStudyParticipant({ id: "P1" });
+      p.recordAssignment("P1", {
+        conditionMode: "delegated", conditionRole: "buyer",
+        opponentBlock: "moderate", assignmentSeed: "S",
+        assignmentBlockIndex: 0, replicateId: 0,
+        assignedAt: "2026-05-15T00:00:00.000Z",
+      });
+      p.recordAssignmentEvent("P1", "voided", "attention_fail");
+      const log = (p as any)["db"]
+        .prepare("SELECT event_type, void_reason FROM assignment_log WHERE participant_id='P1' ORDER BY id").all();
+      check("two log rows", log.length === 2);
+      check("second row voided", log[1].event_type === "voided" && log[1].void_reason === "attention_fail");
+    } finally { p.close(); }
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }
