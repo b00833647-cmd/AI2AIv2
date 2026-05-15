@@ -42,3 +42,6 @@ AI2AI-backup-*/
 .claude-flow/
 .claude/*.lock
 .claude/local/
+
+# Git worktrees (isolated dev workspaces — never commit their contents)
+.worktrees/
