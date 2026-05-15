@@ -8,3 +8,4 @@ seaborn>=0.13
 python-docx>=1.1
 pytest>=7.4
 plotnine>=0.13
+anthropic>=0.40
