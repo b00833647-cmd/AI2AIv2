@@ -1542,6 +1542,30 @@ export class SqlitePersistence implements Persistence {
       .all(participantId) as Array<Record<string, unknown>>;
   }
 
+  /** Atomically: read the next permuted-block position, call `compute(pos)`
+   *  to resolve the condition, and persist it. The randomization policy is
+   *  injected (kept out of the storage layer); see src/server/assignment.ts. */
+  claimAssignment(
+    participantId: string,
+    compute: (position: number) => {
+      conditionMode: "delegated" | "direct";
+      conditionRole: "buyer" | "seller";
+      opponentBlock: "easygoing" | "moderate" | "tough";
+      assignmentSeed: string;
+      assignmentBlockIndex: number;
+      replicateId: number;
+      assignedAt: string;
+    },
+  ): ReturnType<typeof compute> {
+    const tx = this.db.transaction(() => {
+      const pos = this.netResearchAssignmentPosition();
+      const a = compute(pos);
+      this.recordAssignment(participantId, a);
+      return a;
+    });
+    return tx();
+  }
+
   /**
    * IRREVERSIBLY delete a participant and ALL their associated data:
    * - participant_responses, participant_events, behavior_prompts (auto-cascade

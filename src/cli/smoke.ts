@@ -374,6 +374,31 @@ async function main(): Promise<void> {
     } finally { p.close(); }
   }
 
+  console.log("\n# clean-design: claimAssignment primitive\n");
+  {
+    const d = mkdtempSync(path.join(tmpdir(), "ai2ai-cd-"));
+    const p = openPersistence(path.join(d, "cd.db"));
+    try {
+      p.createStudyParticipant({ id: "P1" });
+      p.createStudyParticipant({ id: "P2" });
+      const seen: number[] = [];
+      const compute = (pos: number) => {
+        seen.push(pos);
+        return {
+          conditionMode: "delegated" as const, conditionRole: "buyer" as const,
+          opponentBlock: "moderate" as const, assignmentSeed: "S",
+          assignmentBlockIndex: pos, replicateId: pos,
+          assignedAt: "2026-05-15T00:00:00.000Z",
+        };
+      };
+      p.claimAssignment("P1", compute);
+      p.claimAssignment("P2", compute);
+      check("positions were 0 then 1", seen[0] === 0 && seen[1] === 1);
+      check("P2 stored block index 1",
+        p.getAssignment("P2")?.assignmentBlockIndex === 1);
+    } finally { p.close(); }
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }
