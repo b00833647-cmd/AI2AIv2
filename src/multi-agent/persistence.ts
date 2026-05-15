@@ -1544,7 +1544,7 @@ export class SqlitePersistence implements Persistence {
 
   /** Atomically: read the next permuted-block position, call `compute(pos)`
    *  to resolve the condition, and persist it. The randomization policy is
-   *  injected (kept out of the storage layer); see src/server/assignment.ts. */
+   *  injected by the caller (kept out of the storage layer). */
   claimAssignment(
     participantId: string,
     compute: (position: number) => {
@@ -1557,6 +1557,7 @@ export class SqlitePersistence implements Persistence {
       assignedAt: string;
     },
   ): ReturnType<typeof compute> {
+    // recordAssignment opens its own transaction; better-sqlite3 nests it as a SAVEPOINT, so the outer tx still provides the atomic read-position→write guarantee.
     const tx = this.db.transaction(() => {
       const pos = this.netResearchAssignmentPosition();
       const a = compute(pos);
