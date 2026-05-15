@@ -554,6 +554,11 @@ export class SqlitePersistence implements Persistence {
     assignment_block_index: number | null;
     replicate_id: number | null;
     manipulation_check_pass: number | null;
+    excl_attention: number | null;
+    excl_manipulation: number | null;
+    excl_speeding: number | null;
+    excl_comprehension: number | null;
+    excl_noncompletion: number | null;
   } | undefined {
     return this.db
       .prepare(
@@ -564,7 +569,9 @@ export class SqlitePersistence implements Persistence {
                 prolific_pid, prolific_study_id, prolific_session_id,
                 condition_mode, condition_role, opponent_block,
                 assignment_seed, assignment_block_index, replicate_id,
-                manipulation_check_pass
+                manipulation_check_pass,
+                excl_attention, excl_manipulation, excl_speeding,
+                excl_comprehension, excl_noncompletion
            FROM study_participants WHERE id = ?`,
       )
       .get(id) as
@@ -599,6 +606,11 @@ export class SqlitePersistence implements Persistence {
           assignment_block_index: number | null;
           replicate_id: number | null;
           manipulation_check_pass: number | null;
+          excl_attention: number | null;
+          excl_manipulation: number | null;
+          excl_speeding: number | null;
+          excl_comprehension: number | null;
+          excl_noncompletion: number | null;
         }
       | undefined;
   }
@@ -1339,6 +1351,53 @@ export class SqlitePersistence implements Persistence {
     this.db
       .prepare(`UPDATE study_participants SET manipulation_check_pass = ? WHERE id = ?`)
       .run(pass ? 1 : 0, participantId);
+  }
+
+  /** Set structured exclusion booleans and recompute the derived
+   *  excluded / excluded_reason rollup (excluded=1 iff any excl_* is set). */
+  setExclusionFlags(
+    participantId: string,
+    flags: Partial<{
+      attention: boolean; manipulation: boolean; speeding: boolean;
+      comprehension: boolean; noncompletion: boolean;
+    }>,
+  ): void {
+    const map: Record<string, string> = {
+      attention: "excl_attention", manipulation: "excl_manipulation",
+      speeding: "excl_speeding", comprehension: "excl_comprehension",
+      noncompletion: "excl_noncompletion",
+    };
+    const tx = this.db.transaction(() => {
+      for (const [k, col] of Object.entries(map)) {
+        const v = (flags as Record<string, boolean | undefined>)[k];
+        if (v === undefined) continue;
+        this.db
+          .prepare(`UPDATE study_participants SET ${col} = ? WHERE id = ?`)
+          .run(v ? 1 : 0, participantId);
+      }
+      const row = this.db
+        .prepare(
+          `SELECT excl_attention, excl_manipulation, excl_speeding,
+                  excl_comprehension, excl_noncompletion
+             FROM study_participants WHERE id = ?`,
+        )
+        .get(participantId) as Record<string, number | null> | undefined;
+      const set = Object.entries(row ?? {})
+        .filter(([, v]) => v === 1)
+        .map(([c]) => c.replace("excl_", ""));
+      this.db
+        .prepare(
+          `UPDATE study_participants
+              SET excluded = ?, excluded_reason = ?
+            WHERE id = ?`,
+        )
+        .run(
+          set.length > 0 ? 1 : 0,
+          set.length > 0 ? `auto: ${set.join(", ")}` : null,
+          participantId,
+        );
+    });
+    tx();
   }
 
   /**

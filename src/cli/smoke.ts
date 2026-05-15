@@ -307,6 +307,28 @@ async function main(): Promise<void> {
     } finally { p.close(); }
   }
 
+  console.log("\n# clean-design: setExclusionFlags\n");
+  {
+    const d = mkdtempSync(path.join(tmpdir(), "ai2ai-cd-"));
+    const p = openPersistence(path.join(d, "cd.db"));
+    try {
+      p.createStudyParticipant({ id: "P1" });
+      p.setExclusionFlags("P1", { attention: true, speeding: true });
+      const sp = p.getStudyParticipant("P1")!;
+      check("excl_attention=1", sp.excl_attention === 1);
+      check("excl_speeding=1", sp.excl_speeding === 1);
+      check("excl_manipulation null/0", !sp.excl_manipulation);
+      check("rollup excluded=1", sp.excluded === 1);
+      check("rollup reason mentions flags",
+        typeof sp.excluded_reason === "string" &&
+        sp.excluded_reason.includes("attention") &&
+        sp.excluded_reason.includes("speeding"));
+      p.setExclusionFlags("P1", { attention: false, speeding: false });
+      check("rollup clears when none set",
+        p.getStudyParticipant("P1")!.excluded === 0);
+    } finally { p.close(); }
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }
