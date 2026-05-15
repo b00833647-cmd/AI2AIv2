@@ -124,6 +124,107 @@ def fig_prompt_len(con) -> Path:
     return save(fig, "fig6_prompt_len", aspect=0.5)
 
 
+def fig_dv_heatmap(con) -> Path:
+    apply_theme()
+    from matplotlib.colors import LinearSegmentedColormap
+    from scripts.analysis.human_pilot.palette import LIKERT_DIVERGING
+    s = survey_long(con)
+    s = s[s["key"].isin(V2_SURVEY_KEYS) & s["value_int"].notna()].copy()
+    s["value_int"] = s["value_int"].astype(float)
+    s["cell"] = s["mode2"] + "\n" + s["role"]
+    piv = (s.pivot_table(index="key", columns="cell", values="value_int",
+                         aggfunc="mean").reindex(V2_SURVEY_KEYS))
+    cmap = LinearSegmentedColormap.from_list("likert", LIKERT_DIVERGING)
+    fig, ax = plt.subplots()
+    im = ax.imshow(piv.values, cmap=cmap, vmin=1, vmax=7, aspect="auto")
+    ax.set_xticks(range(piv.shape[1]))
+    ax.set_xticklabels(list(piv.columns), fontsize=8)
+    ax.set_yticks(range(piv.shape[0]))
+    ax.set_yticklabels(list(piv.index), fontsize=8)
+    ax.axhline(3.5, color="black", lw=1.6)  # priority DVs (rows 0-3) above
+    for r in range(piv.shape[0]):
+        for c in range(piv.shape[1]):
+            ax.text(c, r, f"{piv.values[r, c]:.1f}", ha="center",
+                    va="center", fontsize=8, color="black")
+    fig.colorbar(im, ax=ax, shrink=0.7, label="mean (1–7)")
+    ax.set_title("DV means by group (priority DVs above the rule)")
+    return save(fig, "fig4_dv_heatmap", aspect=0.7)
+
+
+def fig_dv_raincloud(con, dv: str) -> Path:
+    from scripts.analysis.human_pilot.tables import srh_results
+    s = survey_long(con)
+    d = s[(s["key"] == dv) & s["value_int"].notna()].copy()
+    d["value_int"] = d["value_int"].astype(float)
+    row = srh_results(con).query("dv == @dv").iloc[0]
+    sub = (f"SRH  Mode p={row['mode_p']:.3f} · Role p={row['role_p']:.3f} · "
+           f"M×R p={row['inter_p']:.3f}  (exploratory, n=10/cell)")
+    g = (p9.ggplot(d, p9.aes("role", "value_int", fill="role"))
+         + p9.geom_violin(alpha=0.3, trim=True, color="none")
+         + p9.geom_boxplot(width=0.15, outlier_alpha=0.0, alpha=0.7)
+         + p9.geom_jitter(width=0.08, height=0.0, size=1.6, alpha=0.65)
+         + p9.facet_wrap("~mode2")
+         + p9.scale_fill_manual(values=ROLE_COLORS)
+         + p9.coord_cartesian(ylim=(0.8, 7.2))
+         + p9.labs(title=dv, subtitle=sub, x="", y="response (1–7)", fill="")
+         + p9.theme_minimal()
+         + p9.theme(figure_size=(6, 4.0), legend_position="none"))
+    return save_plotnine(g, f"fig4_dv_{dv}", w=6.0, h=4.0)
+
+
+def fig_dv_panel5(con) -> Path:
+    s = survey_long(con)
+    keys = V2_SURVEY_KEYS[4:]
+    d = s[s["key"].isin(keys) & s["value_int"].notna()].copy()
+    d["value_int"] = d["value_int"].astype(float)
+    d["cell"] = d["mode2"] + "·" + d["role"]
+    d["key"] = pd.Categorical(d["key"], categories=keys, ordered=True)
+    cmap = {
+        "AI-to-AI·buyer": CELL_COLORS["agent/buyer"],
+        "AI-to-AI·seller": CELL_COLORS["agent/seller"],
+        "Human-to-AI·buyer": CELL_COLORS["human_buyer/buyer"],
+        "Human-to-AI·seller": CELL_COLORS["human_seller/seller"],
+    }
+    g = (p9.ggplot(d, p9.aes("cell", "value_int", fill="cell"))
+         + p9.geom_violin(alpha=0.3, trim=True, color="none")
+         + p9.geom_boxplot(width=0.15, outlier_alpha=0.0, alpha=0.7)
+         + p9.geom_jitter(width=0.08, height=0.0, size=1.2, alpha=0.55)
+         + p9.facet_wrap("~key", ncol=2)
+         + p9.scale_fill_manual(values=cmap)
+         + p9.coord_cartesian(ylim=(0.8, 7.2))
+         + p9.labs(title="Secondary DVs by the 4 groups", x="", y="response (1–7)")
+         + p9.theme_minimal()
+         + p9.theme(figure_size=(7, 7), legend_position="none",
+                    axis_text_x=p9.element_text(rotation=30, ha="right")))
+    return save_plotnine(g, "fig4_dv_panel5", w=7.0, h=7.0)
+
+
+def fig_dv_interaction(con, dv: str) -> Path:
+    apply_theme()
+    s = survey_long(con)
+    d = s[(s["key"] == dv) & s["value_int"].notna()].copy()
+    d["value_int"] = d["value_int"].astype(float)
+    modes = ["AI-to-AI", "Human-to-AI"]
+    x = np.arange(2)
+    fig, ax = plt.subplots()
+    for role in ["buyer", "seller"]:
+        means, errs = [], []
+        for m2 in modes:
+            v = d[(d["mode2"] == m2) & (d["role"] == role)]["value_int"]
+            means.append(float(v.mean()))
+            errs.append(1.96 * float(v.std()) / np.sqrt(len(v))
+                        if len(v) > 1 else 0.0)
+        ax.errorbar(x, means, yerr=errs, fmt="o-", capsize=3,
+                    color=ROLE_COLORS[role], label=role)
+    ax.set_xticks(x)
+    ax.set_xticklabels(modes)
+    ax.set_ylim(1, 7)
+    ax.set_ylabel("mean (1–7) ± 95% CI")
+    ax.set_title(f"{dv} — Mode × Role (descriptive, exploratory)")
+    ax.legend(fontsize=8, title="role")
+    return save(fig, f"fig5_int_{dv}", aspect=0.55)
+
+
 ALL_FIGURES = [
     ("fig1_funnel", fig_funnel),
     ("fig2_demographics", fig_demographics),
@@ -132,6 +233,12 @@ ALL_FIGURES = [
     ("fig3_price", fig_price),
     ("fig5_interaction", fig_interaction),
     ("fig6_prompt_len", fig_prompt_len),
+    ("fig4_dv_heatmap", fig_dv_heatmap),
+    *[(f"fig4_dv_{k}", (lambda c, k=k: fig_dv_raincloud(c, k)))
+      for k in V2_SURVEY_KEYS[:4]],
+    ("fig4_dv_panel5", fig_dv_panel5),
+    *[(f"fig5_int_{k}", (lambda c, k=k: fig_dv_interaction(c, k)))
+      for k in V2_SURVEY_KEYS[:4]],
 ]
 
 
