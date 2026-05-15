@@ -1,0 +1,13 @@
+variable,level,n,pct
+gender,Female,22,55.0
+gender,Male,16,40.0
+gender,Prefer not to say,1,2.5
+gender,Non-binary,1,2.5
+experience,little,15,37.5
+experience,none,12,30.0
+experience,moderate,9,22.5
+experience,lot,4,10.0
+ai_familiarity,some,25,62.5
+ai_familiarity,very,14,35.0
+ai_familiarity,none,1,2.5
+age,mean (SD),40,41.0 (14.7)

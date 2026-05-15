@@ -1,0 +1,5 @@
+metric,value
+participants with any clipboard/right-click attempt,18
+total clipboard/right-click events,107
+behavior prompts (agent modes),20
+behavior prompt length median (chars),230

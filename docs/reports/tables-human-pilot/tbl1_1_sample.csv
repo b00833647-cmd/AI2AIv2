@@ -1,0 +1,13 @@
+experiment_mode,role,opponent_personality,n
+agent,buyer,easygoing,4
+agent,buyer,moderate,3
+agent,buyer,tough,3
+agent,seller,easygoing,4
+agent,seller,moderate,2
+agent,seller,tough,4
+human_buyer,buyer,easygoing,3
+human_buyer,buyer,moderate,4
+human_buyer,buyer,tough,3
+human_seller,seller,easygoing,4
+human_seller,seller,moderate,4
+human_seller,seller,tough,2

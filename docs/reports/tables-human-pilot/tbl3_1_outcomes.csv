@@ -1,0 +1,5 @@
+experiment_mode,role,n,agreement_rate,price_median,price_iqr,turns_median,time_median_s
+agent,buyer,10,0.5,23500.0,23000-23500,13.5,150.4195
+agent,seller,10,0.8,23250.0,22875-23500,16.0,163.6255
+human_buyer,buyer,10,0.5,24250.0,23750-24750,9.0,388.8565
+human_seller,seller,10,0.9,22500.0,22000-23000,9.5,349.4945

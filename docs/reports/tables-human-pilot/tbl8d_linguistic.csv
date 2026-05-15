@@ -1,0 +1,3 @@
+role,n,char_len_med,politeness_mean,hedges_mean,questions_mean,concession_mean,directness_mean
+buyer,53,57.0,0.09,0.04,0.4,0.17,0.0
+seller,44,48.5,0.09,0.0,0.07,0.27,0.0

@@ -1,0 +1,7 @@
+link,group,n,price_median
+price~orientation,distributive,9,23000.0
+price~orientation,integrative,2,23500.0
+price~orientation,mixed,2,23000.0
+satisfaction~comment_sentiment,negative,7,4.0
+satisfaction~comment_sentiment,neutral,3,5.0
+satisfaction~comment_sentiment,positive,10,6.5

@@ -12,6 +12,11 @@ from scripts.analysis.human_pilot import figures as F
 from scripts.analysis.human_pilot.docx_report import (
     new_doc, h1, h2, para, figure, table,
 )
+from scripts.analysis.human_pilot.tables import (
+    theme_prevalence, taxonomy_by_role, comment_sentiment,
+    linguistic_by_role, qual_quant_link, qual_cache_available,
+)
+from scripts.analysis.human_pilot.qual_codebook import MODEL as QMODEL, CODER_RUN_DATE as QDATE
 
 OUT = Path("docs/reports/2026-05-15-human-pilot-data-report.docx")
 TBL_DIR = Path("docs/reports/tables-human-pilot")
@@ -130,6 +135,70 @@ def build():
           "At current N the report supports descriptives + the two 20-vs-20 "
           "exploratory contrasts. Powered cell-level and 3-way analyses "
           "require a larger sample.")
+
+    # ── Section 8 — Qualitative ──
+    h1(doc, "8. Qualitative analysis")
+    if qual_cache_available():
+        para(doc, f"LLM-assisted coding disclosure: themes, taxonomy and "
+                  f"comment sentiment were coded once on {QDATE} with "
+                  f"{QMODEL} against the fixed codebook. n=20 behaviour "
+                  f"prompts / 20 comments. Codes are illustrative and "
+                  f"hypothesis-generating, NOT theoretically saturated; no "
+                  f"inter-rater reliability. The full coding sheet "
+                  f"(qual_coding_sheet.csv) is committed for spot-checking.",
+             italic=True)
+    else:
+        para(doc, "Qualitative LLM coding has not been run yet — sections "
+                  "8A/8B/8C/8E show placeholders. Run "
+                  "`python -m scripts.analysis.human_pilot.code_qualitative` "
+                  "with ANTHROPIC_API_KEY set, then rebuild. Section 8D "
+                  "(linguistic) is deterministic and shown below regardless.",
+             italic=True)
+
+    h2(doc, "8A — Strategy themes (behaviour prompts, inductive)")
+    figure(doc, F.fig_theme_prevalence(con),
+           "Figure 8A.1 — Theme prevalence across 20 agent-mode prompts.",
+           "How often each negotiation-strategy theme appears in "
+           "participants' instructions to their delegated agent. "
+           "Illustrative; n=20.")
+    if qual_cache_available():
+        tp = theme_prevalence(con); _csv(tp, "tbl8a_themes")
+        table(doc, tp, "Table 8A.1 — Theme prevalence (count, %).",
+              "Most-instructed strategies first.")
+
+    h2(doc, "8B — Strategy taxonomy (deductive)")
+    if qual_cache_available():
+        tx = taxonomy_by_role(con); _csv(tx, "tbl8b_taxonomy")
+        table(doc, tx, "Table 8B.1 — Taxonomy frequencies by role.",
+              "Distributive vs integrative orientation, anchor strength, "
+              "threshold/politeness/info-strategy — buyer vs seller counts. "
+              "Descriptive; no test (n=20).")
+    else:
+        para(doc, "(8B table pending qualitative coding.)", italic=True)
+
+    h2(doc, "8C — Study-comment sentiment")
+    figure(doc, F.fig_comment_sentiment(con),
+           "Figure 8C.1 — Comment valence × topic (n=20, all non-blank).",
+           "Tone and focus of the open-ended study comments.")
+
+    h2(doc, "8D — Human-turn language (deterministic)")
+    figure(doc, F.fig_linguistic(con),
+           "Figure 8D.1 — Linguistic features, buyer vs seller (human modes).",
+           "Politeness, hedging, questions, concession and directness per "
+           "typed turn. Lexicon-based, fully reproducible, no LLM.")
+    tl = linguistic_by_role(con); _csv(tl, "tbl8d_linguistic")
+    table(doc, tl, "Table 8D.1 — Linguistic feature means by role.",
+          "Per-turn means for human-mode participants.")
+
+    h2(doc, "8E — Qualitative × quantitative link")
+    if qual_cache_available():
+        ql = qual_quant_link(con); _csv(ql, "tbl8e_link")
+        table(doc, ql, "Table 8E.1 — Outcomes by strategy / sentiment.",
+              "Agreed-price median by prompt orientation; satisfaction "
+              "median by comment sentiment. Descriptive, illustrative, "
+              "hypothesis-generating only — n is small.")
+    else:
+        para(doc, "(8E link pending qualitative coding.)", italic=True)
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     doc.save(OUT)

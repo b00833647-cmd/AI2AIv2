@@ -1,0 +1,7 @@
+variable,n,now,when_n_grows
+experiment_mode (mode2),40,descriptive + 20v20 exploratory test,powered mode contrast
+role,40,descriptive + 20v20 exploratory test,powered role contrast
+opponent_personality,40,descriptive only (≈13/level),3-group KW
+final_price,27,descriptive (agreed only),price modelling
+9 survey items,40,"per-item δ + CI, FDR (exploratory)",powered item tests + subscales
+mode × role × personality,40,NOT analysable (cells 2-4),3-way once ≥~15/cell
