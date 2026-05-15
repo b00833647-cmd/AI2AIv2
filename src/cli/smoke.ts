@@ -190,6 +190,26 @@ async function main(): Promise<void> {
     db.close();
   }
 
+  console.log("\n# clean-design schema: study_participants columns\n");
+  {
+    const d = mkdtempSync(path.join(tmpdir(), "ai2ai-cd-"));
+    const p = openPersistence(path.join(d, "cd.db"));
+    try {
+      const cols = (p as any)["db"]
+        .prepare("PRAGMA table_info(study_participants)")
+        .all()
+        .map((r: any) => r.name as string);
+      for (const c of [
+        "condition_mode", "condition_role", "opponent_block",
+        "assignment_seed", "assignment_block_index", "replicate_id",
+        "manipulation_check_pass", "excl_attention", "excl_manipulation",
+        "excl_speeding", "excl_comprehension", "excl_noncompletion",
+      ]) {
+        check(`study_participants.${c} exists`, cols.includes(c));
+      }
+    } finally { p.close(); }
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }

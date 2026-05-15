@@ -208,6 +208,22 @@ const MIGRATIONS: string[] = [
   "ALTER TABLE study_participants ADD COLUMN prolific_pid TEXT",
   "ALTER TABLE study_participants ADD COLUMN prolific_study_id TEXT",
   "ALTER TABLE study_participants ADD COLUMN prolific_session_id TEXT",
+  // Clean experimental design (spec 2/4) — first-class condition,
+  // assignment provenance, and pre-registered checks. All NULLABLE with
+  // no DEFAULT: pre-existing/pilot rows stay NULL, which is the legacy
+  // discriminator (NULL condition_mode ⇒ analysis uses experiment_mode).
+  "ALTER TABLE study_participants ADD COLUMN condition_mode TEXT",
+  "ALTER TABLE study_participants ADD COLUMN condition_role TEXT",
+  "ALTER TABLE study_participants ADD COLUMN opponent_block TEXT",
+  "ALTER TABLE study_participants ADD COLUMN assignment_seed TEXT",
+  "ALTER TABLE study_participants ADD COLUMN assignment_block_index INTEGER",
+  "ALTER TABLE study_participants ADD COLUMN replicate_id INTEGER",
+  "ALTER TABLE study_participants ADD COLUMN manipulation_check_pass INTEGER",
+  "ALTER TABLE study_participants ADD COLUMN excl_attention INTEGER",
+  "ALTER TABLE study_participants ADD COLUMN excl_manipulation INTEGER",
+  "ALTER TABLE study_participants ADD COLUMN excl_speeding INTEGER",
+  "ALTER TABLE study_participants ADD COLUMN excl_comprehension INTEGER",
+  "ALTER TABLE study_participants ADD COLUMN excl_noncompletion INTEGER",
 ];
 
 export class SqlitePersistence implements Persistence {
