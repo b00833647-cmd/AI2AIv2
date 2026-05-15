@@ -9,7 +9,7 @@ from scripts.analysis.human_pilot.data import (
     V2_SURVEY_KEYS,
 )
 from scripts.analysis.human_pilot.stats_ext import (
-    fisher_2x2, cliff_delta, bootstrap_ci, fdr_bh, mann_whitney,
+    fisher_2x2, cliff_delta, fdr_bh, mann_whitney,
 )
 
 
@@ -71,6 +71,20 @@ def survey_descriptives(con) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values(["item", "mode2"]).reset_index(drop=True)
 
 
+def _delta_ci(a, b, n_boot: int = 1000, seed: int = 42):
+    """Two-sample percentile bootstrap CI for Cliff's delta: resample
+    each group independently with replacement, recompute delta."""
+    rng = np.random.default_rng(seed)
+    A = np.asarray(a, dtype=float)
+    B = np.asarray(b, dtype=float)
+    boots = [
+        cliff_delta(rng.choice(A, A.size, replace=True),
+                    rng.choice(B, B.size, replace=True))
+        for _ in range(n_boot)
+    ]
+    return float(np.percentile(boots, 2.5)), float(np.percentile(boots, 97.5))
+
+
 def _two_group_survey(con, group_col: str, a_label, b_label) -> pd.DataFrame:
     s = survey_long(con)
     s = s[s["key"].isin(V2_SURVEY_KEYS) & s["value_int"].notna()].copy()
@@ -82,12 +96,7 @@ def _two_group_survey(con, group_col: str, a_label, b_label) -> pd.DataFrame:
         if len(a) < 3 or len(b) < 3:
             continue
         d = cliff_delta(a, b)
-        lo, hi = bootstrap_ci(
-            np.array([1] * len(a) + [0] * len(b)),
-            statistic=lambda x: cliff_delta(
-                list(np.array(a + b)[x == 1]), list(np.array(a + b)[x == 0])),
-            n_boot=1000, random_state=42,
-        )
+        lo, hi = _delta_ci(a, b)
         mw = mann_whitney(a, b)
         out.append({"item": item, "n_a": len(a), "n_b": len(b),
                     "delta": d, "ci_lo": lo, "ci_hi": hi, "p_mw": mw["p"]})
@@ -246,7 +255,7 @@ def qual_quant_link(con) -> pd.DataFrame:
         for ori, g in m.groupby("orientation"):
             out.append({"link": "price~orientation", "group": ori,
                         "n": len(g),
-                        "price_median": float(g["final_price"].median())
+                        "value_median": float(g["final_price"].median())
                         if len(g) else None})
     rows_c = _qual_rows("comment")
     if rows_c:
@@ -258,6 +267,6 @@ def qual_quant_link(con) -> pd.DataFrame:
         for val, g in m.groupby("valence"):
             out.append({"link": "satisfaction~comment_sentiment",
                         "group": val, "n": len(g),
-                        "price_median": float(g["value_int"].median())
+                        "value_median": float(g["value_int"].median())
                         if len(g) else None})
     return pd.DataFrame(out)
