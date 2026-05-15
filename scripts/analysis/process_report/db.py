@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from scripts.analysis.process_report.conditions import resolve_conditions
+
 SNAPSHOT = Path("data/ai2ai-human-pilot-2026-05-15.db")
 
 MODE2 = {"agent": "AI-to-AI",
@@ -21,13 +23,19 @@ def connect() -> sqlite3.Connection:
 
 
 def completers(con) -> pd.DataFrame:
-    """The 40 finished participants, one row each, with cell labels."""
+    """The 40 finished participants, one row each, with cell labels.
+
+    Condition columns come from the clean-room reader (NULL-means-legacy);
+    mode2/cell derive from its canonical condition_mode so legacy (pilot)
+    and future main-study rows unify under one vocabulary.
+    """
     df = pd.read_sql_query(
         """SELECT id AS participant_id, session_id, role, experiment_mode,
                   completion_code
              FROM study_participants
             WHERE completion_code IS NOT NULL""", con)
-    df["mode2"] = df["experiment_mode"].map(MODE2)
+    cond = resolve_conditions(con)[["participant_id", "mode2"]]
+    df = df.merge(cond, on="participant_id", how="left")
     df["cell"] = df["mode2"] + " · " + df["role"]
     return df.reset_index(drop=True)
 
