@@ -1660,7 +1660,7 @@ const PROLIFIC_COMPLETION_CODES: Record<string, string> = {
   "agent/buyer":          "CL2ZWLNV",         // /blx
   "agent/seller":         "CL2ZWLNV",         // /slx
   "human_buyer/buyer":    "CL2ZWLNV",         // /bhx
-  // "human_seller/seller":  "<TBD>",         // /shx
+  "human_seller/seller":  "CL2ZWLNV",         // /shx
 };
 
 /**
