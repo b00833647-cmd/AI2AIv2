@@ -21,8 +21,14 @@ SECONDARY_SURVEY = [
 
 
 def _mode_split(df: pd.DataFrame, dv: str):
-    a = df.loc[df["condition_mode"] == "delegated", dv].astype(float)
-    b = df.loc[df["condition_mode"] == "direct", dv].astype(float)
+    # to_numeric(coerce) == astype(float) for valid numeric data, but yields
+    # NaN (not a TypeError) for an all-NA / non-coercible column; the
+    # dropna() below then removes them. Keeps the dry-run guard from
+    # crashing on degenerate partial data instead of stamping it.
+    a = pd.to_numeric(df.loc[df["condition_mode"] == "delegated", dv],
+                      errors="coerce")
+    b = pd.to_numeric(df.loc[df["condition_mode"] == "direct", dv],
+                      errors="coerce")
     return a.dropna().to_numpy(), b.dropna().to_numpy()
 
 
@@ -76,16 +82,18 @@ def run_battery(sample: pd.DataFrame) -> dict:
         r["q_bh"] = float(q)
 
     # opponent as controlled covariate (sensitivity only)
-    groups = [sample.loc[sample["opponent_block"] == o, "satisfaction"]
-              .astype(float).dropna().to_numpy()
+    groups = [pd.to_numeric(
+                  sample.loc[sample["opponent_block"] == o, "satisfaction"],
+                  errors="coerce").dropna().to_numpy()
               for o in ("easygoing", "moderate", "tough")]
     opp = kruskal_wallis(*groups)
     opp_out = {"test": "kruskal_wallis",
                "note": "controlled covariate, not a factor of interest",
                **opp}
 
-    ar = sample.loc[sample["condition_mode"] == "delegated",
-                    "agent_represented"].astype(float).dropna()
+    ar = pd.to_numeric(
+        sample.loc[sample["condition_mode"] == "delegated",
+                   "agent_represented"], errors="coerce").dropna()
     delegated_only = {
         "dv": "agent_represented",
         "caveat": "delegated-only (not comparable in direct); reported "
