@@ -1,0 +1,3 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+total_concession,.935,−.02,"[−.42, .40]",.293,.026,.097,Role | Direct (X3 vs X4),.061
+rounds_to_close,< .001,.69,"[.48, .95]",.754,.036,.726,Mode | Seller (X2 vs X4),< .001

@@ -1,0 +1,9 @@
+Measure,X1,X2,X3,X4,N
+opening_anchor,21350.0,25400.0,20100.0,21600.0,40
+anchor_distance,450.0,100.0,1700.0,4200.0,40
+opening_spread,4000.0,3600.0,2666.67,-200.0,39
+n_proposals,7.5,8.9,6.2,4.4,40
+n_messages,6.6,6.8,3.9,5.1,40
+n_concessions,2.6,3.5,1.8,1.0,40
+mean_concession,790.83,633.33,2428.65,1595.24,35
+rounds_to_close,7.5,8.9,6.2,4.4,40

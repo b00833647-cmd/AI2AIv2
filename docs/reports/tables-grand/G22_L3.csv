@@ -1,0 +1,7 @@
+Measure,Overall M(SD),Delegated,Direct,Buyer,Seller
+msg_words,65.20 (50.52),112.48,17.92,61.58,68.82
+questions,0.36 (0.29),0.47,0.24,0.46,0.26
+politeness,0.56 (0.47),0.96,0.17,0.52,0.60
+threats,0.06 (0.10),0.06,0.07,0.10,0.03
+standards_appeal,0.23 (0.28),0.43,0.03,0.21,0.26
+price_refs,1.36 (0.93),2.01,0.70,1.17,1.54

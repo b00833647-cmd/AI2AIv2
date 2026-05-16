@@ -1,0 +1,10 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+satisfaction,.354,−.17,"[−.53, .17]",.038,.498,.271,Diagonal (X1 vs X4),.040
+would_use_again,.650,−.09,"[−.44, .27]",.183,.660,.300,Role | Delegated (X1 vs X2),.205
+agent_represented,.888,.03,"[−.34, .37]",.527,.391,.440,Role | Delegated (X1 vs X2),.326
+control,.731,−.07,"[−.43, .29]",.047,.124,.150,Role | Direct (X3 vs X4),.034
+emot_pleasant,.769,.06,"[−.30, .41]",.263,.834,.026,Diagonal (X2 vs X3),.371
+emot_anxious,.150,.27,"[−.08, .64]",.632,.028,.423,Mode | Buyer (X1 vs X3),.014
+effort_invested,.032,−.39,"[−.72, −.09]",.042,.165,.947,Diagonal (X2 vs X3),.004
+engage_engaged,.342,−.17,"[−.50, .15]",.988,.640,.339,Mode | Buyer (X1 vs X3),.348
+outfair_share,.591,−.10,"[−.45, .23]",.348,.989,.937,Diagonal (X1 vs X4),.230

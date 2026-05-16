@@ -1,0 +1,4 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+settlement_price,.960,.02,"[−.45, .47]",.003,.023,.743,Role | Direct (X3 vs X4),.005
+buyer_share,.923,−.04,"[−.55, .49]",.309,.520,.037,Diagonal (X1 vs X4),.488
+settle_vs_mid,.960,.02,"[−.45, .47]",.003,.023,.743,Role | Direct (X3 vs X4),.005

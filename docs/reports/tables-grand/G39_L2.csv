@@ -1,0 +1,3 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+opening_spread,.013,.46,"[.15, .82]",.107,.571,.488,Diagonal (X1 vs X4),.005
+rounds_to_close,< .001,.69,"[.48, .95]",.754,.036,.726,Mode | Seller (X2 vs X4),< .001

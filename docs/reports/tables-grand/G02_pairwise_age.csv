@@ -1,0 +1,7 @@
+Contrast,n,U,p,Cliff δ,95% CI,band,q (BH)
+Mode | Buyer (X1 vs X3),10/10,72,p = .112,.43,"[.00, .94]",medium,.224
+Mode | Seller (X2 vs X4),10/10,41,p = .520,−.18,"[−.74, .34]",small,.596
+Role | Delegated (X1 vs X2),10/10,78,p = .037,.56,"[.20, 1.02]",large,.123
+Role | Direct (X3 vs X4),10/10,42,p = .596,−.15,"[−.69, .36]",small,.596
+Diagonal (X1 vs X4),10/10,78,p = .041,.55,"[.16, 1.03]",large,.123
+Diagonal (X2 vs X3),10/10,42,p = .545,−.17,"[−.72, .31]",small,.596

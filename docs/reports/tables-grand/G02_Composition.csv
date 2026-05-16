@@ -1,0 +1,25 @@
+Variable,Level,n,%
+gender,Female,22,55.0
+gender,Male,16,40.0
+gender,Non-binary,1,2.5
+gender,Prefer not to say,1,2.5
+experience,little,15,37.5
+experience,none,12,30.0
+experience,moderate,9,22.5
+experience,lot,4,10.0
+ai_familiarity,some,25,62.5
+ai_familiarity,very,14,35.0
+ai_familiarity,none,1,2.5
+os,Windows,28,70.0
+os,macOS,8,20.0
+os,Unknown,3,7.5
+os,Linux,1,2.5
+browser,Chrome,37,92.5
+browser,Safari,2,5.0
+browser,Edge,1,2.5
+timezone,America/New_York,22,55.0
+timezone,America/Chicago,8,20.0
+timezone,America/Los_Angeles,5,12.5
+timezone,America/Denver,3,7.5
+timezone,America/Phoenix,2,5.0
+age,M(SD); range,40,41.0(14.7); 19–73

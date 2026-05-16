@@ -1,0 +1,7 @@
+Contrast,rate,OR,p,q (BH)
+Mode | Buyer (X1 vs X3),50% vs 50%,1.00,p = 1.000,1.000
+Mode | Seller (X2 vs X4),80% vs 90%,0.44,p = 1.000,1.000
+Role | Delegated (X1 vs X2),50% vs 80%,0.25,p = .350,.525
+Role | Direct (X3 vs X4),50% vs 90%,0.11,p = .141,.423
+Diagonal (X1 vs X4),50% vs 90%,0.11,p = .141,.423
+Diagonal (X2 vs X3),80% vs 50%,4.00,p = .350,.525

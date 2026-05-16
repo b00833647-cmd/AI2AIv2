@@ -1,0 +1,3 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+action_transitions,.277,−.19,"[−.55, .16]",.151,.008,.171,Mode | Buyer (X1 vs X3),.004
+n_actions,< .001,.69,"[.48, .95]",.754,.036,.726,Mode | Seller (X2 vs X4),< .001

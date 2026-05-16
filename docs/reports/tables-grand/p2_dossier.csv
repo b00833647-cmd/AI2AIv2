@@ -1,0 +1,13 @@
+Metric,X1,X2,X3,X4
+n,10,10,10,10
+Agreement rate,50%,80%,50%,90%
+Settlement Mdn (USD),23500,23250,24250,22500
+Satisfaction M,4.60,5.20,4.40,6.00
+Would-use-again M,3.70,5.00,4.20,4.90
+Perceived control M,4.30,4.50,3.40,5.60
+Anxious affect M,4.90,3.20,2.60,3.70
+Outcome fairness M,4.60,5.00,4.70,5.30
+Turns Mdn,14,16,9,10
+Active time Mdn (s),635,682,630,504
+Concessions Mdn,2,4,2,1
+Anchor dist Mdn,0,0,500,2250

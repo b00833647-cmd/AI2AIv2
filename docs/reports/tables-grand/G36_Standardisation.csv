@@ -1,0 +1,5 @@
+Audit,Value
+distinct scenario_id,1
+distinct system_prompt (Buyer),17
+distinct system_prompt (Seller),18
+behavior_prompts rows vs delegated completers,21 vs 20

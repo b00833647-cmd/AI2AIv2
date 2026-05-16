@@ -1,0 +1,5 @@
+Measure,Overall M(SD),Delegated,Direct,Buyer,Seller
+n_decisions,13.45 (3.59),15.95,10.95,13.15,13.75
+n_request_turn,12.35 (3.63),14.90,9.80,12.10,12.60
+orch_tokens,45622.47 (25546.77),66407.40,24837.55,44086.30,47158.65
+rationale_len,26.45 (11.59),21.35,31.56,29.35,23.55

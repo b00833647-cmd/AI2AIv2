@@ -1,0 +1,4 @@
+Measure,X1,X2,X3,X4,N
+prompt_specificity,1.6,2.3,,,20
+prompt_readability_wps,13.92,20.13,,,20
+anchor_distance,450.0,100.0,,,20

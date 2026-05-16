@@ -1,0 +1,6 @@
+Measure,Overall M(SD),Delegated,Direct,Buyer,Seller
+prompt_words,54.90 (35.58),54.90,nan,39.80,70.00
+prompt_threat,0.20 (0.41),0.20,nan,0.10,0.30
+prompt_polite,0.35 (0.59),0.35,nan,0.30,0.40
+prompt_price_refs,1.75 (1.55),1.75,nan,1.50,2.00
+context_chars,314.10 (144.94),314.10,nan,278.40,349.80

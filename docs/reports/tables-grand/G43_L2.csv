@@ -1,0 +1,3 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+readability,NA,NA,"[NA, NA]",.140,NA,.979,Role | Delegated (X1 vs X2),.140
+lexical_diversity,NA,NA,"[NA, NA]",.272,NA,.807,Role | Delegated (X1 vs X2),.272

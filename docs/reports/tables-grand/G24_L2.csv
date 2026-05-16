@@ -1,0 +1,3 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+ai_opening,.173,.25,"[−.08, .61]",< .001,.149,.215,Diagonal (X1 vs X4),< .001
+ai_n_moves,< .001,.70,"[.51, .95]",1.000,.368,.564,Mode | Seller (X2 vs X4),< .001

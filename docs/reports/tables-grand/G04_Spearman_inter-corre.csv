@@ -1,0 +1,10 @@
+Item,satisfaction,would_use_again,agent_represented,control,emot_pleasant,emot_anxious,effort_invested,engage_engaged,outfair_share
+Satisfaction,1.0,0.79,0.58,0.78,0.78,-0.52,-0.04,0.25,0.74
+Would use again,0.79,1.0,0.61,0.73,0.67,-0.52,-0.05,0.17,0.6
+Felt represented,0.58,0.61,1.0,0.56,0.58,-0.49,0.09,0.43,0.44
+Perceived control,0.78,0.73,0.56,1.0,0.72,-0.33,-0.02,0.21,0.64
+Pleasant affect,0.78,0.67,0.58,0.72,1.0,-0.51,0.03,0.32,0.61
+Anxious affect,-0.52,-0.52,-0.49,-0.33,-0.51,1.0,-0.16,-0.24,-0.42
+Effort invested,-0.04,-0.05,0.09,-0.02,0.03,-0.16,1.0,0.33,0.14
+Engagement,0.25,0.17,0.43,0.21,0.32,-0.24,0.33,1.0,0.16
+Outcome fairness,0.74,0.6,0.44,0.64,0.61,-0.42,0.14,0.16,1.0

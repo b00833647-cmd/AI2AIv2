@@ -1,0 +1,5 @@
+Experiment,Label,Mode,Role,n
+X1,X1 · Delegated · Buyer,delegated,buyer,10
+X2,X2 · Delegated · Seller,delegated,seller,10
+X3,X3 · Direct · Buyer,direct,buyer,10
+X4,X4 · Direct · Seller,direct,seller,10

@@ -1,0 +1,16 @@
+Table,Field,Meaning / caveat
+study_participants,completion_code,Non-null ⇒ completer (analysed = 40)
+study_participants,experiment_mode,agent⇒delegated; human_*⇒direct
+study_participants,role,buyer / seller (→ X1–X4 with Mode)
+study_participants,attention_check_pass,ENTIRELY NULL — not captured
+study_participants,excluded / test_data,All 0
+participant_responses,screen=post_survey,9 Likert DVs (1–7) + free_text
+participant_responses,screen=engine/opponent_personality,Randomised opponent (covariate)
+participant_responses,screen=context/personal_context,Delegated context (n=20)
+sessions,outcome_type / outcome_terms_json,agreed/rejected/impasse/aborted; {price}
+sessions,scenario_pack_json,"Fixed ZOPA 22,500–23,500 (pie $1,000)"
+turns,tool_calls_json,"submit_proposal{action,price} / send_message"
+orchestrator_decisions,tool_name,request_turn/declare_outcome/broadcast/pause
+participant_events,event_type/payload_json,dwell/idle/scroll/listing/integrity/human-turn
+behavior_prompts,prompt_text,Delegated instructions (match_rating/mapped_signals NULL)
+outcomes / scores,(empty),No utility / judge scores — not analysable

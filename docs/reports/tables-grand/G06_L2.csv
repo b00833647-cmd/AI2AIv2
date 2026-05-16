@@ -1,0 +1,5 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+n_decisions,< .001,.81,"[.67, 1.02]",.615,.422,.812,Mode | Seller (X2 vs X4),< .001
+n_request_turn,< .001,.82,"[.68, 1.02]",.664,.302,.732,Mode | Seller (X2 vs X4),< .001
+orch_tokens,< .001,.94,"[.89, 1.05]",.675,.224,.805,Mode | Seller (X2 vs X4),< .001
+rationale_len,.010,−.48,"[−.82, −.18]",.057,.465,.341,Diagonal (X2 vs X3),.002

@@ -1,0 +1,7 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+msg_words,< .001,1.00,"[1.00, 1.00]",.655,.267,.857,Mode | Seller (X2 vs X4),< .001
+questions,.013,.46,"[.14, .81]",.035,.085,.486,Diagonal (X1 vs X4),< .001
+politeness,< .001,.96,"[.93, 1.04]",.722,.420,.936,Diagonal (X2 vs X3),< .001
+threats,.899,.02,"[−.30, .33]",.014,.246,.363,Role | Delegated (X1 vs X2),.007
+standards_appeal,< .001,.84,"[.70, 1.03]",.528,.296,.586,Mode | Seller (X2 vs X4),< .001
+price_refs,< .001,.97,"[.95, 1.04]",.490,.176,.884,Mode | Seller (X2 vs X4),< .001

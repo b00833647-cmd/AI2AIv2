@@ -45,3 +45,10 @@ AI2AI-backup-*/
 
 # Git worktrees (isolated dev workspaces — never commit their contents)
 .worktrees/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Report build cache (regeneratable parquet)
+docs/reports/cache-grand/

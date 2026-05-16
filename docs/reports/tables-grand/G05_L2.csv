@@ -1,0 +1,9 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+opening_anchor,.132,.28,"[−.05, .65]",< .001,.359,.460,Role | Delegated (X1 vs X2),< .001
+anchor_distance,< .001,−.60,"[−.89, −.36]",.659,.066,.648,Mode | Seller (X2 vs X4),< .001
+opening_spread,.013,.46,"[.15, .82]",.107,.571,.488,Diagonal (X1 vs X4),.005
+n_proposals,< .001,.69,"[.48, .95]",.754,.036,.726,Mode | Seller (X2 vs X4),< .001
+n_messages,.002,.56,"[.30, .86]",.260,.631,.142,Diagonal (X2 vs X3),.010
+n_concessions,< .001,.64,"[.41, .92]",.912,.087,.392,Mode | Seller (X2 vs X4),.001
+mean_concession,< .001,−.76,"[−1.03, −.56]",.280,.527,.319,Diagonal (X2 vs X3),.001
+rounds_to_close,< .001,.69,"[.48, .95]",.754,.036,.726,Mode | Seller (X2 vs X4),< .001

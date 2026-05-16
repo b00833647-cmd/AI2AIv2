@@ -1,0 +1,4 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+mean_charcount,NA,NA,"[NA, NA]",.597,NA,.813,Role | Direct (X3 vs X4),.597
+priced_turn_rate,NA,NA,"[NA, NA]",.565,NA,.385,Role | Direct (X3 vs X4),.565
+mean_compose_s,NA,NA,"[NA, NA]",.473,NA,.252,Role | Direct (X3 vs X4),.473

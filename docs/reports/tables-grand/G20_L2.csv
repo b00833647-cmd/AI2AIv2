@@ -1,0 +1,2 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+total_screen_ms,< .001,.94,"[.89, 1.08]",1.000,.850,.862,Mode | Buyer (X1 vs X3),< .001

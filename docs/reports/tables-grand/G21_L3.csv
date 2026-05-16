@@ -1,0 +1,4 @@
+Measure,Overall M(SD),Delegated,Direct,Buyer,Seller
+prompt_specificity,1.95 (1.73),1.95,nan,1.60,2.30
+prompt_readability_wps,17.03 (8.81),17.03,nan,13.92,20.13
+anchor_distance,275.00 (499.34),275.00,nan,450.00,100.00

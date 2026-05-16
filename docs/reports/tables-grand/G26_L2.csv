@@ -1,0 +1,3 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+emot_pleasant,.769,.06,"[−.30, .41]",.263,.834,.026,Diagonal (X2 vs X3),.371
+emot_anxious,.150,.27,"[−.08, .64]",.632,.028,.423,Mode | Buyer (X1 vs X3),.014

@@ -1,0 +1,6 @@
+Check,p,Cliff δ,band
+age × mode,0.401,0.16,small
+age × role,0.130,0.28,small
+gender × Mode,0.488,χ²,V=0.25
+experience × Mode,0.243,χ²,V=0.32
+ai_familiarity × Mode,0.595,χ²,V=0.16

@@ -1,0 +1,8 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+active_s,.351,.17,"[−.18, .53]",.490,.088,.778,Mode | Seller (X2 vs X4),.076
+idle_s,.014,.46,"[.16, .79]",.695,.705,.178,Diagonal (X1 vs X4),.038
+scroll_depth,.152,−.25,"[−.57, .07]",.456,.174,.770,Mode | Seller (X2 vs X4),.067
+n_clicks,.104,−.30,"[−.66, .03]",.104,.194,.831,Mode | Buyer (X1 vs X3),.021
+n_tab_away,.461,−.11,"[−.40, .17]",.384,.920,.690,Diagonal (X2 vs X3),.281
+integrity_attempts,.049,.33,"[.04, .65]",.644,.710,.653,Mode | Buyer (X1 vs X3),.087
+n_likert_changes,.501,−.12,"[−.46, .21]",.398,.422,.252,Role | Direct (X3 vs X4),.263

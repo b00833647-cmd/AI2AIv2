@@ -1,0 +1,6 @@
+Metric,Value
+distinct prolific_pid (completers),40
+duplicate prolific_pid,0
+distinct prolific_study_id,4
+referrer present,58
+completers via paste event (prompt authenticity),2

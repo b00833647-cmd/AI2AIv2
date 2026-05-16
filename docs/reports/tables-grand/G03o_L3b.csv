@@ -1,0 +1,6 @@
+View,n,k,rate
+Overall,40,27,68%
+Mode=delegated,20,13,65%
+Mode=direct,20,14,70%
+Role=buyer,20,10,50%
+Role=seller,20,17,85%

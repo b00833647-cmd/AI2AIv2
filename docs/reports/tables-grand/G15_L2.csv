@@ -1,0 +1,2 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+turn_tokens_sum,< .001,1.00,"[1.00, 1.00]",.636,.626,.653,Mode | Buyer (X1 vs X3),< .001

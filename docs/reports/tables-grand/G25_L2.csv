@@ -1,0 +1,3 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+obj_buyer_share,.014,.55,"[.24, .93]",.038,.638,.025,Diagonal (X2 vs X3),.006
+perceived_fair,.498,−.15,"[−.57, .25]",.815,.444,.271,Mode | Buyer (X1 vs X3),.386

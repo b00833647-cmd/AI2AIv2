@@ -1,0 +1,6 @@
+Measure,X1,X2,X3,X4,N
+prompt_words,39.8,70.0,,,20
+prompt_threat,0.1,0.3,,,20
+prompt_polite,0.3,0.4,,,20
+prompt_price_refs,1.5,2.0,,,20
+context_chars,278.4,349.8,,,20

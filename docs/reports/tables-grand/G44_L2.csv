@@ -1,0 +1,3 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+active_s,.351,.17,"[−.18, .53]",.490,.088,.778,Mode | Seller (X2 vs X4),.076
+stated_vs_active,.032,−.39,"[−.72, −.09]",.042,.165,.947,Diagonal (X2 vs X3),.004

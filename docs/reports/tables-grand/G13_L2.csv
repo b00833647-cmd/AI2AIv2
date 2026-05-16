@@ -1,0 +1,2 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+mean_clock_skew_s,.337,.18,"[−.16, .54]",.989,.935,.108,Mode | Buyer (X1 vs X3),.521

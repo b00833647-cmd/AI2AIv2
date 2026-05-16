@@ -1,0 +1,3 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+median_latency_ms,< .001,−.84,"[−1.08, −.68]",.218,.023,.436,Mode | Buyer (X1 vs X3),< .001
+max_latency_ms,< .001,−.97,"[−1.05, −.95]",.776,.705,.915,Mode | Seller (X2 vs X4),< .001

@@ -1,0 +1,4 @@
+Measure,Overall M(SD),Delegated,Direct,Buyer,Seller
+mean_charcount,88.41 (63.50),nan,88.41,92.63,84.20
+priced_turn_rate,0.26 (0.19),nan,0.26,0.28,0.23
+mean_compose_s,74.96 (57.80),nan,74.96,92.75,57.17

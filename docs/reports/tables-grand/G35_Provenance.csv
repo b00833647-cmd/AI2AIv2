@@ -1,0 +1,5 @@
+emitter,emitter_id,model,turns
+human,buyer,human,53
+human,seller,human,44
+participant,buyer,claude-sonnet-4-6,204
+participant,seller,claude-sonnet-4-6,193

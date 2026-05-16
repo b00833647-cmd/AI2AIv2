@@ -1,0 +1,6 @@
+Metric,Value
+sessions (all),46
+status=running (abandoned),5
+degraded sessions (all),2
+degraded among completers,2
+max turns_consumed,19

@@ -1,0 +1,4 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+n_screen_revisits,< .001,.90,"[.80, 1.10]",.655,.643,.929,Mode | Buyer (X1 vs X3),< .001
+n_resize,.165,−.15,"[−.35, .05]",.138,.572,.693,Diagonal (X2 vs X3),.078
+n_focus,< .001,−.78,"[−1.03, −.58]",.204,.785,.632,Mode | Buyer (X1 vs X3),< .001

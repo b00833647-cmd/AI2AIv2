@@ -1,0 +1,6 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+prompt_words,NA,NA,"[NA, NA]",.054,NA,.844,Role | Delegated (X1 vs X2),.054
+prompt_threat,NA,NA,"[NA, NA]",.301,NA,.249,Role | Delegated (X1 vs X2),.301
+prompt_polite,NA,NA,"[NA, NA]",.925,NA,.304,Role | Delegated (X1 vs X2),.925
+prompt_price_refs,NA,NA,"[NA, NA]",.587,NA,.942,Role | Delegated (X1 vs X2),.587
+context_chars,NA,NA,"[NA, NA]",.273,NA,.950,Role | Delegated (X1 vs X2),.273

@@ -1,0 +1,3 @@
+Measure,Overall M(SD),Delegated,Direct,Buyer,Seller
+median_latency_ms,12296.10 (11791.21),7303.30,17288.90,16203.75,8388.45
+max_latency_ms,69081.50 (87978.76),13860.30,124302.70,83948.55,54214.45

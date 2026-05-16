@@ -1,0 +1,6 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+turns_consumed,< .001,.82,"[.68, 1.02]",.664,.302,.732,Mode | Seller (X2 vs X4),< .001
+session_sec,< .001,−.79,"[−1.05, −.58]",.797,.083,.901,Mode | Buyer (X1 vs X3),< .001
+study_sec,.636,.09,"[−.28, .45]",.735,.245,.679,Mode | Seller (X2 vs X4),.241
+tokens_total,< .001,.96,"[.92, 1.04]",.675,.279,.788,Mode | Seller (X2 vs X4),< .001
+tokens_orchestrator,< .001,.94,"[.89, 1.05]",.675,.224,.805,Mode | Seller (X2 vs X4),< .001

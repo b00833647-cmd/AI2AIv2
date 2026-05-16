@@ -1,0 +1,4 @@
+Measure,Mode p,Mode δ,Mode 95%CI,Role p,M×R p,Opp p,Top pairwise,that p
+prompt_specificity,NA,NA,"[NA, NA]",.512,NA,.784,Role | Delegated (X1 vs X2),.512
+prompt_readability_wps,NA,NA,"[NA, NA]",.121,NA,.235,Role | Delegated (X1 vs X2),.121
+anchor_distance,NA,NA,"[NA, NA]",.243,NA,.264,Role | Delegated (X1 vs X2),.243
