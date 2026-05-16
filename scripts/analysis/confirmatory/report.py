@@ -79,3 +79,10 @@ def build_report(db_path: str, out_path: str = DEFAULT_OUT) -> dict:
         return {"clean": clean, "dry_run": dry, "n": len(sample), "out": out_path}
     finally:
         con.close()
+
+
+if __name__ == "__main__":  # pragma: no cover
+    import sys
+    _db = sys.argv[1] if len(sys.argv) > 1 else "data/ai2ai-human-pilot-2026-05-15.db"
+    _out = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_OUT
+    print(build_report(_db, _out))
