@@ -2643,6 +2643,43 @@ function applyConsentCopy(mode) {
   if (p) p.textContent = copy.payment;
 }
 
+// Visible, retryable failure surface for the Prolific entry flow. If
+// /api/p/start or the role/mode sync fails (network / 5xx) on EITHER the
+// neutral research-entry branch or a debug route, OR on a same-tab resume,
+// the participant must not be stranded on a dead screen / indefinite
+// spinner — show the Prolific gate with a clear error and a working
+// "Try again" button instead.
+function showEntryError(err) {
+  console.error("[boot] study entry failed:", err);
+  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+  const gate = document.getElementById("screen-prolific");
+  if (gate) gate.classList.add("active");
+  const errEl = $("prolific-pid-error");
+  if (errEl) {
+    errEl.textContent =
+      "Couldn't start the study — please check your connection and try again. " +
+      "If this keeps happening, reload the page or re-open the study link.";
+  }
+  const btn = $("btn-prolific-continue");
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = "Try again";
+    btn.onclick = startOrRetry;   // idempotent; also (re)wires the cached path
+  }
+}
+
+async function startOrRetry() {
+  const btn = $("btn-prolific-continue");
+  const errEl = $("prolific-pid-error");
+  if (errEl) errEl.textContent = "";
+  if (btn) { btn.disabled = true; btn.textContent = "Setting up…"; }
+  try {
+    await continueFromProlific();
+  } catch (err) {
+    showEntryError(err);
+  }
+}
+
 async function continueFromProlific() {
   const preset = detectRoleFromPath();
 
@@ -2707,7 +2744,7 @@ async function continueFromProlific() {
       await api("/api/p/mode", { participantId: state.participantId, mode: spaMode });
       show(targetStep);
     } catch (err) {
-      console.error("[boot] neutral path role/mode sync failed:", err);
+      showEntryError(err);
     }
     return;
   }
@@ -2737,7 +2774,7 @@ async function continueFromProlific() {
     await api("/api/p/mode", { participantId: state.participantId, mode: preset.mode });
     show(targetStep);
   } catch (err) {
-    console.error("[boot] preset role/mode failed:", err);
+    showEntryError(err);
   }
 }
 
@@ -2771,27 +2808,18 @@ async function continueFromProlific() {
   try { cached = sessionStorage.getItem(PID_KEY); } catch (e) { /* disabled */ }
   if (cached) {
     state.participantId = cached;
-    await continueFromProlific();
+    try {
+      await continueFromProlific();
+    } catch (err) {
+      showEntryError(err);   // resume path has no Continue button wired yet
+    }
     return;
   }
 
   // Fresh visit — wire the Continue button on the Prolific screen and let
   // the participant proceed at their pace.
   const btn = $("btn-prolific-continue");
-  if (btn) {
-    btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      btn.textContent = "Setting up…";
-      try {
-        await continueFromProlific();
-      } catch (err) {
-        btn.disabled = false;
-        btn.textContent = "Continue";
-        const errEl = $("prolific-pid-error");
-        if (errEl) errEl.textContent = "Couldn't start the study. Please try again.";
-      }
-    });
-  }
+  if (btn) btn.onclick = startOrRetry;   // single source of entry + retry UX
 })();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
