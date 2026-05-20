@@ -52,3 +52,13 @@ __pycache__/
 
 # Report build cache (regeneratable parquet)
 docs/reports/cache-grand/
+
+# Environment / secrets — NEVER commit (.env.example is the only allowed template)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+.env.backup*
+*.env.backup*
+.env.local.backup
