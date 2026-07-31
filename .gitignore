@@ -53,6 +53,12 @@ __pycache__/
 # Report build cache (regeneratable parquet)
 docs/reports/cache-grand/
 
+# Confirmatory report output. The test suite invokes report.py, which writes
+# synthetic DRY-RUN tables here — they must never land next to the real
+# published tables in docs/reports/tables-grand/. Force-add (git add -f) if you
+# ever want to commit a genuine confirmatory run.
+docs/reports/tables-confirmatory/
+
 # Environment / secrets — NEVER commit (.env.example is the only allowed template)
 .env
 .env.local
